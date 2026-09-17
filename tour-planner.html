@@ -599,51 +599,67 @@
       flex-shrink: 0;
       vertical-align: middle;
     }
+    .type-icon-badge svg {
+      width: 0.92em;
+      height: 0.92em;
+      display: block;
+      flex-shrink: 0;
+    }
     .type-icon-badge.type-factory {
+      color: var(--factory);
       background: color-mix(in srgb, var(--factory) 22%, #fff);
       border-color: var(--factory);
       box-shadow: 0 0 0 1px color-mix(in srgb, var(--factory) 35%, transparent);
     }
     .type-icon-badge.type-shop {
+      color: var(--shop);
       background: color-mix(in srgb, var(--shop) 22%, #fff);
       border-color: var(--shop);
       box-shadow: 0 0 0 1px color-mix(in srgb, var(--shop) 35%, transparent);
     }
     .type-icon-badge.type-restaurant,
     .type-icon-badge.type-meal {
+      color: var(--restaurant);
       background: color-mix(in srgb, var(--restaurant) 24%, #fff);
       border-color: var(--restaurant);
       box-shadow: 0 0 0 1px color-mix(in srgb, var(--restaurant) 35%, transparent);
     }
     .type-icon-badge.type-hotel {
+      color: var(--hotel);
       background: color-mix(in srgb, var(--hotel) 24%, #fff);
       border-color: var(--hotel);
       box-shadow: 0 0 0 1px color-mix(in srgb, var(--hotel) 35%, transparent);
     }
     .type-icon-badge.type-museum {
+      color: var(--museum);
       background: color-mix(in srgb, var(--museum) 24%, #fff);
       border-color: var(--museum);
       box-shadow: 0 0 0 1px color-mix(in srgb, var(--museum) 35%, transparent);
     }
     .type-icon-badge.type-school {
+      color: var(--school);
       background: color-mix(in srgb, var(--school) 22%, #fff);
       border-color: var(--school);
       box-shadow: 0 0 0 1px color-mix(in srgb, var(--school) 35%, transparent);
     }
     .type-icon-badge.type-experience {
+      color: var(--experience);
       background: color-mix(in srgb, var(--experience) 22%, #fff);
       border-color: var(--experience);
       box-shadow: 0 0 0 1px color-mix(in srgb, var(--experience) 35%, transparent);
     }
     .type-icon-badge.type-travel {
+      color: var(--travel);
       background: color-mix(in srgb, var(--travel) 22%, #fff);
       border-color: var(--travel);
     }
     .type-icon-badge.type-pickup {
+      color: var(--pickup);
       background: color-mix(in srgb, var(--pickup) 22%, #fff);
       border-color: var(--pickup);
     }
     .type-icon-badge.type-other {
+      color: var(--accent);
       background: color-mix(in srgb, var(--accent) 16%, #fff);
       border-color: var(--accent);
     }
@@ -3994,21 +4010,61 @@
   }
 
 
-  function placeTypeIcon(type) {
+  /** Tiny inline SVGs — clear shapes at chip size (not face-like emoji). */
+  function placeTypeSvg(type) {
+    const t = normalisePlaceType(type);
+    // viewBox 0 0 16 16; fill uses currentColor so the colour ring paints the glyph
+    const svg = (body) =>
+      `<svg class="type-glyph" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">${body}</svg>`;
     const map = {
-      factory: '🏭',
-      shop: '🛍️',
-      restaurant: '🍽️',
-      meal: '🍽️',
-      hotel: '🏨',
-      museum: '🏛️',
-      school: '🎓',
-      experience: '✨',
-      pickup: '🚐',
-      travel: '🚗',
-      other: '📍',
+      // Shop = simple house
+      shop: svg(
+        '<path fill="currentColor" d="M8 1.4 1.5 6.6V8h1.4v6.2h4.2V9.6h1.8v4.6h4.2V8H14.5V6.6Z"/>'
+      ),
+      // Factory = house body + really big chimney
+      factory: svg(
+        '<path fill="currentColor" d="M2.2 1h2.6v4.6l.2.1 3-1.7v1.9l3-1.7V14.2H1.6V5.8l.6.3V1zm1.2 1.15v3.55l-.35.2V2.15h.35zM4.2 7.35l2.55-1.45v1.55l2.55-1.45v5.9H4.2V7.35z"/>'
+      ),
+      // Hotel = house-like H (roof + bold H posts)
+      hotel: svg(
+        '<path fill="currentColor" d="M8 1.35 1.7 6.1v1.1h1.25V14.2h2.55V9.2h5V14.2h2.55V7.2H14.3V6.1Zm-2.7 4.35h1.55v2.7H5.3V5.7zm4.15 0h1.55v2.7H9.45V5.7z"/>'
+      ),
+      // Restaurant / meal = fork + knife
+      restaurant: svg(
+        '<path fill="currentColor" d="M3.35 1.5c.7 0 1.2.85 1.2 1.85V6.4h.7v8.3H3.35V6.4h-.7V3.35c0-1 .5-1.85 1.2-1.85zm7.55-.1c1.55 0 2.7 1.3 2.7 3.2 0 1.35-.65 2.4-1.65 2.75V14.7H10.3V7.35c-1-.35-1.65-1.4-1.65-2.75 0-1.9 1.15-3.2 2.7-3.2z"/>'
+      ),
+      meal: null,
+      // Experience = three people having fun (arms up)
+      experience: svg(
+        '<circle fill="currentColor" cx="3.15" cy="3" r="1.3"/>'
+        + '<circle fill="currentColor" cx="8" cy="2.45" r="1.3"/>'
+        + '<circle fill="currentColor" cx="12.85" cy="3" r="1.3"/>'
+        + '<path fill="currentColor" d="M1.15 7.15 3.15 5.45 5.15 7.15v7.1H1.15zM5.7 6.85 8 5 10.3 6.85v7.4H5.7zM10.85 7.15 12.85 5.45 14.85 7.15v7.1h-4z"/>'
+      ),
+      // Museum = pediment + columns (cool / thoughtful, not a face)
+      museum: svg(
+        '<path fill="currentColor" d="M8 1.2 1.4 5v1.25h13.2V5Zm-5.35 5.9h1.55v5.1H2.65zm2.85 0h1.55v5.1H5.5zm2.85 0h1.55v5.1H8.35zm2.85 0h1.55v5.1h-1.55zM1.5 13.45h13v1.35H1.5z"/>'
+      ),
+      school: svg(
+        '<path fill="currentColor" d="M8 1.45 1.7 4.7v1.55L8 9.4l6.3-3.15V4.7Zm-4.5 6.2v2.15L8 12.95l4.5-3.15V7.65L8 10.8 3.5 7.65z"/>'
+      ),
+      pickup: svg(
+        '<path fill="currentColor" d="M2.1 5.15h7.7l1.85 2.45h2.25v4.3h-1.15a1.75 1.75 0 0 1-3.4 0H6.4a1.75 1.75 0 0 1-3.4 0H2.1V5.15zm1.55 7.2a.9.9 0 1 0 0-1.8.9.9 0 0 0 0 1.8zm7.5 0a.9.9 0 1 0 0-1.8.9.9 0 0 0 0 1.8zM9.2 6.4H3.4v3.4h7.45l-1.25-1.65H9.2V6.4z"/>'
+      ),
+      travel: svg(
+        '<path fill="currentColor" d="M1.8 7.6 7.2 2.4h1.7l1.55 2.7H14v1.6h-1.2l.7 3.3H14v1.6H2.55A1.75 1.75 0 0 1 1.8 7.6zm2.35 2.4h7.05l-.45-2.1H8.55L7.2 5.5 4.15 8.4v1.6z"/>'
+      ),
+      other: svg(
+        '<path fill="currentColor" d="M8 1.35c-2.75 0-5 2.05-5 4.6 0 3.25 5 8.7 5 8.7s5-5.45 5-8.7c0-2.55-2.25-4.6-5-4.6zm0 6.3a1.85 1.85 0 1 1 0-3.7 1.85 1.85 0 0 1 0 3.7z"/>'
+      ),
     };
-    return map[String(type || 'other')] || map.other;
+    map.meal = map.restaurant;
+    return map[t] || map.other;
+  }
+
+  function placeTypeIcon(type) {
+    // Default type glyph is now SVG (clear shapes). Custom place.icon may still be emoji.
+    return placeTypeSvg(type);
   }
 
   function normalisePlaceType(type) {
@@ -4018,20 +4074,28 @@
     return known.includes(t) ? t : 'other';
   }
 
-  /** Glyph + coloured ring so place types read at a glance. */
+  /** Glyph + coloured ring so place types read at a glance (tray, day stops, day-at-a-glance). */
   function renderTypeIconBadge(type, glyph) {
     const t = normalisePlaceType(type);
-    const icon = glyph != null && String(glyph).trim() !== '' ? String(glyph) : placeTypeIcon(t);
+    const g = glyph != null ? String(glyph).trim() : '';
+    let icon;
+    if (g.startsWith('<svg')) {
+      icon = g; // trusted SVG from placeTypeSvg
+    } else if (g) {
+      icon = escapeHtml(g); // optional per-place emoji
+    } else {
+      icon = placeTypeSvg(t);
+    }
     return `<span class="type-icon-badge type-${t}" title="${escapeHtml(typeLabel(t))}">${icon}</span>`;
   }
 
-  /** Prefer place.icon when set (e.g. Studnice tower); else type emoji. */
+  /** Prefer place.icon when set (e.g. Studnice tower); else type SVG. */
   function placeIconForStop(stop) {
-    if (!stop) return placeTypeIcon('other');
+    if (!stop) return placeTypeSvg('other');
     const place = placeById(stop.placeId || stop.place_id);
     const custom = place && String(place.icon || '').trim();
     if (custom) return custom;
-    return placeTypeIcon(stop.type);
+    return placeTypeSvg(stop.type);
   }
 
   function placeTypeForStop(stop) {
@@ -4210,11 +4274,11 @@
   }
 
   function placeChipIcon(place) {
-    if (!place) return placeTypeIcon('other');
+    if (!place) return placeTypeSvg('other');
     ensurePlace(place);
     const custom = String(place.icon || '').trim();
     if (custom) return custom;
-    return placeTypeIcon(place.type);
+    return placeTypeSvg(place.type);
   }
 
   function formatTimeWheelLabel(stop) {
