@@ -2017,7 +2017,101 @@ function renderDayTabs() {
     `;
   }
 
-  function render() {
+
+  function captureUiState() {
+    const active = document.activeElement;
+    let focus = null;
+    if (active && active.closest && active.closest('#app')) {
+      const focusAttrs = [
+        'data-place-name', 'data-place-address', 'data-place-contact-detail', 'data-place-notes',
+        'data-place-type', 'data-place-contact-method', 'data-add-place-time',
+        'data-stop-title', 'data-stop-notes', 'data-stop-address', 'data-stop-time', 'data-stop-travel',
+        'data-guest-name', 'data-guest-lent', 'data-repay-amount', 'data-repay-date'
+      ];
+      for (const attr of focusAttrs) {
+        if (active.hasAttribute && active.hasAttribute(attr)) {
+          focus = {
+            attr,
+            value: active.getAttribute(attr),
+            repayId: active.getAttribute('data-repay-id') || null,
+            tag: active.tagName,
+            type: active.type || '',
+            selStart: typeof active.selectionStart === 'number' ? active.selectionStart : null,
+            selEnd: typeof active.selectionEnd === 'number' ? active.selectionEnd : null,
+          };
+          break;
+        }
+      }
+      if (!focus && active.id) {
+        focus = {
+          id: active.id,
+          tag: active.tagName,
+          type: active.type || '',
+          selStart: typeof active.selectionStart === 'number' ? active.selectionStart : null,
+          selEnd: typeof active.selectionEnd === 'number' ? active.selectionEnd : null,
+        };
+      }
+    }
+    const placeList = document.querySelector('.place-list');
+    return {
+      windowY: window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0,
+      placeListTop: placeList ? placeList.scrollTop : null,
+      focus,
+    };
+  }
+
+  function restoreUiState(snap) {
+    if (!snap) return;
+    const apply = () => {
+      if (snap.placeListTop != null) {
+        const placeList = document.querySelector('.place-list');
+        if (placeList) placeList.scrollTop = snap.placeListTop;
+      }
+      try { window.scrollTo(0, snap.windowY || 0); } catch { /* ignore */ }
+      const f = snap.focus;
+      if (!f) return;
+      let el = null;
+      if (f.id) {
+        el = document.getElementById(f.id);
+      } else if (f.attr) {
+        const nodes = Array.from(document.querySelectorAll(`[${f.attr}="${CSS.escape(String(f.value))}"]`));
+        el = nodes.find(n => !f.repayId || n.getAttribute('data-repay-id') === f.repayId) || nodes[0] || null;
+      }
+      if (!el || typeof el.focus !== 'function') return;
+      try { el.focus({ preventScroll: true }); } catch { try { el.focus(); } catch { /* ignore */ } }
+      try {
+        if (f.selStart != null && typeof el.setSelectionRange === 'function' && /^(text|search|url|tel|password|email|number)$/i.test(el.type || 'text')) {
+          el.setSelectionRange(f.selStart, f.selEnd != null ? f.selEnd : f.selStart);
+        }
+      } catch { /* ignore */ }
+    };
+    requestAnimationFrame(() => requestAnimationFrame(apply));
+  }
+
+  function updatePlaceMapsLink(placeId) {
+    const p = state.catalogue.find(x => x.id === placeId);
+    if (!p) return;
+    const item = document.querySelector(`.place-dir-item[data-place-id="${CSS.escape(placeId)}"]`);
+    if (!item) return;
+    const maps = item.querySelector('.maps-under-field');
+    if (maps) maps.innerHTML = mapsButtonHtml(p.name, p.address, 'Open in Apple Maps');
+  }
+
+  function updatePlaceContactPill(placeId) {
+    const p = state.catalogue.find(x => x.id === placeId);
+    if (!p) return;
+    const item = document.querySelector(`.place-dir-item[data-place-id="${CSS.escape(placeId)}"]`);
+    if (!item) return;
+    const pill = item.querySelector('.contact-pill');
+    if (!pill) return;
+    pill.textContent = p.contactMethod ? contactLabel(p.contactMethod) : 'Contact not set';
+  }
+
+  function render(opts) {
+    const options = (opts && typeof opts === 'object') ? opts : {};
+    const resetScroll = !!options.resetScroll;
+    const uiSnap = resetScroll ? null : captureUiState();
+
     const view = effectiveView();
     document.body.classList.toggle('view-phone', view === 'phone');
     document.body.classList.toggle('view-detailed', view === 'detailed');
@@ -2177,15 +2271,18 @@ function renderDayTabs() {
       app.innerHTML = plannerDesktop;
     }
     bindDynamic();
+    if (resetScroll) {
+      try { window.scrollTo({ top: 0, behavior: 'smooth' }); }
+      catch { window.scrollTo(0, 0); }
+    } else {
+      restoreUiState(uiSnap);
+    }
   }
 
   function setMainTab(tab) {
     state.mainTab = tab === 'places' ? 'places' : 'planner';
     localStorage.setItem('planner_main_tab', state.mainTab);
-    render();
-    try {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch { window.scrollTo(0, 0); }
+    render({ resetScroll: true });
   }
 
   function parseEnteredDate(value) {
@@ -2335,31 +2432,48 @@ function renderDayTabs() {
     });
     root.querySelectorAll('[data-place-name]').forEach(inp => {
       inp.addEventListener('input', () => {
-        const p = state.catalogue.find(x => x.id === inp.getAttribute('data-place-name'));
+        const id = inp.getAttribute('data-place-name');
+        const p = state.catalogue.find(x => x.id === id);
         if (p) {
           p.name = inp.value;
           if (state.plan && state.plan.tourHotelPlaceId === p.id) state.plan.tourHotelName = p.name;
           scheduleAutoSave();
+          updatePlaceMapsLink(id);
         }
       });
     });
     root.querySelectorAll('[data-place-address]').forEach(inp => {
       inp.addEventListener('input', () => {
-        const p = state.catalogue.find(x => x.id === inp.getAttribute('data-place-address'));
-        if (p) { p.address = inp.value; scheduleAutoSave(); }
+        const id = inp.getAttribute('data-place-address');
+        const p = state.catalogue.find(x => x.id === id);
+        if (p) {
+          p.address = inp.value;
+          scheduleAutoSave();
+          updatePlaceMapsLink(id);
+        }
       });
-      inp.addEventListener('change', () => { scheduleAutoSave(); refresh(); });
+      // Do not full-re-render on blur/confirm — maps link updates in place above.
+      inp.addEventListener('change', () => { scheduleAutoSave(); });
     });
     root.querySelectorAll('[data-place-type]').forEach(sel => {
       sel.addEventListener('change', () => {
         const p = state.catalogue.find(x => x.id === sel.getAttribute('data-place-type'));
-        if (p) { p.type = sel.value; scheduleAutoSave(); refresh(); }
+        if (!p) return;
+        p.type = sel.value;
+        scheduleAutoSave();
+        // Only rebuild when the active category filter would hide/move this card.
+        if (state.placeFilter !== 'all' && state.placeFilter !== p.type) refresh();
       });
     });
     root.querySelectorAll('[data-place-contact-method]').forEach(sel => {
       sel.addEventListener('change', () => {
-        const p = state.catalogue.find(x => x.id === sel.getAttribute('data-place-contact-method'));
-        if (p) { p.contactMethod = sel.value; scheduleAutoSave(); refresh(); }
+        const id = sel.getAttribute('data-place-contact-method');
+        const p = state.catalogue.find(x => x.id === id);
+        if (p) {
+          p.contactMethod = sel.value;
+          scheduleAutoSave();
+          updatePlaceContactPill(id);
+        }
       });
     });
     root.querySelectorAll('[data-place-contact-detail]').forEach(inp => {
