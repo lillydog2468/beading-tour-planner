@@ -233,6 +233,68 @@
     .day-tab .d-date { font-size: 12px; color: var(--text-secondary); }
     .day-tab.today { background: var(--accent-soft); }
 
+    /* Compact day reminder — same day.blocks as the detailed timeline */
+    .day-glance {
+      border: 1px solid var(--border);
+      background: var(--surface-alt);
+      border-radius: 12px;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+    }
+    .day-glance-label {
+      font-size: 11px; font-weight: 800; letter-spacing: .04em;
+      text-transform: uppercase; color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+    .day-glance-list {
+      list-style: none; margin: 0; padding: 0;
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .day-glance-row {
+      display: grid;
+      grid-template-columns: 4.2em 1fr;
+      gap: 10px;
+      align-items: baseline;
+      width: 100%;
+      border: none;
+      background: transparent;
+      text-align: left;
+      font-family: inherit;
+      color: var(--text);
+      padding: 6px 4px;
+      border-radius: 8px;
+      cursor: pointer;
+      min-height: 36px;
+    }
+    .day-glance-row:hover, .day-glance-row:focus {
+      background: var(--accent-soft);
+      outline: none;
+    }
+    .day-glance-time {
+      font-variant-numeric: tabular-nums;
+      font-weight: 800;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .day-glance-title {
+      font-weight: 700;
+      font-size: 14px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .day-glance-empty { margin: 0; font-size: 13px; color: var(--text-secondary); }
+    .stop.glance-flash {
+      box-shadow: 0 0 0 3px var(--accent-glow);
+      border-radius: 10px;
+      transition: box-shadow .2s ease;
+    }
+    .view-phone .day-glance { padding: 12px 14px; margin-bottom: 14px; }
+    .view-phone .day-glance-label { font-size: 12px; margin-bottom: 8px; }
+    .view-phone .day-glance-row { min-height: 44px; padding: 8px 6px; }
+    .view-phone .day-glance-time { font-size: 16px; }
+    .view-phone .day-glance-title { font-size: 16px; }
+
     .timeline { display: flex; flex-direction: column; gap: 0; }
     .stop {
       display: grid;
@@ -2710,6 +2772,46 @@
     `;
   }
 
+  function renderDayGlance(day) {
+    if (!day) return '';
+    sortDayBlocks(day);
+    const stops = (day.blocks || []).filter(s => s && String(s.title || '').trim());
+    if (!stops.length) {
+      return `<div class="day-glance" aria-label="Day at a glance">
+        <div class="day-glance-label">Day at a glance</div>
+        <p class="day-glance-empty">No stops yet — add places below.</p>
+      </div>`;
+    }
+    const rows = stops.map(s => {
+      const time = String(s.time || '').trim();
+      const timeLabel = time || '—';
+      const title = String(s.title || '').trim();
+      return `<li><button type="button" class="day-glance-row" data-glance-stop="${escapeHtml(s.id)}" title="Jump to this stop">
+        <span class="day-glance-time">${escapeHtml(timeLabel)}</span>
+        <span class="day-glance-title">${escapeHtml(title)}</span>
+      </button></li>`;
+    }).join('');
+    return `<div class="day-glance" aria-label="Day at a glance">
+      <div class="day-glance-label">Day at a glance</div>
+      <ul class="day-glance-list">${rows}</ul>
+    </div>`;
+  }
+
+  function focusStopFromGlance(stopId) {
+    if (!stopId) return;
+    const el = document.getElementById('stop-block-' + stopId);
+    if (!el) return;
+    try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    catch { el.scrollIntoView(true); }
+    el.classList.add('glance-flash');
+    setTimeout(() => el.classList.remove('glance-flash'), 1400);
+    const titleInp = el.querySelector('[data-stop-title]');
+    if (titleInp) {
+      try { titleInp.focus({ preventScroll: true }); }
+      catch { titleInp.focus(); }
+    }
+  }
+
   function renderTimeline(day, large) {
     if (!day) return '<p class="muted">No days yet.</p>';
     sortDayBlocks(day);
@@ -2722,7 +2824,7 @@
       seedTravelMinutes(day, i);
       const next = blocks[i + 1];
       html += `
-        <article class="stop">
+        <article class="stop" id="stop-block-${escapeHtml(s.id)}">
           <div class="stop-time">
             <input type="time" data-stop-time="${s.id}" value="${escapeHtml(s.time || '')}" aria-label="Time">
           </div>
@@ -3105,6 +3207,7 @@ function renderDayTabs() {
         </div>
         ${renderDayTabs()}
         ${view === 'phone' ? phoneTodayNote : ''}
+        ${renderDayGlance(day)}
         ${renderDayOrigin()}
         ${renderPlacePickerSelect('dayPlacePicker')}
         ${renderTimeline(day, view === 'phone')}
@@ -3332,6 +3435,9 @@ function renderDayTabs() {
     // Place select no longer auto-adds — Keith picks Time, then taps Add selected place.
     document.querySelectorAll('[data-day]').forEach(btn => {
       btn.addEventListener('click', () => { state.selectedDay = Number(btn.getAttribute('data-day')); render(); });
+    });
+    document.querySelectorAll('[data-glance-stop]').forEach(btn => {
+      btn.addEventListener('click', () => focusStopFromGlance(btn.getAttribute('data-glance-stop')));
     });
     document.querySelectorAll('[data-stop-time]').forEach(inp => {
       // Safari / mobile: bind input+change+blur, but NEVER commit from a detached node
