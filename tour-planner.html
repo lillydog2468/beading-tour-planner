@@ -769,13 +769,20 @@
   function mapsQuery(name, address) {
     // Free-text address only (village/town or fuller street). Never use contact details.
     const addr = (address || '').trim();
-    if (addr) return addr;
+    if (addr) {
+      // Apple Maps share/frame links are usable as the Maps href itself (handled in appleMapsUrl).
+      return addr;
+    }
     const n = (name || '').trim();
     if (!n) return 'Czech Republic';
-    // Place name alone is fine for Apple Maps search (e.g. factory in a known town).
-    return n;
+    // Never send a bare place name alone — Maps often jumps to the wrong country.
+    if (/\bczech\b|\bčesk|\bjablonec\b|\bliberec\b|\bturnov\b|\bkoberov/i.test(n)) return n;
+    return n + ', Czech Republic';
   }
   function appleMapsUrl(name, address) {
+    const addr = (address || '').trim();
+    // Pasted Apple Maps links (maps.apple.com / maps.apple/p/…) open directly.
+    if (/^https?:\/\/(maps\.apple\.com|maps\.apple)\b/i.test(addr)) return addr;
     const q = mapsQuery(name, address);
     // https works in browser; Apple devices hand off to Maps
     return 'https://maps.apple.com/?q=' + encodeURIComponent(q);
@@ -816,11 +823,56 @@
     return !['pickup', 'hotel', 'meal', 'travel'].includes(t);
   }
   function mapsButtonHtml(name, address, label) {
-    const q = (address || '').trim() || (name || '').trim();
+    const q = (address || '').trim() || mapsQuery(name, address);
     if (!q) return '';
     const href = appleMapsUrl(name, address);
     const text = label || 'Open in Apple Maps';
     return `<a class="maps-btn maps-btn-inline" href="${href}" target="_blank" rel="noopener" title="Open address in Apple Maps">${escapeHtml(text)}</a>`;
+  }
+
+  function placeById(id) {
+    if (!id) return null;
+    return (state.catalogue || []).find(p => p.id === id) || null;
+  }
+
+  /** Prefer stop.address; if empty and linked to a place, use Places catalogue address. */
+  function resolveStopAddress(stop) {
+    if (!stop) return '';
+    const own = String(stop.address || '').trim();
+    if (own) return own;
+    const place = placeById(stop.placeId || stop.place_id);
+    if (place && String(place.address || '').trim()) return String(place.address).trim();
+    return '';
+  }
+
+  /** If a linked stop has no address yet, copy from the Places catalogue (does not overwrite notes). */
+  function hydrateStopAddressFromPlace(stop) {
+    if (!stop) return false;
+    if (String(stop.address || '').trim()) return false;
+    const place = placeById(stop.placeId || stop.place_id);
+    const addr = place && String(place.address || '').trim();
+    if (!addr) return false;
+    stop.address = addr;
+    return true;
+  }
+
+  function syncEmptyStopAddressesFromCatalogue(placeIdFilter) {
+    if (!state.plan || !Array.isArray(state.plan.days)) return false;
+    let changed = false;
+    state.plan.days.forEach(day => {
+      (day.blocks || []).forEach(stop => {
+        const pid = stop.placeId || stop.place_id;
+        if (placeIdFilter && pid !== placeIdFilter) return;
+        if (hydrateStopAddressFromPlace(stop)) changed = true;
+      });
+    });
+    return changed;
+  }
+
+  function stopMapsButtonHtml(stop, label) {
+    const name = (stop && stop.title) || '';
+    const address = resolveStopAddress(stop);
+    return mapsButtonHtml(name, address, label || 'Open in Apple Maps');
   }
 
   const CONTACT_METHODS = [
@@ -964,7 +1016,7 @@
     return /prague|praha|airport|\bprg\b|aviatická|hotel axa/i.test(String(text || ''));
   }
   function looksLikeBeadingAreaText(text) {
-    return /jablonec|liberec|turnov|zásada|zasada|smržovka|smrzovka|beading|rutkovsky|park hotel|na bašta|na basta/i.test(String(text || ''));
+    return /jablonec|liberec|turnov|zásada|zasada|smržovka|smrzovka|koberov|beading|rutkovsky|park hotel|na bašta|na basta/i.test(String(text || ''));
   }
   function isWeekdayISO(iso) {
     const d = parseISODateUTC(iso);
@@ -1011,7 +1063,7 @@
     if (isPraguePickupStop(stop)) return false;
     const dayIndex = (state.plan?.days || []).indexOf(day);
     const fromAddr = travelFromAddress(day, blockIndex);
-    const toAddr = String(stop.address || '');
+    const toAddr = String(resolveStopAddress(stop) || stop.address || '');
     const fromBlob = fromAddr + ' ' + (blockIndex === 0 && isArrivalDayIndex(dayIndex) ? day1OriginLabel() : '')
       + (blockIndex > 0 ? (' ' + String(day.blocks[blockIndex - 1]?.title || '')) : '');
     const toBlob = toAddr + ' ' + String(stop.title || '') + ' ' + String(stop.notes || '');
@@ -2153,7 +2205,8 @@
       type: place.type || 'experience',
       title: place.name,
       notes: place.notes || '',
-      address: place.address || '',
+      // Copy catalogue address onto the stop (keep placeId for later sync / Maps fallback)
+      address: (place.address && String(place.address).trim()) || '',
       placeId: place.id,
       period: periodForTime(time),
       messageSent: false,
@@ -2504,6 +2557,8 @@ function renderTimeline(day, large) {
     let html = '<div class="timeline">';
     blocks.forEach((s, i) => {
       ensureStopTicks(s);
+      // Fill blank stop address from Places catalogue when linked by placeId
+      if (hydrateStopAddressFromPlace(s)) scheduleAutoSave();
       seedTravelMinutes(day, i);
       const next = blocks[i + 1];
       html += `
@@ -2517,8 +2572,8 @@ function renderTimeline(day, large) {
             <div class="stop-title"><input type="text" data-stop-title="${s.id}" value="${escapeHtml(s.title || '')}"></div>
             <div class="stop-notes"><input type="text" data-stop-notes="${s.id}" value="${escapeHtml(s.notes || '')}" placeholder="Notes"></div>
             <div class="stop-notes address-row">
-              <input type="text" data-stop-address="${s.id}" value="${escapeHtml(s.address || '')}" placeholder="Address (village/town or street)" aria-label="Address">
-              ${mapsButtonHtml(s.title, s.address, 'Open in Apple Maps')}
+              <input type="text" data-stop-address="${s.id}" value="${escapeHtml(resolveStopAddress(s))}" placeholder="Address (village/town or street)" aria-label="Address">
+              ${stopMapsButtonHtml(s, 'Open in Apple Maps')}
             </div>
             ${stopNeedsBookingTicks(s) ? `
             <div class="booking-ticks" role="group" aria-label="Booking status">
@@ -3174,12 +3229,23 @@ function renderDayTabs() {
         const p = state.catalogue.find(x => x.id === id);
         if (p) {
           p.address = inp.value;
-          scheduleAutoSave();
+          // Linked day stops with an empty address pick up the new Places address
+          if (syncEmptyStopAddressesFromCatalogue(id)) scheduleAutoSave();
+          else scheduleAutoSave();
           updatePlaceMapsLink(id);
         }
       });
       // Do not full-re-render on blur/confirm — maps link updates in place above.
-      inp.addEventListener('change', () => { scheduleAutoSave(); });
+      // On confirm, re-render so Planner stop fields show any newly filled addresses.
+      inp.addEventListener('change', () => {
+        const id = inp.getAttribute('data-place-address');
+        if (syncEmptyStopAddressesFromCatalogue(id)) {
+          scheduleAutoSave();
+          render();
+        } else {
+          scheduleAutoSave();
+        }
+      });
     });
     root.querySelectorAll('[data-place-type]').forEach(sel => {
       sel.addEventListener('change', () => {
