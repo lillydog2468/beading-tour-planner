@@ -431,8 +431,8 @@
     }
     .day-glance-item {
       display: grid;
-      grid-template-columns: 18px 1fr;
-      gap: 2px;
+      grid-template-columns: 18px 1fr auto;
+      gap: 2px 4px;
       align-items: center;
       border-radius: 8px;
     }
@@ -452,7 +452,41 @@
     }
     .day-glance-handle:active { cursor: grabbing; }
     .day-glance-item .day-glance-row { min-width: 0; }
+    .day-glance-moves {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+    .day-glance-move {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      border-radius: 8px;
+      min-width: 44px;
+      min-height: 44px;
+      width: 44px;
+      height: 44px;
+      padding: 0;
+      cursor: pointer;
+      font-size: 18px;
+      font-weight: 800;
+      line-height: 1;
+      font-family: inherit;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .day-glance-move:hover:not(:disabled) {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .day-glance-move:disabled {
+      opacity: .35;
+      cursor: default;
+    }
     .view-phone .day-glance-handle { padding: 12px 0; font-size: 15px; }
+    .view-phone .day-glance-moves { gap: 4px; }
+    .view-phone .day-glance-move { min-width: 44px; min-height: 44px; }
     .rough-draft-banner {
       margin-top: 8px;
       padding: 8px 10px;
@@ -2765,8 +2799,26 @@
     const list = document.getElementById('dayGlanceList');
     if (!list) return;
     let dragFrom = null;
+    let dragFromHandle = false;
+    list.querySelectorAll('.day-glance-handle').forEach(h => {
+      const arm = () => { dragFromHandle = true; };
+      h.addEventListener('mousedown', arm);
+      h.addEventListener('touchstart', arm, { passive: true });
+    });
+    // Keep ↑↓ taps reliable — do not let the parent li start a drag from the buttons
+    list.querySelectorAll('.day-glance-move').forEach(btn => {
+      btn.addEventListener('mousedown', (e) => { e.stopPropagation(); dragFromHandle = false; });
+      btn.addEventListener('pointerdown', (e) => { e.stopPropagation(); dragFromHandle = false; });
+      btn.addEventListener('click', (e) => e.stopPropagation());
+    });
     list.querySelectorAll('.day-glance-item').forEach(item => {
       item.addEventListener('dragstart', (e) => {
+        // Prefer ⠿ handle; ↑↓ / row clicks must not start HTML5 DnD (fiddly on Mac/phone)
+        if (!dragFromHandle && !e.target.closest('.day-glance-handle')) {
+          e.preventDefault();
+          return;
+        }
+        dragFromHandle = false;
         dragFrom = Number(item.getAttribute('data-glance-index'));
         item.classList.add('dragging');
         try {
@@ -2778,6 +2830,7 @@
         item.classList.remove('dragging');
         list.querySelectorAll('.day-glance-item').forEach(el => el.classList.remove('drag-over'));
         dragFrom = null;
+        dragFromHandle = false;
       });
       item.addEventListener('dragover', (e) => {
         e.preventDefault();
@@ -3214,18 +3267,24 @@
       const fullTitle = String(s.title || '').trim();
       const icon = placeIconForStop(s);
       const tip = fullTitle && fullTitle !== label ? (fullTitle + ' — jump to this stop') : 'Jump to this stop';
+      const upDis = idx === 0 ? ' disabled' : '';
+      const downDis = idx === stops.length - 1 ? ' disabled' : '';
       return `<li class="day-glance-item" draggable="true" data-glance-index="${idx}" data-glance-stop-id="${escapeHtml(s.id)}">
-        <span class="day-glance-handle" title="Drag to reorder" aria-hidden="true">⠿</span>
+        <span class="day-glance-handle" title="Drag to reorder on desktop" aria-hidden="true">⠿</span>
         <button type="button" class="day-glance-row" data-glance-stop="${escapeHtml(s.id)}" title="${escapeHtml(tip)}">
           <span class="day-glance-time">${escapeHtml(timeLabel)}</span>
           <span class="day-glance-icon" aria-hidden="true">${icon}</span>
           <span class="day-glance-title"><span class="glance-nick">${escapeHtml(label)}</span></span>
         </button>
+        <div class="day-glance-moves">
+          <button type="button" class="day-glance-move" data-move="${escapeHtml(s.id)}" data-dir="-1" aria-label="Move up"${upDis}>↑</button>
+          <button type="button" class="day-glance-move" data-move="${escapeHtml(s.id)}" data-dir="1" aria-label="Move down"${downDis}>↓</button>
+        </div>
       </li>`;
     }).join('');
     return `<div class="day-glance" aria-label="Day at a glance">
       <div class="day-glance-label">Day at a glance</div>
-      <p class="day-glance-hint">Drag ⠿ to reorder · dropping Places into the glance comes later</p>
+      <p class="day-glance-hint">Use ↑ ↓ to reorder (drag ⠿ on desktop if you like)</p>
       <ul class="day-glance-list" id="dayGlanceList">${rows}</ul>
     </div>`;
   }
