@@ -459,6 +459,14 @@
       width: 72px; min-height: 36px; padding: 6px 8px; font-size: 14px;
       font-weight: 800; font-variant-numeric: tabular-nums;
     }
+    .travel-note .travel-mode-row {
+      display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+      width: 100%; margin-top: 4px;
+    }
+    .travel-note .travel-mode-hint {
+      width: 100%; font-size: 12px; color: var(--text-secondary); margin-top: 2px;
+    }
+    .travel-note .chip.travel-mode { font-size: 11px; padding: 4px 9px; }
     .view-phone .travel-note { margin-left: 0; padding-left: 12px; font-size: 14px; }
     .view-phone .travel-note input[type="number"] { min-height: 40px; font-size: 16px; }
 
@@ -601,7 +609,7 @@
   const DEMO_ID = 'demo';
   const TRAVEL_BETWEEN = 'About 15–25 minutes by van between most stops.';
   const TRAVEL_HOOK = 'Exact travel time later — Maps API not wired in this prototype.';
-  const PRAGUE_DRIVE = 'About 1 hour 25 minutes to the beading area (Jablonec nad Nisou).';
+  const PRAGUE_DRIVE = 'About 85 min clear road, or about 105 min in weekday morning traffic, to the beading area (Jablonec nad Nisou).';
   const PRAGUE_AIRPORT_NAME = 'Václav Havel Airport Prague (PRG)';
   const PRAGUE_AIRPORT_ADDRESS = 'Aviatická, 161 00 Prague 6, Czech Republic';
 
@@ -830,6 +838,7 @@
     if (typeof s.travelMinutes !== 'number' || Number.isNaN(s.travelMinutes)) {
       s.travelMinutes = (s.travelMinutes == null || s.travelMinutes === '') ? null : Number(s.travelMinutes);
     }
+    if (s.travelMode !== 'clear' && s.travelMode !== 'traffic') s.travelMode = s.travelMode || null;
     return s;
   }
   function ensurePlace(p) {
@@ -902,23 +911,125 @@
       places: (state.catalogue || []).filter(p => (p.type || 'other') === g.id),
     })).filter(g => g.places.length);
   }
+  const PRAGUE_CLEAR_MIN = 85;
+  const PRAGUE_TRAFFIC_MIN = 105;
+
   function roughTravelMinutes(fromAddr, toAddr) {
     // Rough ±5 min seed for v1 — Maps API stays stubbed.
     const a = (fromAddr || '').trim();
     const b = (toAddr || '').trim();
     if (!a && !b) return 15;
-    if (!a || !b) return 20;
+    if (!a || !b) {
+      // Prague origin with unknown destination still counts as the long haul.
+      if (/prague|praha|airport|aviatická/i.test(a) || /prague|praha|airport|aviatická/i.test(b)) {
+        return PRAGUE_CLEAR_MIN;
+      }
+      return 20;
+    }
     if (a.toLowerCase() === b.toLowerCase()) return 5;
     const sameTown = /jablonec|liberec|turnov|zásada|zasada|prague|praha/i;
     const aTown = (a.match(sameTown) || [''])[0].toLowerCase();
     const bTown = (b.match(sameTown) || [''])[0].toLowerCase();
     if (aTown && bTown && aTown === bTown) return 15;
-    if (/prague|praha/i.test(a) || /prague|praha/i.test(b)) return 85;
+    if (/prague|praha/i.test(a) || /prague|praha/i.test(b)) return PRAGUE_CLEAR_MIN;
     return 25;
+  }
+
+  function looksLikePragueText(text) {
+    return /prague|praha|airport|\bprg\b|aviatická|hotel axa/i.test(String(text || ''));
+  }
+  function looksLikeBeadingAreaText(text) {
+    return /jablonec|liberec|turnov|zásada|zasada|smržovka|smrzovka|beading|rutkovsky|park hotel|na bašta|na basta/i.test(String(text || ''));
+  }
+  function isWeekdayISO(iso) {
+    const d = parseISODateUTC(iso);
+    if (!d) return false;
+    const wd = d.getUTCDay();
+    return wd >= 1 && wd <= 5;
+  }
+  function isMorningStopTime(hhmm) {
+    const h = Number(String(hhmm || '09:00').split(':')[0]);
+    return Number.isFinite(h) && h < 12;
+  }
+  function travelFromAddress(day, blockIndex) {
+    if (!day || !day.blocks) return '';
+    if (blockIndex > 0) return day.blocks[blockIndex - 1]?.address || '';
+    const dayIndex = (state.plan?.days || []).indexOf(day);
+    if (isArrivalDayIndex(dayIndex)) return day1OriginAddress();
+    return tourHotelAddress();
+  }
+  /** Travel “from …” label: previous stop, else day-1 Prague/airport origin, else tour hotel (day 2+). */
+  function travelFromLabel(day, blockIndex) {
+    if (!day || !day.blocks || blockIndex < 0) return 'From previous place';
+    if (blockIndex > 0) {
+      const prev = day.blocks[blockIndex - 1];
+      const name = String(prev?.title || '').trim();
+      return name ? ('From ' + name) : 'From previous place';
+    }
+    const dayIndex = (state.plan?.days || []).indexOf(day);
+    if (isArrivalDayIndex(dayIndex)) return 'From ' + day1OriginLabel();
+    const hotelLabel = (getTourHotelPlace()?.name || state.plan?.tourHotelName || 'tour hotel');
+    return 'From ' + hotelLabel;
+  }
+  function isPraguePickupStop(stop) {
+    if (!stop || stop.type !== 'pickup') return false;
+    const t = String(stop.title || '');
+    // Day-1 origin pick-ups are titled “Airport pick-up — …” or “Hotel pick-up — {Prague hotel}”.
+    // Day-2+ tour-hotel pick-up is plain “Hotel pick-up” (no em dash) and must not match here.
+    if (/airport pick-up/i.test(t)) return true;
+    if (/hotel pick-up\s*[—–-]/i.test(t)) return true;
+    return false;
+  }
+  function isPragueBeadingTravel(day, blockIndex, stop) {
+    if (!stop) return false;
+    if (/drive to the beading area/i.test(String(stop.title || ''))) return true;
+    if (isPraguePickupStop(stop)) return false;
+    const dayIndex = (state.plan?.days || []).indexOf(day);
+    const fromAddr = travelFromAddress(day, blockIndex);
+    const toAddr = String(stop.address || '');
+    const fromBlob = fromAddr + ' ' + (blockIndex === 0 && isArrivalDayIndex(dayIndex) ? day1OriginLabel() : '')
+      + (blockIndex > 0 ? (' ' + String(day.blocks[blockIndex - 1]?.title || '')) : '');
+    const toBlob = toAddr + ' ' + String(stop.title || '') + ' ' + String(stop.notes || '');
+    const fromPrague = looksLikePragueText(fromBlob)
+      || (blockIndex === 0 && isArrivalDayIndex(dayIndex));
+    if (!fromPrague) return false;
+    if (looksLikeBeadingAreaText(toBlob)) return true;
+    // Arrival-day stop leaving Prague (e.g. first factory) — treat as the long haul even with a blank address.
+    if (isArrivalDayIndex(dayIndex) && !looksLikePragueText(toBlob)) return true;
+    return roughTravelMinutes(fromAddr, toAddr) >= 80;
+  }
+  function suggestedTravelMode(day, stop) {
+    if (day?.date && isWeekdayISO(day.date) && isMorningStopTime(stop?.time || day1PickupTime())) {
+      return 'traffic';
+    }
+    return 'clear';
+  }
+  function minutesForTravelMode(mode) {
+    return mode === 'traffic' ? PRAGUE_TRAFFIC_MIN : PRAGUE_CLEAR_MIN;
   }
   function seedTravelMinutes(day, blockIndex) {
     if (!day || !day.blocks || !day.blocks[blockIndex]) return;
     const cur = ensureStopTicks(day.blocks[blockIndex]);
+    if (isPragueBeadingTravel(day, blockIndex, cur)) {
+      if (cur.travelMinutes != null) {
+        // Stock clear (85) with no explicit mode: prefer weekday-morning traffic when the day date says so.
+        if (cur.travelMode == null && cur.travelMinutes === PRAGUE_CLEAR_MIN
+            && suggestedTravelMode(day, cur) === 'traffic') {
+          cur.travelMode = 'traffic';
+          cur.travelMinutes = PRAGUE_TRAFFIC_MIN;
+        } else if (cur.travelMode == null) {
+          cur.travelMode = cur.travelMinutes === PRAGUE_TRAFFIC_MIN ? 'traffic'
+            : (cur.travelMinutes === PRAGUE_CLEAR_MIN ? 'clear' : null);
+        }
+        return;
+      }
+      const mode = (cur.travelMode === 'clear' || cur.travelMode === 'traffic')
+        ? cur.travelMode
+        : suggestedTravelMode(day, cur);
+      cur.travelMode = mode;
+      cur.travelMinutes = minutesForTravelMode(mode);
+      return;
+    }
     if (cur.travelMinutes != null) return;
     if (blockIndex === 0) {
       const dayIndex = (state.plan?.days || []).indexOf(day);
@@ -1284,8 +1395,24 @@
     const options = opts || {};
     syncDay1PraguePickupStop();
     updatePragueHotelMapsUi();
+    // Refresh day-1 “from …” labels (and stock Prague-leg seeds) when the hotel name/address changes.
+    refreshArrivalDayTravelLabels();
     scheduleAutoSave();
     if (options.render) render();
+  }
+  function refreshArrivalDayTravelLabels() {
+    const day = arrivalDay(state.plan);
+    if (!day || !Array.isArray(day.blocks)) return;
+    day.blocks.forEach((s, i) => {
+      ensureStopTicks(s);
+      if (!isPragueBeadingTravel(day, i, s)) return;
+      const stock = s.travelMinutes === PRAGUE_CLEAR_MIN || s.travelMinutes === PRAGUE_TRAFFIC_MIN || s.travelMinutes == null;
+      if (!stock) return;
+      if (s.travelMode !== 'clear' && s.travelMode !== 'traffic') {
+        s.travelMode = suggestedTravelMode(day, s);
+      }
+      s.travelMinutes = minutesForTravelMode(s.travelMode);
+    });
   }
 
   function mergeCatalogueSeed(existing) {
@@ -1306,12 +1433,12 @@
       if (useAirport) {
         return [
           { id: uid('s'), time: pickup, type: 'pickup', title: 'Airport pick-up — ' + PRAGUE_AIRPORT_NAME, notes: 'Meet the group at arrivals, then drive to the beading area. Confirm the meeting point from the booking flight times.', address: PRAGUE_AIRPORT_ADDRESS, period: 'Morning', messageSent: false, booked: false, travelMinutes: null },
-          { id: uid('s'), time: addMinutes(pickup, 30), type: 'travel', title: 'Drive to the beading area (Jablonec nad Nisou)', notes: PRAGUE_DRIVE, address: 'Jablonec nad Nisou, Czech Republic', period: 'Morning', messageSent: false, booked: false, travelMinutes: 85 },
+          { id: uid('s'), time: addMinutes(pickup, 30), type: 'travel', title: 'Drive to the beading area (Jablonec nad Nisou)', notes: PRAGUE_DRIVE, address: 'Jablonec nad Nisou, Czech Republic', period: 'Morning', messageSent: false, booked: false, travelMinutes: null, travelMode: null },
         ];
       }
       return [
         { id: uid('s'), time: pickup, type: 'pickup', title: 'Hotel pick-up — ' + prague, notes: 'Collect the group at their Prague hotel and leave for the beading area. Confirm the meeting point the night before.', address: ctx.pragueAddress || '', period: 'Morning', messageSent: false, booked: false, travelMinutes: null },
-        { id: uid('s'), time: addMinutes(pickup, 15), type: 'travel', title: 'Drive to the beading area (Jablonec nad Nisou)', notes: PRAGUE_DRIVE, address: 'Jablonec nad Nisou, Czech Republic', period: 'Morning', messageSent: false, booked: false, travelMinutes: 85 },
+        { id: uid('s'), time: addMinutes(pickup, 15), type: 'travel', title: 'Drive to the beading area (Jablonec nad Nisou)', notes: PRAGUE_DRIVE, address: 'Jablonec nad Nisou, Czech Republic', period: 'Morning', messageSent: false, booked: false, travelMinutes: null, travelMode: null },
       ];
     }
     return [
@@ -1921,6 +2048,10 @@
     const tmp = day.blocks[i];
     day.blocks[i] = day.blocks[j];
     day.blocks[j] = tmp;
+    // “From …” text follows the new order on render; re-seed only blank estimates.
+    [i, j].forEach(idx => {
+      if (day.blocks[idx] && day.blocks[idx].travelMinutes == null) seedTravelMinutes(day, idx);
+    });
     scheduleAutoSave();
     render();
   }
@@ -2041,7 +2172,20 @@
     ensureStopTicks(s);
     const n = Number(value);
     s.travelMinutes = Number.isFinite(n) ? Math.max(0, Math.round(n)) : null;
+    if (s.travelMinutes === PRAGUE_CLEAR_MIN) s.travelMode = 'clear';
+    else if (s.travelMinutes === PRAGUE_TRAFFIC_MIN) s.travelMode = 'traffic';
+    else if (s.travelMode === 'clear' || s.travelMode === 'traffic') s.travelMode = null;
     scheduleAutoSave();
+  }
+  function setStopTravelMode(stopId, mode) {
+    const s = findStop(stopId);
+    if (!s) return;
+    ensureStopTicks(s);
+    const m = mode === 'traffic' ? 'traffic' : 'clear';
+    s.travelMode = m;
+    s.travelMinutes = minutesForTravelMode(m);
+    scheduleAutoSave();
+    render();
   }
   function addPlaceFromPicker(selectId) {
     const sel = document.getElementById(selectId);
@@ -2246,13 +2390,27 @@ function renderTimeline(day, large) {
         </article>
       `;
       if (shouldShowTravel(s, next) || true) {
-        // show travel estimate into this stop (from previous / hotel)
+        // Travel into this stop: previous place, day-1 Prague/airport origin, or tour hotel (day 2+)
         const mins = s.travelMinutes == null ? '' : String(s.travelMinutes);
-        const hotelLabel = (getTourHotelPlace()?.name || state.plan.tourHotelName || 'hotel');
-        const label = i === 0 ? ('From ' + hotelLabel) : 'From previous stop';
+        const label = travelFromLabel(day, i);
+        const longLeg = isPragueBeadingTravel(day, i, s);
+        let modeChips = '';
+        if (longLeg) {
+          const mode = (s.travelMode === 'clear' || s.travelMode === 'traffic')
+            ? s.travelMode
+            : (s.travelMinutes === PRAGUE_TRAFFIC_MIN ? 'traffic'
+              : (s.travelMinutes === PRAGUE_CLEAR_MIN ? 'clear' : suggestedTravelMode(day, s)));
+          modeChips = `
+            <div class="travel-mode-row" role="group" aria-label="Prague drive estimate">
+              <button type="button" class="chip travel-mode ${mode === 'clear' ? 'on' : ''}" data-travel-mode="${s.id}" data-mode="clear">Clear road · ${PRAGUE_CLEAR_MIN} min</button>
+              <button type="button" class="chip travel-mode ${mode === 'traffic' ? 'on' : ''}" data-travel-mode="${s.id}" data-mode="traffic">Work morning · ${PRAGUE_TRAFFIC_MIN} min</button>
+            </div>
+            <div class="travel-mode-hint">About ${PRAGUE_CLEAR_MIN} min clear / about ${PRAGUE_TRAFFIC_MIN} min in weekday morning traffic. Pick one to set the editable minutes.</div>`;
+        }
         html += `<div class="travel-note">🚐 ${escapeHtml(label)}:
           <label class="muted">≈ <input type="number" inputmode="numeric" min="0" step="5" data-travel-mins="${s.id}" value="${escapeHtml(mins)}" aria-label="Travel minutes"> min (±5)</label>
           <span class="muted">editable estimate</span>
+          ${modeChips}
         </div>`;
       }
       if (shouldShowTravel(s, next)) {
@@ -2780,6 +2938,9 @@ function renderDayTabs() {
     });
     document.querySelectorAll('[data-travel-mins]').forEach(inp => {
       inp.addEventListener('change', () => setStopTravelMinutes(inp.getAttribute('data-travel-mins'), inp.value));
+    });
+    document.querySelectorAll('[data-travel-mode]').forEach(btn => {
+      btn.addEventListener('click', () => setStopTravelMode(btn.getAttribute('data-travel-mode'), btn.getAttribute('data-mode')));
     });
     document.querySelectorAll('[data-stop-address]').forEach(inp => {
       inp.addEventListener('input', () => {
