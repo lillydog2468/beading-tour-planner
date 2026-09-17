@@ -252,7 +252,7 @@
     }
     .day-glance-row {
       display: grid;
-      grid-template-columns: 4.2em 1fr;
+      grid-template-columns: 4.2em 1.5em 1fr;
       gap: 10px;
       align-items: baseline;
       width: 100%;
@@ -422,6 +422,24 @@
       background: var(--surface); border: 1px solid var(--border);
       border-radius: 999px; padding: 6px 12px; min-height: 36px;
     }
+
+    .day-glance-icon { font-size: 14px; line-height: 1; text-align: center; opacity: .92; }
+    .day-glance-title .glance-nick { font-weight: 800; }
+    .rough-draft-banner {
+      margin-top: 8px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: #fef3c7;
+      color: #92400e;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+    [data-theme="dark"] .rough-draft-banner {
+      background: rgba(245,158,11,.18);
+      color: #fbbf24;
+    }
+
     .view-phone .trip-summary .trip-title { font-size: 20px; }
     .view-phone .trip-summary .trip-meta span { font-size: 15px; min-height: 40px; }
 
@@ -1093,6 +1111,7 @@
     p.contactDetail = p.contactDetail || '';
     p.address = p.address || '';
     p.notes = p.notes || '';
+    p.nickname = p.nickname || '';
     p.type = p.type || 'other';
     return p;
   }
@@ -1697,6 +1716,194 @@
     ];
   }
 
+
+  const ROUGH_DRAFT_NOTE = 'Rough draft — edit times and stops as you like.';
+
+  function findCataloguePlace(ref) {
+    const list = state.catalogue || [];
+    if (!ref) return null;
+    if (typeof ref === 'string') {
+      const byId = placeById(ref);
+      if (byId) return byId;
+      return list.find(p => namesRoughlyMatch(p.name, ref)) || null;
+    }
+    for (const id of (ref.ids || (ref.id ? [ref.id] : []))) {
+      const hit = placeById(id);
+      if (hit) return hit;
+    }
+    for (const name of (ref.names || (ref.name ? [ref.name] : []))) {
+      const hit = list.find(p => namesRoughlyMatch(p.name, name));
+      if (hit) return hit;
+    }
+    return null;
+  }
+
+  function isSkeletonStop(stop) {
+    if (!stop) return true;
+    const t = String(stop.type || '');
+    if (t === 'pickup' || t === 'travel') return true;
+    if (t === 'meal' && /breakfast/i.test(String(stop.title || ''))) return true;
+    return false;
+  }
+
+  function substantiveStopCount(day) {
+    return (day && Array.isArray(day.blocks) ? day.blocks : []).filter(s => !isSkeletonStop(s)).length;
+  }
+
+  function dayLooksBusy(day) {
+    return substantiveStopCount(day) >= 2;
+  }
+
+  function stopFromCataloguePlace(place, time) {
+    const t = normaliseStopTime(time, '');
+    const notes = [place.notes || '', ROUGH_DRAFT_NOTE].filter(Boolean).join(' ');
+    return {
+      id: uid('s'),
+      time: t,
+      type: place.type || 'other',
+      title: place.name,
+      notes,
+      address: (place.address && String(place.address).trim()) || '',
+      placeId: place.id,
+      period: periodForTime(t),
+      messageSent: false,
+      booked: false,
+      travelMinutes: null,
+    };
+  }
+
+  /** Slots from real Places + patterns in Angela week 2 / sample plans. Never invent factories. */
+  function roughWeekPlaceSlots() {
+    return {
+      day1: [
+        { time: '09:30', ref: { ids: ['kf01'], names: ['Rutkovsky'] } },
+        { time: '11:00', ref: { ids: ['pass01'], names: ['Pass'] } },
+        { time: '12:30', ref: { ids: ['kr06'], names: ['Snack at supermarket'] } },
+        { time: '15:00', ref: { ids: ['ks03'], names: ['Vlad antik'] } },
+      ],
+      later: [
+        [
+          { time: '09:30', ref: { ids: ['kf07'], names: ['Ralton'] } },
+          { time: '13:00', ref: { ids: ['kf03'], names: ['GB Beads'] } },
+          { time: '15:00', ref: { ids: ['ks01'], names: ['Antik shop beads', 'Antik shop'] } },
+        ],
+        [
+          { time: '09:30', ref: { ids: ['kf02'], names: ['Matubo'] } },
+          { time: '11:00', ref: { ids: ['kf04'], names: ['Beads for You — Lucka', 'Beads for You'] } },
+        ],
+        [
+          { time: '09:30', ref: { ids: ['kf05'], names: ['Pegasus Production', 'Pegasus'] } },
+          { time: '11:30', ref: { ids: ['km01'], names: ['Glass and jewellery museum in Jablonec'] } },
+          { time: '14:00', ref: { ids: ['ks04'], names: ['Bijou Non Stop'] } },
+        ],
+        [
+          { time: '09:30', ref: { ids: ['kf06'], names: ['Glass beads family Clever'] } },
+          { time: '12:30', ref: { ids: ['kr03'], names: ['Na Baště', 'Na Basta'] } },
+          { time: '14:30', ref: { ids: ['ks05'], names: ['Bijou Components'] } },
+        ],
+        [
+          { time: '09:30', ref: { ids: ['kf08'], names: ['Oliver Glass'] } },
+          { time: '13:00', ref: { ids: ['ks02'], names: ['Small antik shop in Držkov'] } },
+        ],
+        [
+          { time: '09:30', ref: { ids: ['kf12'], names: ['Button factory'] } },
+          { time: '11:30', ref: { ids: ['ke03'], names: ['Koralex bead press house', 'Koralex'] } },
+          { time: '14:00', ref: { ids: ['ks06'], names: ['Křišťálový ráj'] } },
+        ],
+      ],
+    };
+  }
+
+  function buildRoughDayBlocks(dayIndex, ctx, usedPlaceIds) {
+    const slots = roughWeekPlaceSlots();
+    const blocks = defaultBlocks(dayIndex, ctx).map(s => Object.assign({}, s, { id: uid('s') }));
+    const pickSlots = dayIndex === 0
+      ? slots.day1
+      : slots.later[Math.max(0, dayIndex - 1) % slots.later.length];
+    (pickSlots || []).forEach(slot => {
+      const place = findCataloguePlace(slot.ref);
+      if (!place) return;
+      if (usedPlaceIds.has(place.id)) return;
+      usedPlaceIds.add(place.id);
+      blocks.push(stopFromCataloguePlace(place, slot.time));
+    });
+    if (dayIndex > 0 && substantiveStopCount({ blocks: blocks }) < 1) {
+      const fallback = (state.catalogue || []).filter(p =>
+        (p.type === 'factory' || p.type === 'shop') && !usedPlaceIds.has(p.id)
+      );
+      let t = '09:30';
+      fallback.slice(0, 2).forEach(place => {
+        usedPlaceIds.add(place.id);
+        blocks.push(stopFromCataloguePlace(place, t));
+        t = addMinutes(t, 120);
+      });
+    }
+    const dayObj = { blocks: blocks };
+    sortDayBlocks(dayObj);
+    dayObj.blocks.forEach((_, i) => seedTravelMinutes(dayObj, i));
+    return dayObj.blocks;
+  }
+
+  function applyRoughWeek(opts) {
+    const replaceBusy = !!(opts && opts.replaceBusy);
+    if (!state.plan || !Array.isArray(state.plan.days) || !state.plan.days.length) {
+      toast('Add tour dates (or days) first');
+      return;
+    }
+    const ctx = {
+      tourHotelName: state.plan.tourHotelName || '',
+      pragueHotelName: state.plan.pragueHotel?.name || '',
+      pragueAddress: state.plan.pragueHotel?.address || '',
+      pickupTime: day1PickupTime(state.plan),
+      day1OriginType: effectiveDay1OriginType(state.plan),
+      hasAirport: hasAirportArrivalOption(state.plan),
+    };
+    const used = new Set();
+    let filled = 0;
+    let skippedBusy = 0;
+    state.plan.days.forEach((day, i) => {
+      if (dayLooksBusy(day) && !replaceBusy) {
+        skippedBusy += 1;
+        (day.blocks || []).forEach(s => {
+          const pid = s.placeId || s.place_id;
+          if (pid) used.add(pid);
+        });
+        return;
+      }
+      day.blocks = buildRoughDayBlocks(i, ctx, used);
+      filled += 1;
+    });
+    if (effectiveDay1OriginType(state.plan) === 'prague') syncDay1PraguePickupStop();
+    state.plan.roughDraft = true;
+    scheduleAutoSave();
+    render();
+    if (filled && skippedBusy) {
+      toast('Rough draft on ' + filled + ' day(s); left ' + skippedBusy + ' busy day(s) alone');
+    } else if (filled) {
+      toast('Rough week laid down — draft only, please edit');
+    } else {
+      toast('Nothing to fill — every day already looks busy');
+    }
+  }
+
+  function suggestRoughWeek() {
+    if (!state.plan || !Array.isArray(state.plan.days) || !state.plan.days.length) {
+      toast('Add tour dates (or days) first');
+      return;
+    }
+    const busyIdx = [];
+    state.plan.days.forEach((day, i) => {
+      if (dayLooksBusy(day)) busyIdx.push(i + 1);
+    });
+    if (busyIdx.length) {
+      const msg = 'Day(s) ' + busyIdx.join(', ')
+        + ' already have several stops.\n\nOK = replace those days too with the rough draft\nCancel = only fill empty / sparse days';
+      applyRoughWeek({ replaceBusy: window.confirm(msg) });
+      return;
+    }
+    applyRoughWeek({ replaceBusy: true });
+  }
+
   function emptyPlan(partial) {
     const arrival = partial.arrivalDate || '';
     const departure = partial.departureDate || '';
@@ -1988,6 +2195,7 @@
       contact_detail: p.contactDetail || null,
       address: p.address || null,
       notes: p.notes || null,
+      nickname: p.nickname || null,
       sort_order: typeof p.sortOrder === 'number' ? p.sortOrder : (index + 1),
       updated_at: new Date().toISOString(),
     };
@@ -2002,6 +2210,7 @@
       contactDetail: r.contact_detail || '',
       address: r.address || '',
       notes: r.notes || '',
+      nickname: r.nickname || '',
       sortOrder: r.sort_order == null ? 0 : Number(r.sort_order),
     });
   }
@@ -2725,6 +2934,7 @@
             <div class="maps-under-field">${mapsButtonHtml(p.name, p.address, 'Open in Apple Maps')}</div>
           </div>
         </div>
+        <input type="text" data-place-nickname="${p.id}" value="${escapeHtml(p.nickname || '')}" placeholder="Nickname / short name (Day at a glance)" style="margin-top:8px;" title="Optional short name shown in Day at a glance">
         <input type="text" data-place-notes="${p.id}" value="${escapeHtml(p.notes || '')}" placeholder="Notes / description (editable)" style="margin-top:8px;">
         ${showAddToDay ? `<div class="add-to-day-row">
           <div class="time-field">
@@ -2773,6 +2983,32 @@
     `;
   }
 
+
+  function placeTypeIcon(type) {
+    const map = {
+      factory: '🏭',
+      shop: '🛍️',
+      restaurant: '🍽️',
+      meal: '🍽️',
+      hotel: '🏨',
+      museum: '🏛️',
+      school: '🎓',
+      experience: '✨',
+      pickup: '🚐',
+      travel: '🚗',
+      other: '📍',
+    };
+    return map[String(type || 'other')] || map.other;
+  }
+
+  function glanceLabelForStop(stop) {
+    if (!stop) return '';
+    const place = placeById(stop.placeId || stop.place_id);
+    const nick = place && String(place.nickname || '').trim();
+    if (nick) return nick;
+    return String(stop.title || '').trim();
+  }
+
   function renderDayGlance(day) {
     if (!day) return '';
     sortDayBlocks(day);
@@ -2786,10 +3022,14 @@
     const rows = stops.map(s => {
       const time = String(s.time || '').trim();
       const timeLabel = time || '—';
-      const title = String(s.title || '').trim();
-      return `<li><button type="button" class="day-glance-row" data-glance-stop="${escapeHtml(s.id)}" title="Jump to this stop">
+      const label = glanceLabelForStop(s);
+      const fullTitle = String(s.title || '').trim();
+      const icon = placeTypeIcon(s.type);
+      const tip = fullTitle && fullTitle !== label ? (fullTitle + ' — jump to this stop') : 'Jump to this stop';
+      return `<li><button type="button" class="day-glance-row" data-glance-stop="${escapeHtml(s.id)}" title="${escapeHtml(tip)}">
         <span class="day-glance-time">${escapeHtml(timeLabel)}</span>
-        <span class="day-glance-title">${escapeHtml(title)}</span>
+        <span class="day-glance-icon" aria-hidden="true">${icon}</span>
+        <span class="day-glance-title"><span class="glance-nick">${escapeHtml(label)}</span></span>
       </button></li>`;
     }).join('');
     return `<div class="day-glance" aria-label="Day at a glance">
@@ -3169,6 +3409,7 @@ function renderDayTabs() {
         </div>
         ${renderTourHotelSelect()}
         <button type="button" class="btn btn-outline btn-sm" id="btnRebuildDays">Rebuild days from dates</button>
+        <button type="button" class="btn btn-outline btn-sm" id="btnSuggestRoughWeek" title="Lay down a draft week from Places and usual tour patterns — you can edit everything after">Suggest a rough week</button>
       </div>
     `;
 
@@ -3180,6 +3421,7 @@ function renderDayTabs() {
           <span>🏨 Staying at: ${escapeHtml(state.plan.tourHotelName || 'Not set')}</span>
           <span>🗺 Day 1 start: ${escapeHtml(effectiveDay1OriginType() === 'airport' ? PRAGUE_AIRPORT_NAME : (state.plan.pragueHotel?.name || 'Prague hotel pick-up'))}</span>
         </div>
+        ${state.plan.roughDraft ? '<div class="rough-draft-banner">Rough draft week — times and stops are a starting point only. Edit freely.</div>' : ''}
       </div>
     `;
 
@@ -3202,6 +3444,7 @@ function renderDayTabs() {
           <h2>${view === 'phone' ? 'Today’s plan' : 'Day timeline'}</h2>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
             <button type="button" class="btn btn-outline btn-sm" id="btnAddDay">Add a day</button>
+            <button type="button" class="btn btn-outline btn-sm" id="btnSuggestRoughWeek" title="Lay down a draft week from Places and usual tour patterns — you can edit everything after">Suggest a rough week</button>
             <button type="button" class="btn btn-outline btn-sm" id="btnGotoPlaces">Manage Places</button>
             <button type="button" class="btn btn-primary btn-sm phone-only" id="btnOpenSheet">Quick add</button>
           </div>
@@ -3360,6 +3603,7 @@ function renderDayTabs() {
     q('#btnAddGuest')?.addEventListener('click', addGuest);
     q('#btnAddDay')?.addEventListener('click', addManualDay);
     q('#btnRebuildDays')?.addEventListener('click', rebuildFromDates);
+    document.querySelectorAll('#btnSuggestRoughWeek').forEach(btn => btn.addEventListener('click', suggestRoughWeek));
     q('#btnAddStop')?.addEventListener('click', addBlankStop);
     q('#btnOpenSheet')?.addEventListener('click', openSheet);
     q('#btnGotoPlaces')?.addEventListener('click', () => setMainTab('places'));
@@ -3603,6 +3847,16 @@ function renderDayTabs() {
       inp.addEventListener('input', () => {
         const p = state.catalogue.find(x => x.id === inp.getAttribute('data-place-contact-detail'));
         if (p) { p.contactDetail = inp.value; scheduleAutoSave(); }
+      });
+    });
+    root.querySelectorAll('[data-place-nickname]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const p = state.catalogue.find(x => x.id === inp.getAttribute('data-place-nickname'));
+        if (p) { p.nickname = inp.value; scheduleAutoSave(); }
+      });
+      inp.addEventListener('change', () => {
+        const p = state.catalogue.find(x => x.id === inp.getAttribute('data-place-nickname'));
+        if (p) { p.nickname = inp.value; scheduleAutoSave(); render(); }
       });
     });
     root.querySelectorAll('[data-place-notes]').forEach(inp => {
