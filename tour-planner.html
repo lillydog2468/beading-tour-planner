@@ -251,11 +251,9 @@
       display: flex; flex-direction: column; gap: 2px;
     }
     .day-glance-row {
-      display: grid;
-      grid-template-columns: 4.2em 1.5em 1fr;
-      gap: 10px;
-      align-items: baseline;
+      display: block;
       width: 100%;
+      min-width: 0;
       border: none;
       background: transparent;
       text-align: left;
@@ -270,11 +268,21 @@
       background: var(--accent-soft);
       outline: none;
     }
-    .day-glance-time {
+    input.day-glance-time-input[type="time"] {
+      width: 5.6em;
+      min-width: 5.6em;
+      max-width: 6.5em;
+      flex-shrink: 0;
+      padding: 6px 4px;
       font-variant-numeric: tabular-nums;
       font-weight: 800;
       font-size: 13px;
-      color: var(--text-secondary);
+      font-family: inherit;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--input-bg);
+      box-sizing: border-box;
     }
     .day-glance-title {
       font-weight: 700;
@@ -282,6 +290,7 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      display: block;
     }
     .day-glance-empty { margin: 0; font-size: 13px; color: var(--text-secondary); }
     .stop.glance-flash {
@@ -292,7 +301,7 @@
     .view-phone .day-glance { padding: 12px 14px; margin-bottom: 14px; }
     .view-phone .day-glance-label { font-size: 12px; margin-bottom: 8px; }
     .view-phone .day-glance-row { min-height: 44px; padding: 8px 6px; }
-    .view-phone .day-glance-time { font-size: 16px; }
+    .view-phone input.day-glance-time-input[type="time"] { font-size: 16px; min-height: 44px; width: 6.2em; min-width: 6.2em; max-width: 7em; padding: 8px 6px; }
     .view-phone .day-glance-title { font-size: 16px; }
 
     .timeline { display: flex; flex-direction: column; gap: 0; }
@@ -423,7 +432,11 @@
       border-radius: 999px; padding: 6px 12px; min-height: 36px;
     }
 
-    .day-glance-icon { font-size: 14px; line-height: 1; text-align: center; opacity: .92; }
+    .day-glance-icon {
+      font-size: 16px; line-height: 1; text-align: center; opacity: .92;
+      flex-shrink: 0; width: 1.5em; min-width: 1.5em;
+      user-select: none;
+    }
     .day-glance-title .glance-nick { font-weight: 800; }
     .day-glance-hint {
       font-size: 11px; font-weight: 600; color: var(--text-secondary);
@@ -431,8 +444,9 @@
     }
     .day-glance-item {
       display: grid;
-      grid-template-columns: 18px 1fr auto;
-      gap: 2px 4px;
+      /* handle | time | icon | nickname | ↑↓ — nothing overlaps */
+      grid-template-columns: 18px auto auto minmax(0, 1fr) auto;
+      gap: 4px 6px;
       align-items: center;
       border-radius: 8px;
     }
@@ -457,6 +471,7 @@
       flex-direction: column;
       gap: 2px;
       flex-shrink: 0;
+      justify-self: end;
     }
     .day-glance-move {
       border: 1px solid var(--border);
@@ -818,7 +833,7 @@
     }
     .rough-week {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
       gap: 10px;
     }
     @media (max-width: 820px) {
@@ -869,7 +884,8 @@
     }
     .rough-stop {
       display: grid;
-      grid-template-columns: auto 1fr auto;
+      /* time | icon | nickname | ↑↓× — fixed columns so ↑↓ never cover the icon */
+      grid-template-columns: auto auto minmax(0, 1fr) auto;
       gap: 6px;
       align-items: center;
       padding: 6px 8px;
@@ -883,28 +899,43 @@
       border-style: dashed;
       border-color: var(--border);
     }
-    .rough-stop-main {
-      display: grid;
-      grid-template-columns: 3.2em 1.4em 1fr;
-      gap: 6px;
-      align-items: baseline;
-      min-width: 0;
-    }
-    .rough-stop-time {
+    input.rough-stop-time-input[type="time"] {
+      width: 5.6em;
+      min-width: 5.6em;
+      max-width: 6.5em;
+      flex-shrink: 0;
+      padding: 6px 4px;
       font-variant-numeric: tabular-nums;
-      font-weight: 800; font-size: 12px;
-      color: var(--text-secondary);
+      font-weight: 800;
+      font-size: 13px;
+      font-family: inherit;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--input-bg);
+      box-sizing: border-box;
     }
-    .rough-stop-icon { font-size: 14px; text-align: center; }
+    .view-phone input.rough-stop-time-input[type="time"] {
+      font-size: 16px; min-height: 44px; width: 6.2em; min-width: 6.2em; max-width: 7em; padding: 8px 6px;
+    }
+    .rough-stop-icon {
+      font-size: 16px; text-align: center; line-height: 1;
+      width: 1.5em; min-width: 1.5em; flex-shrink: 0;
+      user-select: none;
+    }
     .rough-stop-nick {
       font-weight: 800; font-size: 13px;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      min-width: 0;
     }
     .rough-stop-actions {
       display: flex; gap: 2px; align-items: center;
+      flex-shrink: 0; justify-self: end;
     }
     .rough-stop-actions button {
       min-width: 32px; min-height: 32px;
+      width: 32px; height: 32px;
+      padding: 0;
       border: 1px solid var(--border);
       border-radius: 8px;
       background: var(--surface);
@@ -912,6 +943,11 @@
       font-weight: 800;
       cursor: pointer;
       font-family: inherit;
+      flex-shrink: 0;
+      line-height: 1;
+    }
+    .view-phone .rough-stop-actions button {
+      min-width: 40px; min-height: 40px; width: 40px; height: 40px;
     }
     .rough-stop-actions button:disabled { opacity: .35; cursor: not-allowed; }
     .rough-stop-actions .rough-remove { color: #b42318; }
@@ -3005,11 +3041,11 @@
       h.addEventListener('mousedown', arm);
       h.addEventListener('touchstart', arm, { passive: true });
     });
-    // Keep ↑↓ taps reliable — do not let the parent li start a drag from the buttons
-    list.querySelectorAll('.day-glance-move').forEach(btn => {
-      btn.addEventListener('mousedown', (e) => { e.stopPropagation(); dragFromHandle = false; });
-      btn.addEventListener('pointerdown', (e) => { e.stopPropagation(); dragFromHandle = false; });
-      btn.addEventListener('click', (e) => e.stopPropagation());
+    // Keep ↑↓ / time taps reliable — do not let the parent li start a drag from controls
+    list.querySelectorAll('.day-glance-move, .day-glance-time-input').forEach(el => {
+      el.addEventListener('mousedown', (e) => { e.stopPropagation(); dragFromHandle = false; });
+      el.addEventListener('pointerdown', (e) => { e.stopPropagation(); dragFromHandle = false; });
+      el.addEventListener('click', (e) => e.stopPropagation());
     });
     list.querySelectorAll('.day-glance-item').forEach(item => {
       item.addEventListener('dragstart', (e) => {
@@ -3522,7 +3558,7 @@
     const day = state.plan && state.plan.days ? state.plan.days[dayIndex] : null;
     if (!day) { toast('Day not found'); return; }
     state.roughSelectedPlaceId = null;
-    // Blank time — Keith / Simi add times later in Planner
+    // Blank time by default — editable inline on the stop chip
     addPlaceToDay(place, dayIndex, '');
   }
 
@@ -3585,7 +3621,6 @@
     const rows = stops.map((s, idx) => {
       const system = isRoughSystemStop(s);
       const time = String(s.time || '').trim();
-      const timeLabel = time || '—';
       const label = glanceLabelForStop(s);
       const icon = placeIconForStop(s);
       const upDis = idx === 0 ? ' disabled' : '';
@@ -3593,12 +3628,10 @@
       const removeBtn = system
         ? ''
         : `<button type="button" class="rough-remove" data-rough-remove="${escapeHtml(s.id)}" title="Remove — returns to tray" aria-label="Remove ${escapeHtml(label)}">×</button>`;
-      return `<li class="rough-stop${system ? ' system' : ''}" data-rough-stop-id="${escapeHtml(s.id)}">
-        <div class="rough-stop-main" title="${escapeHtml(String(s.title || label))}">
-          <span class="rough-stop-time">${escapeHtml(timeLabel)}</span>
-          <span class="rough-stop-icon" aria-hidden="true">${icon}</span>
-          <span class="rough-stop-nick">${escapeHtml(label)}</span>
-        </div>
+      return `<li class="rough-stop${system ? ' system' : ''}" data-rough-stop-id="${escapeHtml(s.id)}" title="${escapeHtml(String(s.title || label))}">
+        <input type="time" class="rough-stop-time-input" data-stop-time="${escapeHtml(s.id)}" data-time-src="rough" value="${escapeHtml(time)}" aria-label="Time for ${escapeHtml(label)}">
+        <span class="rough-stop-icon" aria-hidden="true">${icon}</span>
+        <span class="rough-stop-nick">${escapeHtml(label)}</span>
         <div class="rough-stop-actions">
           <button type="button" data-rough-move="${escapeHtml(s.id)}" data-rough-day="${dayIndex}" data-dir="-1" aria-label="Move up"${upDis}>↑</button>
           <button type="button" data-rough-move="${escapeHtml(s.id)}" data-rough-day="${dayIndex}" data-dir="1" aria-label="Move down"${downDis}>↓</button>
@@ -3648,7 +3681,7 @@
         <div class="row-between" style="align-items:flex-start;gap:10px;flex-wrap:wrap;">
           <div>
             <h2 style="margin:0;">Rough plan</h2>
-            <p class="muted" style="margin:6px 0 0;max-width:42em;">Sketch the week with Simi — drag places onto days or tap-to-add. Same plan as Planner (shared cloud save). Times stay blank until you fill them in Planner.</p>
+            <p class="muted" style="margin:6px 0 0;max-width:42em;">Sketch the week with Simi — drag places onto days or tap-to-add. Same plan as Planner (shared cloud save). Tap a stop’s time to set it (blank is fine when adding).</p>
           </div>
           <button type="button" class="btn btn-outline btn-sm" id="btnRoughGotoPlanner">Open Planner</button>
         </div>
@@ -3760,7 +3793,6 @@
     }
     const rows = stops.map((s, idx) => {
       const time = String(s.time || '').trim();
-      const timeLabel = time || '—';
       const label = glanceLabelForStop(s);
       const fullTitle = String(s.title || '').trim();
       const icon = placeIconForStop(s);
@@ -3769,9 +3801,9 @@
       const downDis = idx === stops.length - 1 ? ' disabled' : '';
       return `<li class="day-glance-item" draggable="true" data-glance-index="${idx}" data-glance-stop-id="${escapeHtml(s.id)}">
         <span class="day-glance-handle" title="Drag to reorder on desktop" aria-hidden="true">⠿</span>
+        <input type="time" class="day-glance-time-input" data-stop-time="${escapeHtml(s.id)}" data-time-src="glance" value="${escapeHtml(time)}" aria-label="Time for ${escapeHtml(label)}">
+        <span class="day-glance-icon" aria-hidden="true">${icon}</span>
         <button type="button" class="day-glance-row" data-glance-stop="${escapeHtml(s.id)}" title="${escapeHtml(tip)}">
-          <span class="day-glance-time">${escapeHtml(timeLabel)}</span>
-          <span class="day-glance-icon" aria-hidden="true">${icon}</span>
           <span class="day-glance-title"><span class="glance-nick">${escapeHtml(label)}</span></span>
         </button>
         <div class="day-glance-moves">
@@ -3782,7 +3814,7 @@
     }).join('');
     return `<div class="day-glance" aria-label="Day at a glance">
       <div class="day-glance-label">Day at a glance</div>
-      <p class="day-glance-hint">Use ↑ ↓ to reorder (drag ⠿ on desktop if you like)</p>
+      <p class="day-glance-hint">Edit time · tap name to jump · ↑ ↓ to reorder (drag ⠿ on desktop)</p>
       <ul class="day-glance-list" id="dayGlanceList">${rows}</ul>
     </div>`;
   }
@@ -3816,7 +3848,7 @@
       html += `
         <article class="stop" id="stop-block-${escapeHtml(s.id)}">
           <div class="stop-time">
-            <input type="time" data-stop-time="${s.id}" value="${escapeHtml(s.time || '')}" aria-label="Time">
+            <input type="time" data-stop-time="${s.id}" data-time-src="timeline" value="${escapeHtml(s.time || '')}" aria-label="Time">
           </div>
           <div class="rail"><div class="dot ${escapeHtml(s.type || '')}"></div></div>
           <div>
@@ -4045,6 +4077,7 @@ function renderDayTabs() {
             attr,
             value: active.getAttribute(attr),
             repayId: active.getAttribute('data-repay-id') || null,
+            timeSrc: active.getAttribute('data-time-src') || null,
             tag: active.tagName,
             type: active.type || '',
             selStart: typeof active.selectionStart === 'number' ? active.selectionStart : null,
@@ -4086,7 +4119,11 @@ function renderDayTabs() {
         el = document.getElementById(f.id);
       } else if (f.attr) {
         const nodes = Array.from(document.querySelectorAll(`[${f.attr}="${CSS.escape(String(f.value))}"]`));
-        el = nodes.find(n => !f.repayId || n.getAttribute('data-repay-id') === f.repayId) || nodes[0] || null;
+        el = nodes.find(n => {
+          if (f.repayId && n.getAttribute('data-repay-id') !== f.repayId) return false;
+          if (f.timeSrc && n.getAttribute('data-time-src') !== f.timeSrc) return false;
+          return true;
+        }) || nodes[0] || null;
       }
       if (!el || typeof el.focus !== 'function') return;
       try { el.focus({ preventScroll: true }); } catch { try { el.focus(); } catch { /* ignore */ } }
