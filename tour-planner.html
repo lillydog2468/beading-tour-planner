@@ -1,0 +1,2030 @@
+<!DOCTYPE html>
+<html lang="en-GB" data-theme="light">
+<head>
+  <script>
+    (() => {
+      try {
+        const stored = localStorage.getItem('theme');
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.setAttribute('data-theme', stored || (prefersDark ? 'dark' : 'light'));
+      } catch {}
+    })();
+  </script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Tour planner — Keith Dudman beading tours</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root, [data-theme="light"] {
+      --bg: #f4f5f7;
+      --surface: #ffffff;
+      --surface-alt: #f9fafb;
+      --border: #e2e4e9;
+      --text: #1a1d26;
+      --text-secondary: #6b7280;
+      --input-bg: #ffffff;
+      --accent: #4f46e5;
+      --accent-hover: #4338ca;
+      --accent-soft: #eef2ff;
+      --accent-glow: rgba(79,70,229,.12);
+      --danger: #dc2626;
+      --success: #16a34a;
+      --warning: #d97706;
+      --radius: 10px;
+      --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+      --shadow-lg: 0 10px 25px rgba(0,0,0,.1);
+      --factory: #7c3aed;
+      --restaurant: #c2410c;
+      --experience: #0f766e;
+      --shop: #1d4ed8;
+      --museum: #a16207;
+      --school: #be185d;
+      --hotel: #b45309;
+      --travel: #6b7280;
+      --pickup: #4f46e5;
+    }
+    [data-theme="dark"] {
+      --bg: #111318;
+      --surface: #1a1d24;
+      --surface-alt: #21242c;
+      --border: #2e3240;
+      --text: #e4e6eb;
+      --text-secondary: #8b8f9a;
+      --input-bg: #21242c;
+      --accent: #6366f1;
+      --accent-hover: #818cf8;
+      --accent-soft: rgba(99,102,241,.14);
+      --accent-glow: rgba(99,102,241,.22);
+      --danger: #ef4444;
+      --success: #22c55e;
+      --warning: #fbbf24;
+      --shadow: 0 1px 3px rgba(0,0,0,.3);
+      --shadow-lg: 0 10px 25px rgba(0,0,0,.4);
+      --factory: #c4b5fd;
+      --restaurant: #fdba74;
+      --experience: #5eead4;
+      --shop: #93c5fd;
+      --museum: #fcd34d;
+      --school: #f9a8d4;
+      --hotel: #fbbf24;
+      --travel: #9ca3af;
+      --pickup: #a5b4fc;
+    }
+
+    html, body { min-height: 100%; }
+    body {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+    }
+
+    .wip-banner {
+      background: #f59e0b;
+      color: #111827;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .02em;
+      text-align: center;
+      padding: 6px 12px;
+    }
+
+    .topbar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 40;
+    }
+    .topbar-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 16px;
+      flex-wrap: wrap;
+    }
+    .topbar-left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-width: 0; }
+    .topbar h1 { font-size: 16px; font-weight: 800; letter-spacing: -.3px; }
+    .topbar .sub { font-size: 12px; color: var(--text-secondary); font-weight: 600; }
+    .view-nav { display: flex; gap: 4px; background: var(--bg); border-radius: 8px; padding: 3px; }
+    .view-nav a, .view-nav button {
+      padding: 6px 12px; border: none; border-radius: 6px;
+      font-family: inherit; font-size: 12px; font-weight: 600;
+      cursor: pointer; background: transparent; color: var(--text-secondary);
+      text-decoration: none; display: inline-flex; align-items: center; gap: 5px;
+    }
+    .view-nav a.active, .view-nav button.active {
+      background: var(--surface); color: var(--text); box-shadow: var(--shadow);
+    }
+    .topbar-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 9px 14px; border: none; border-radius: var(--radius);
+      font-family: inherit; font-size: 13px; font-weight: 700;
+      cursor: pointer; text-decoration: none; color: inherit;
+      min-height: 40px;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+    .btn-outline:hover { background: var(--bg); }
+    .btn-danger { background: transparent; border: 1px solid var(--border); color: var(--danger); }
+    .btn-ghost { background: transparent; color: var(--text-secondary); padding: 6px 8px; min-height: 32px; }
+    .btn-lg { min-height: 48px; font-size: 16px; padding: 12px 16px; }
+    .btn-sm { min-height: 34px; padding: 6px 10px; font-size: 12px; }
+
+    .wrap { max-width: 1280px; margin: 0 auto; padding: 16px; }
+
+    .status-row {
+      display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+    .pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; font-weight: 700; padding: 4px 10px;
+      border-radius: 999px; background: var(--accent-soft); color: var(--accent);
+    }
+    .pill.warn { background: #fef3c7; color: #92400e; }
+    [data-theme="dark"] .pill.warn { background: rgba(245,158,11,.18); color: #fbbf24; }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: 280px 1fr 300px;
+      gap: 14px;
+      align-items: start;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      padding: 14px;
+    }
+    .card h2 {
+      font-size: 13px; font-weight: 800; letter-spacing: .04em;
+      text-transform: uppercase; color: var(--text-secondary); margin-bottom: 10px;
+    }
+
+    label.field-label {
+      display: block; font-size: 12px; font-weight: 700;
+      color: var(--text-secondary); margin-bottom: 4px;
+    }
+    input[type="text"], input[type="time"], input[type="date"], select, textarea {
+      width: 100%; padding: 10px 12px;
+      border: 1px solid var(--border); border-radius: 8px;
+      background: var(--input-bg); color: var(--text);
+      font-family: inherit; font-size: 14px;
+    }
+    .view-phone input, .view-phone select, .view-phone textarea { font-size: 16px; min-height: 44px; }
+
+    .place-row, .stop-row {
+      display: flex; gap: 8px; align-items: center; margin-bottom: 8px;
+    }
+    .icon-btn {
+      border: 1px solid var(--border); background: var(--surface);
+      color: var(--text-secondary); border-radius: 8px;
+      width: 36px; height: 36px; cursor: pointer; flex-shrink: 0;
+      font-size: 16px; font-weight: 800;
+    }
+    .icon-btn:hover { color: var(--danger); border-color: var(--danger); }
+
+    .hotel-card {
+      background: var(--accent-soft);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+    }
+    .hotel-card .name { font-weight: 800; font-size: 16px; }
+    .hotel-card .meta { color: var(--text-secondary); font-size: 13px; margin: 4px 0 10px; }
+    .maps-btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--accent); color: #fff; text-decoration: none;
+      font-weight: 800; font-size: 14px; padding: 10px 14px;
+      border-radius: 10px; min-height: 44px;
+    }
+    .maps-btn:hover { background: var(--accent-hover); }
+
+    .day-tabs { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 10px; }
+    .day-tab {
+      flex: 0 0 auto; border: 1px solid var(--border); background: var(--surface);
+      border-radius: 12px; padding: 8px 12px; cursor: pointer; text-align: left;
+      font-family: inherit; color: var(--text);
+    }
+    .day-tab.active { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+    .day-tab .d-label { font-weight: 800; font-size: 13px; }
+    .day-tab .d-date { font-size: 12px; color: var(--text-secondary); }
+    .day-tab.today { background: var(--accent-soft); }
+
+    .timeline { display: flex; flex-direction: column; gap: 0; }
+    .stop {
+      display: grid;
+      grid-template-columns: 108px 18px 1fr auto;
+      gap: 10px;
+      align-items: start;
+      padding: 10px 0;
+    }
+    .stop-time {
+      font-variant-numeric: tabular-nums;
+      font-weight: 800; font-size: 15px;
+    }
+    .stop-time input { padding: 6px 6px; font-weight: 800; font-size: 14px; min-width: 0; }
+    .rail { position: relative; height: 100%; min-height: 42px; }
+    .rail::before {
+      content: ''; position: absolute; left: 7px; top: 8px; bottom: -18px;
+      width: 2px; background: var(--border);
+    }
+    .stop:last-child .rail::before { display: none; }
+    .dot {
+      width: 16px; height: 16px; border-radius: 50%;
+      background: var(--accent); border: 3px solid var(--surface);
+      box-shadow: 0 0 0 2px var(--accent); position: relative; z-index: 1;
+    }
+    .dot.factory { background: var(--factory); box-shadow: 0 0 0 2px var(--factory); }
+    .dot.restaurant { background: var(--restaurant); box-shadow: 0 0 0 2px var(--restaurant); }
+    .dot.experience { background: var(--experience); box-shadow: 0 0 0 2px var(--experience); }
+    .dot.shop { background: var(--shop); box-shadow: 0 0 0 2px var(--shop); }
+    .dot.museum { background: var(--museum); box-shadow: 0 0 0 2px var(--museum); }
+    .dot.school { background: var(--school); box-shadow: 0 0 0 2px var(--school); }
+    .dot.hotel, .dot.meal { background: var(--hotel); box-shadow: 0 0 0 2px var(--hotel); }
+    .dot.travel { background: var(--travel); box-shadow: 0 0 0 2px var(--travel); }
+    .dot.pickup { background: var(--pickup); box-shadow: 0 0 0 2px var(--pickup); }
+
+    .stop-title { font-weight: 800; font-size: 15px; }
+    .stop-title input, .stop-notes input { border: none; background: transparent; padding: 2px 0; }
+    .stop-title input:focus, .stop-notes input:focus { outline: none; background: var(--input-bg); border: 1px solid var(--border); }
+    .badge {
+      display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: .04em;
+      text-transform: uppercase; padding: 2px 7px; border-radius: 999px;
+      background: var(--bg); color: var(--text-secondary); margin-right: 6px;
+    }
+    .stop-notes { color: var(--text-secondary); font-size: 13px; }
+    .stop-actions { display: flex; flex-direction: column; gap: 4px; }
+
+    .travel-note {
+      display: flex; gap: 10px; align-items: flex-start;
+      margin: 0 0 0 108px; padding: 4px 0 8px 28px;
+      color: var(--text-secondary); font-size: 12px; font-weight: 600;
+      border-left: 2px dashed var(--border);
+    }
+    .travel-note .hook {
+      display: inline-block; margin-left: 6px; font-weight: 500; font-style: italic;
+      opacity: .85;
+    }
+
+    .place-list { display: flex; flex-direction: column; gap: 8px; max-height: 70vh; overflow: auto; }
+    .place {
+      border: 1px solid var(--border); border-radius: 10px; padding: 10px;
+      background: var(--surface-alt); cursor: pointer; text-align: left;
+      font-family: inherit; color: var(--text); width: 100%;
+    }
+    .place:hover, .place:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+    .place .p-name { font-weight: 800; }
+    .place .p-meta { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+    .filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+    .chip {
+      border: 1px solid var(--border); background: var(--surface); color: var(--text);
+      border-radius: 999px; padding: 5px 10px; font-size: 12px; font-weight: 700;
+      cursor: pointer; font-family: inherit;
+    }
+    .chip.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    .sheet {
+      position: fixed; inset: 0; background: rgba(0,0,0,.45);
+      z-index: 80; display: none; align-items: flex-end; justify-content: center;
+    }
+    .sheet.open { display: flex; }
+    .sheet-panel {
+      background: var(--surface); width: min(560px, 100%);
+      max-height: 88vh; overflow: auto; border-radius: 18px 18px 0 0;
+      padding: 16px; padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    }
+
+    .toast-wrap { position: fixed; right: 16px; bottom: 16px; z-index: 90; display: flex; flex-direction: column; gap: 8px; }
+    .toast {
+      background: var(--text); color: var(--surface); padding: 10px 14px;
+      border-radius: 10px; font-size: 13px; font-weight: 700; box-shadow: var(--shadow-lg);
+    }
+
+    .view-phone .stop-title { font-size: 20px; }
+    .view-phone .stop-time { font-size: 18px; }
+    .view-phone .hotel-card .name { font-size: 20px; }
+    .view-phone h1 { font-size: 18px; }
+    .view-phone .wrap { padding: 12px; }
+    .view-phone .grid-3 { grid-template-columns: 1fr; }
+    .view-phone .desktop-only { display: none !important; }
+    .view-detailed .phone-only { display: none !important; }
+
+    @media (max-width: 980px) {
+      .grid-3 { grid-template-columns: 1fr; }
+    }
+
+    .muted { color: var(--text-secondary); font-size: 13px; }
+    .row-between { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .stack { display: flex; flex-direction: column; gap: 8px; }
+    .hidden { display: none !important; }
+    select.group-select { min-width: 180px; max-width: 280px; }
+
+    /* Trip summary */
+    .trip-summary {
+      background: var(--accent-soft);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+    .trip-summary .trip-title { font-weight: 800; font-size: 18px; margin-bottom: 6px; }
+    .trip-summary .trip-meta {
+      display: flex; flex-wrap: wrap; gap: 8px 14px;
+      font-size: 14px; font-weight: 700;
+    }
+    .trip-summary .trip-meta span {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 999px; padding: 6px 12px; min-height: 36px;
+    }
+    .view-phone .trip-summary .trip-title { font-size: 20px; }
+    .view-phone .trip-summary .trip-meta span { font-size: 15px; min-height: 40px; }
+
+    /* Guest debt */
+    .guest-block {
+      border: 1px solid var(--border); border-radius: 12px;
+      padding: 10px; margin-bottom: 10px; background: var(--surface-alt);
+    }
+    .guest-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+    .guest-row input { flex: 1; }
+    .debt-grid {
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 8px;
+    }
+    @media (max-width: 520px) { .debt-grid { grid-template-columns: 1fr; } }
+    .debt-field label {
+      display: block; font-size: 11px; font-weight: 800; letter-spacing: .03em;
+      text-transform: uppercase; color: var(--text-secondary); margin-bottom: 3px;
+    }
+    .debt-field input {
+      width: 100%; padding: 10px 12px; min-height: 44px;
+      border: 1px solid var(--border); border-radius: 8px;
+      background: var(--input-bg); color: var(--text);
+      font-family: inherit; font-size: 16px; font-variant-numeric: tabular-nums;
+    }
+    .debt-balance {
+      font-weight: 800; font-size: 15px; padding: 10px 12px; border-radius: 8px;
+      background: var(--surface); border: 1px solid var(--border);
+      min-height: 44px; display: flex; align-items: center;
+    }
+    .debt-balance.owes { color: var(--danger); }
+    .debt-balance.clear { color: var(--success); }
+    .repay-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+    .repay-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 13px; }
+    .repay-row input[type="number"] { width: 96px; min-height: 40px; font-size: 15px; }
+    .repay-row input[type="date"] { width: 140px; min-height: 40px; font-size: 14px; }
+    .repay-note { font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-top: 4px; }
+
+    /* Booking ticks */
+    .booking-ticks { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .tick {
+      display: inline-flex; align-items: center; gap: 8px;
+      border: 1px solid var(--border); background: var(--surface);
+      border-radius: 10px; padding: 8px 12px; min-height: 44px;
+      font-size: 13px; font-weight: 700; cursor: pointer; user-select: none; color: var(--text);
+    }
+    .tick input { width: 18px; height: 18px; accent-color: var(--accent); flex-shrink: 0; }
+    .tick.on-message { border-color: var(--warning); background: #fffbeb; }
+    .tick.on-booked { border-color: var(--success); background: #ecfdf5; }
+    [data-theme="dark"] .tick.on-message { background: rgba(245,158,11,.14); }
+    [data-theme="dark"] .tick.on-booked { background: rgba(34,197,94,.14); }
+    .view-phone .tick { font-size: 15px; min-height: 48px; padding: 10px 14px; }
+
+    /* Travel estimate */
+    .travel-note {
+      display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+      margin: 0 0 0 108px; padding: 4px 0 8px 28px;
+      color: var(--text-secondary); font-size: 12px; font-weight: 600;
+      border-left: 2px dashed var(--border);
+    }
+    .travel-note input[type="number"] {
+      width: 72px; min-height: 36px; padding: 6px 8px; font-size: 14px;
+      font-weight: 800; font-variant-numeric: tabular-nums;
+    }
+    .view-phone .travel-note { margin-left: 0; padding-left: 12px; font-size: 14px; }
+    .view-phone .travel-note input[type="number"] { min-height: 40px; font-size: 16px; }
+
+    /* Place picker */
+    .place-picker {
+      border: 1px solid var(--border); border-radius: 12px;
+      padding: 10px; background: var(--surface-alt); margin-bottom: 10px;
+    }
+    .place-picker select { width: 100%; min-height: 48px; font-size: 16px; margin-bottom: 8px; }
+    .place-picker .picker-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    /* Places directory */
+    .place-dir-item {
+      border: 1px solid var(--border); border-radius: 12px;
+      padding: 12px; margin-bottom: 10px; background: var(--surface-alt);
+    }
+    .place-dir-item .dir-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px;
+    }
+    @media (max-width: 640px) { .place-dir-item .dir-grid { grid-template-columns: 1fr; } }
+    .contact-pill {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 11px; font-weight: 800; text-transform: uppercase;
+      letter-spacing: .03em; padding: 3px 8px; border-radius: 999px;
+      background: var(--accent-soft); color: var(--accent); margin-left: 6px;
+    }
+
+    /* ── Auto-save toggle (matches booking form) ── */
+    .autosave-toggle {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; font-weight: 500;
+      color: var(--text-secondary); cursor: pointer; user-select: none;
+      white-space: nowrap;
+    }
+    .autosave-toggle input { display: none; }
+    .toggle-track {
+      width: 36px; height: 20px;
+      background: var(--border); border-radius: 10px;
+      position: relative; transition: background .2s;
+      flex-shrink: 0;
+    }
+    .toggle-track::after {
+      content: ''; position: absolute; top: 2px; left: 2px;
+      width: 16px; height: 16px; border-radius: 50%;
+      background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.2);
+      transition: transform .2s;
+    }
+    .autosave-toggle input:checked + .toggle-track { background: var(--success); }
+    .autosave-toggle input:checked + .toggle-track::after { transform: translateX(16px); }
+    .autosave-status { font-size: 11px; color: var(--text-secondary); min-width: 50px; }
+    .autosave-status.saving { color: var(--warning); }
+    .autosave-status.saved { color: var(--success); }
+
+    @media (max-width: 600px) {
+      .autosave-toggle { font-size: 0; gap: 4px; }
+      .autosave-toggle .toggle-track { flex-shrink: 0; }
+      .autosave-status { font-size: 10px; min-width: 0; }
+    }
+
+  </style>
+</head>
+<body>
+  <div class="wip-banner">Work in progress — day planner for Keith Dudman’s beading tours around Jablonec nad Nisou</div>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="topbar-left">
+        <div>
+          <h1>Tour planner</h1>
+          <div class="sub">Check the day’s plan on your phone</div>
+        </div>
+        <nav class="view-nav" aria-label="Main">
+          <a href="booking-form.html">Bookings</a>
+          <a href="analytics.html">Analytics</a>
+          <a href="tour-planner.html" class="active">Planner</a>
+        </nav>
+      </div>
+      <div class="topbar-actions">
+        <label class="autosave-toggle" title="Auto-save changes after 2 seconds of inactivity">
+          <input type="checkbox" id="autosaveToggle" onchange="toggleAutoSave(this.checked)">
+          <span class="toggle-track"></span>
+          Auto-save
+        </label>
+        <span class="autosave-status" id="autosaveStatus"></span>
+        <select id="groupSelect" class="group-select" aria-label="Tour group"></select>
+        <div class="view-nav" role="group" aria-label="Planner view">
+          <button type="button" id="btnPhoneView">Phone</button>
+          <button type="button" id="btnDetailedView">Detailed</button>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" id="btnTheme">Theme</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap" id="app">
+    <p class="muted">Loading the sample tour…</p>
+  </main>
+
+  <div class="sheet" id="sheet" aria-hidden="true">
+    <div class="sheet-panel" role="dialog" aria-labelledby="sheetTitle">
+      <div class="row-between" style="margin-bottom:10px;">
+        <h2 id="sheetTitle" style="font-size:18px;font-weight:800;">Add a stop</h2>
+        <button type="button" class="btn btn-outline btn-sm" id="sheetClose">Close</button>
+      </div>
+      <div id="sheetBody"></div>
+    </div>
+  </div>
+  <div class="toast-wrap" id="toasts"></div>
+
+<script>
+  const SUPABASE_URL = 'https://ojulhplswtcmheonsnlv.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9qdWxocGxzd3RjbWhlb25zbmx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MTk3MDUsImV4cCI6MjA4ODk5NTcwNX0.n45cEd4soEC4gLDs2KSnBBvPs4nivDcSoj4GsG6u8IU';
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const STORAGE_KEY = 'keith_tour_planner_v1';
+  const DEMO_ID = 'demo';
+  const TRAVEL_BETWEEN = 'About 15–25 minutes by van between most stops.';
+  const TRAVEL_HOOK = 'Exact travel time later — Maps API not wired in this prototype.';
+  const PRAGUE_DRIVE = 'About 1 hour 25 minutes to the beading area (Jablonec nad Nisou).';
+
+  const PLACE_TYPES = [
+    { id: 'all', label: 'All' },
+    { id: 'factory', label: 'Factories' },
+    { id: 'shop', label: 'Shops' },
+    { id: 'restaurant', label: 'Restaurants' },
+    { id: 'experience', label: 'Experiences' },
+    { id: 'museum', label: 'Museums' },
+    { id: 'school', label: 'Schools' },
+    { id: 'other', label: 'Other' },
+  ];
+
+  const state = {
+    viewPref: localStorage.getItem('planner_view') || 'auto',
+    bookingKey: DEMO_ID,
+    bookings: [],
+    sessionEmail: '',
+    catalogue: [],
+    plans: {},
+    plan: null,
+    selectedDay: 0,
+    placeFilter: 'all',
+    liveBookings: false,
+    supabasePlanTable: false,
+  };
+
+  function uid(prefix) {
+    return (prefix || 'id') + '_' + Math.random().toString(36).slice(2, 9);
+  }
+  function escapeHtml(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function toast(msg) {
+    const el = document.createElement('div');
+    el.className = 'toast';
+    el.textContent = msg;
+    document.getElementById('toasts').appendChild(el);
+    setTimeout(() => el.remove(), 2600);
+  }
+  function parseISODateUTC(iso) {
+    if (!iso) return null;
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso));
+    if (!m) return null;
+    const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
+    const dt = new Date(Date.UTC(y, mo - 1, d));
+    if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return null;
+    return dt;
+  }
+  function toISODateUTC(dateUTC) {
+    const yyyy = String(dateUTC.getUTCFullYear());
+    const mm = String(dateUTC.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(dateUTC.getUTCDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+  function formatDateDMY(iso) {
+    const d = parseISODateUTC(iso);
+    if (!d) return iso ? String(iso) : '—';
+    const dd = String(d.getUTCDate()).padStart(2, '0');
+    const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const yyyy = String(d.getUTCFullYear());
+    return `${dd}/${mm}/${yyyy}`;
+  }
+  function weekdayName(iso) {
+    const d = parseISODateUTC(iso);
+    if (!d) return '';
+    return ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getUTCDay()];
+  }
+  function todayISO() { return toISODateUTC(new Date(Date.UTC(
+    new Date().getFullYear(), new Date().getMonth(), new Date().getDate()
+  ))); }
+  function enumerateDates(arrival, departure) {
+    const a = parseISODateUTC(arrival);
+    const b = parseISODateUTC(departure) || a;
+    if (!a) return [];
+    const end = b && b >= a ? b : a;
+    const out = [];
+    for (let t = a.getTime(); t <= end.getTime(); t += 86400000) {
+      out.push(toISODateUTC(new Date(t)));
+    }
+    return out;
+  }
+  function periodForTime(hhmm) {
+    const h = Number(String(hhmm || '09:00').split(':')[0]);
+    if (h < 12) return 'Morning';
+    if (h < 17) return 'Afternoon';
+    return 'Evening';
+  }
+  function addMinutes(hhmm, mins) {
+    const [h, m] = String(hhmm || '09:00').split(':').map(Number);
+    const total = ((h || 0) * 60 + (m || 0) + mins + 24 * 60) % (24 * 60);
+    return String(Math.floor(total / 60)).padStart(2, '0') + ':' + String(total % 60).padStart(2, '0');
+  }
+  function mapsQuery(name, address) {
+    const addr = (address || '').trim();
+    if (addr) return addr;
+    const n = (name || '').trim() || 'Prague hotel';
+    if (/prague|praha/i.test(n)) return n;
+    return n + ', Prague';
+  }
+  function appleMapsUrl(name, address) {
+    return 'https://maps.apple.com/?q=' + encodeURIComponent(mapsQuery(name, address));
+  }
+  function typeLabel(t) {
+    const singular = {
+      factory: 'Factory', shop: 'Shop', restaurant: 'Restaurant',
+      experience: 'Experience', museum: 'Museum', school: 'School',
+      other: 'Other', hotel: 'Hotel', meal: 'Meal', travel: 'Travel', pickup: 'Pick-up',
+    };
+    if (singular[t]) return singular[t];
+    const hit = PLACE_TYPES.find(p => p.id === t);
+    return hit ? hit.label.replace(/s$/, '') : (t || 'Stop');
+  }
+
+  const CONTACT_METHODS = [
+    { id: 'whatsapp', label: 'WhatsApp' },
+    { id: 'message', label: 'Message / SMS' },
+    { id: 'email', label: 'Email' },
+    { id: 'phone', label: 'Phone only' },
+  ];
+
+  function contactLabel(id) {
+    return (CONTACT_METHODS.find(c => c.id === id) || {}).label || (id || 'Contact');
+  }
+  function ensureGuestDebt(g) {
+    if (!g) return g;
+    if (typeof g.lent !== 'number' || Number.isNaN(g.lent)) g.lent = Number(g.lent) || 0;
+    if (!Array.isArray(g.repayments)) g.repayments = [];
+    g.repayments = g.repayments.map(r => ({
+      id: r.id || uid('r'),
+      date: r.date || todayISO(),
+      amount: Number(r.amount) || 0,
+    }));
+    return g;
+  }
+  function guestPaidBack(g) {
+    ensureGuestDebt(g);
+    return (g.repayments || []).reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+  }
+  function guestOwes(g) {
+    ensureGuestDebt(g);
+    return Math.round(((Number(g.lent) || 0) - guestPaidBack(g)) * 100) / 100;
+  }
+  function formatAmount(n) {
+    const v = Number(n) || 0;
+    return (Math.round(v * 100) / 100).toFixed(2);
+  }
+  function ensureStopTicks(s) {
+    if (!s) return s;
+    if (typeof s.messageSent !== 'boolean') s.messageSent = !!s.messageSent;
+    if (typeof s.booked !== 'boolean') s.booked = !!s.booked;
+    if (typeof s.travelMinutes !== 'number' || Number.isNaN(s.travelMinutes)) {
+      s.travelMinutes = (s.travelMinutes == null || s.travelMinutes === '') ? null : Number(s.travelMinutes);
+    }
+    return s;
+  }
+  function ensurePlace(p) {
+    if (!p) return p;
+    if (p.contactMethod == null) p.contactMethod = '';
+    p.contactDetail = p.contactDetail || '';
+    p.address = p.address || '';
+    p.notes = p.notes || '';
+    p.type = p.type || 'other';
+    return p;
+  }
+  function normalizePlan(plan) {
+    if (!plan) return plan;
+    plan.guests = (plan.guests || []).map(g => ensureGuestDebt(g));
+    (plan.days || []).forEach(d => { (d.blocks || []).forEach(ensureStopTicks); });
+    return plan;
+  }
+  function normalizeCatalogue(list) {
+    return (list || []).map(p => ensurePlace({ ...p }));
+  }
+  function placeGroups() {
+    const order = [
+      { id: 'factory', label: 'Factories' },
+      { id: 'shop', label: 'Shops' },
+      { id: 'restaurant', label: 'Restaurants' },
+      { id: 'experience', label: 'Experiences' },
+      { id: 'museum', label: 'Museums' },
+      { id: 'school', label: 'Schools' },
+      { id: 'other', label: 'Other' },
+    ];
+    return order.map(g => ({
+      ...g,
+      places: (state.catalogue || []).filter(p => (p.type || 'other') === g.id),
+    })).filter(g => g.places.length);
+  }
+  function roughTravelMinutes(fromAddr, toAddr) {
+    // Rough ±5 min seed for v1 — Maps API stays stubbed.
+    const a = (fromAddr || '').trim();
+    const b = (toAddr || '').trim();
+    if (!a && !b) return 15;
+    if (!a || !b) return 20;
+    if (a.toLowerCase() === b.toLowerCase()) return 5;
+    const sameTown = /jablonec|liberec|turnov|zásada|zasada|prague|praha/i;
+    const aTown = (a.match(sameTown) || [''])[0].toLowerCase();
+    const bTown = (b.match(sameTown) || [''])[0].toLowerCase();
+    if (aTown && bTown && aTown === bTown) return 15;
+    if (/prague|praha/i.test(a) || /prague|praha/i.test(b)) return 85;
+    return 25;
+  }
+  function seedTravelMinutes(day, blockIndex) {
+    if (!day || !day.blocks || !day.blocks[blockIndex]) return;
+    const cur = ensureStopTicks(day.blocks[blockIndex]);
+    if (cur.travelMinutes != null) return;
+    if (blockIndex === 0) {
+      const hotel = state.plan?.tourHotelName || '';
+      const hotelAddr = hotel ? (hotel + ', Jablonec nad Nisou') : '';
+      cur.travelMinutes = roughTravelMinutes(hotelAddr, cur.address || '');
+      return;
+    }
+    const prev = day.blocks[blockIndex - 1];
+    cur.travelMinutes = roughTravelMinutes(prev?.address || '', cur.address || '');
+  }
+  function renderPlacePickerSelect(selectId, blankBtnId) {
+    const blankId = blankBtnId || 'btnAddStop';
+    const groups = placeGroups();
+    const opts = ['<option value="">Choose a place…</option>'];
+    groups.forEach(g => {
+      opts.push(`<optgroup label="${escapeHtml(g.label)}">`);
+      g.places.forEach(p => {
+        const contact = p.contactMethod ? ` · ${contactLabel(p.contactMethod)}` : '';
+        opts.push(`<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)}${escapeHtml(contact)}</option>`);
+      });
+      opts.push('</optgroup>');
+    });
+    if (!groups.length) opts.push('<option value="" disabled>No places in the list yet</option>');
+    return `
+      <div class="place-picker">
+        <label class="field-label" for="${selectId}">Add from Places list</label>
+        <select id="${selectId}" aria-label="Places grouped by subcategory">
+          ${opts.join('')}
+        </select>
+        <div class="picker-actions">
+          <button type="button" class="btn btn-primary" data-place-picker-add="${selectId}">Add selected place</button>
+          <button type="button" class="btn btn-outline" id="${blankId}">Add blank stop</button>
+        </div>
+        <p class="muted" style="margin-top:6px;">Grouped as factories, shops, restaurants, experiences, museums and schools. Maintain the full list in Places below.</p>
+      </div>
+    `;
+  }
+
+
+  function defaultCatalogue() {
+    return normalizeCatalogue([
+      { id: 'kf01', name: 'Rutkovsky', type: 'factory', address: '', notes: '', contactMethod: '', contactDetail: '' },
+      { id: 'kf02', name: 'Matubo', type: 'factory', address: '', notes: '', contactMethod: '', contactDetail: '' },
+      { id: 'kf03', name: 'GB Beads', type: 'factory', address: '', notes: '', contactMethod: '', contactDetail: '' },
+      { id: 'kf04', name: 'Beads for You — Lucka', type: 'factory', address: '', notes: '', contactMethod: '', contactDetail: '' },
+      { id: 'kf05', name: 'Pegasus Production', type: 'factory', address: '', notes: 'Confirm / optional.', contactMethod: '', contactDetail: '' },
+      { id: 'kf06', name: 'Glass beads family Clever', type: 'factory', address: '', notes: '', contactMethod: '', contactDetail: '' },
+      { id: 'kf07', name: 'Ralton', type: 'factory', address: '', notes: 'Minimum 4 hours. Probably 4 hours of fun — chance to make own stones to fit in a piece.', contactMethod: '', contactDetail: '' },
+      { id: 'kf08', name: 'Oliver Glass', type: 'factory', address: '', notes: 'About 4 hours.', contactMethod: '', contactDetail: '' },
+      { id: 'kf09', name: 'Janov glass factory', type: 'factory', address: '', notes: '', contactMethod: '', contactDetail: '' },
+      { id: 'kf10', name: 'Pesničák glass cutting', type: 'factory', address: '', notes: '', contactMethod: '', contactDetail: '' },
+      { id: 'kf11', name: 'Black glass jewellery', type: 'factory', address: '', notes: '80-year-old man making from home, last of a kind.', contactMethod: '', contactDetail: '' },
+      { id: 'kf12', name: 'Button factory', type: 'factory', address: '', notes: 'See them being hand painted.', contactMethod: '', contactDetail: '' },
+      { id: 'kf13', name: 'Button pressing in old pressing house', type: 'factory', address: '', notes: '', contactMethod: '', contactDetail: '' },
+      { id: 'kf14', name: 'Lamp glass', type: 'factory', address: '', notes: '', contactMethod: '', contactDetail: '' },
+      { id: 'kf15', name: 'Lhotský studio', type: 'factory', address: '', notes: 'Amazing larger glass studio, world-class works.', contactMethod: '', contactDetail: '' },
+      { id: 'kf16', name: 'Clever Beads', type: 'factory', address: '', notes: 'Confirm / optional.', contactMethod: '', contactDetail: '' },
+      { id: 'ks01', name: 'Antik shop beads', type: 'shop', address: '', notes: '', contactMethod: '', contactDetail: '' },
+      { id: 'ks02', name: 'Small antik shop in Držkov', type: 'shop', address: '', notes: 'Small bakery opposite.', contactMethod: '', contactDetail: '' },
+      { id: 'ks03', name: 'Vlad antik', type: 'shop', address: '', notes: 'Confirm / optional.', contactMethod: '', contactDetail: '' },
+      { id: 'ks04', name: 'Bijou Non Stop', type: 'shop', address: '', notes: 'Confirm / optional.', contactMethod: '', contactDetail: '' },
+      { id: 'ks05', name: 'Bijou Components', type: 'shop', address: '', notes: 'Confirm / optional.', contactMethod: '', contactDetail: '' },
+      { id: 'ks06', name: 'Křišťálový ráj', type: 'shop', address: '', notes: '40+ makers and suppliers; maybe Saturday morning demo from students.', contactMethod: '', contactDetail: '' },
+      { id: 'ks07', name: 'House of Beads', type: 'shop', address: '', notes: 'Confirm / optional.', contactMethod: '', contactDetail: '' },
+      { id: 'ks08', name: 'Glass shop in Smržovka', type: 'shop', address: '', notes: 'Confirm / optional.', contactMethod: '', contactDetail: '' },
+      { id: 'ks09', name: 'Haberdashery in Jablonec', type: 'shop', address: '', notes: 'Confirm / optional.', contactMethod: '', contactDetail: '' },
+      { id: 'ks10', name: 'Precious factory outlet', type: 'shop', address: '', notes: 'Outlet in Zásada.', contactMethod: '', contactDetail: '' },
+      { id: 'kr01', name: 'Černá Studnice', type: 'restaurant', address: '', notes: '', contactMethod: '', contactDetail: '' },
+      { id: 'kr02', name: 'Petřín', type: 'restaurant', address: '', notes: 'Great for last evening meal — need to book.', contactMethod: '', contactDetail: '' },
+      { id: 'kr03', name: 'Na Baště', type: 'restaurant', address: '', notes: 'Also known as Na Basta.', contactMethod: '', contactDetail: '' },
+      { id: 'kr04', name: 'Splzov motorest', type: 'restaurant', address: '', notes: 'Best garlic soup.', contactMethod: '', contactDetail: '' },
+      { id: 'kr05', name: 'Park hotel', type: 'restaurant', address: '', notes: 'Food / hotel dining.', contactMethod: '', contactDetail: '' },
+      { id: 'kr06', name: 'Snack at supermarket', type: 'restaurant', address: '', notes: 'Light food stop — supermarket snack.', contactMethod: '', contactDetail: '' },
+      { id: 'ke01', name: 'Poniklá Christmas decoration', type: 'experience', address: '', notes: 'Look around; amazing private museums / local way of life in a poor hard area in the past.', contactMethod: '', contactDetail: '' },
+      { id: 'ke02', name: 'Family Oliver cutting glass', type: 'experience', address: '', notes: 'Chance to cut into their own small mirror.', contactMethod: '', contactDetail: '' },
+      { id: 'ke03', name: 'Koralex bead press house', type: 'experience', address: '', notes: 'Confirm / optional. About 2 hours of fun.', contactMethod: '', contactDetail: '' },
+      { id: 'km01', name: 'Glass and jewellery museum in Jablonec', type: 'museum', address: '', notes: '', contactMethod: '', contactDetail: '' },
+      { id: 'km02', name: 'Glass museum in Železný Brod', type: 'museum', address: '', notes: '', contactMethod: '', contactDetail: '' },
+      { id: 'km03', name: 'Old Soviet car museum in Železný Brod', type: 'museum', address: '', notes: 'Confirm / optional.', contactMethod: '', contactDetail: '' },
+      { id: 'km04', name: 'Old museum of cars in Smržovka', type: 'museum', address: '', notes: 'Originally a seed bead factory.', contactMethod: '', contactDetail: '' },
+      { id: 'kh01', name: 'Glass school in Jablonec', type: 'school', address: '', notes: 'Small shop — see what the kids are making.', contactMethod: '', contactDetail: '' },
+      { id: 'kh02', name: 'Glass school in Železný Brod', type: 'school', address: '', notes: '', contactMethod: '', contactDetail: '' },
+    ]);
+  }
+
+  function placeNameKey(name) {
+    return String(name || '').trim().toLowerCase();
+  }
+
+  function mergeCatalogueSeed(existing) {
+    const seed = defaultCatalogue();
+    if (!Array.isArray(existing) || !existing.length) return seed;
+    const have = new Set(existing.map(p => placeNameKey(p.name)));
+    const missing = seed.filter(p => !have.has(placeNameKey(p.name)));
+    return normalizeCatalogue(existing.concat(missing));
+  }
+
+  function defaultBlocks(dayIndex, ctx) {
+    const hotel = ctx.tourHotelName || 'the group hotel';
+    const prague = ctx.pragueHotelName || 'Prague hotel / airport';
+    const pickup = ctx.pickupTime || '08:00';
+    if (dayIndex === 0) {
+      return [
+        { id: uid('s'), time: pickup, type: 'pickup', title: 'Pick-up from ' + prague, notes: 'Hotel or airport — confirm the meeting point the night before.', address: ctx.pragueAddress || '', period: 'Morning', messageSent: false, booked: false, travelMinutes: null },
+        { id: uid('s'), time: addMinutes(pickup, 15), type: 'travel', title: 'Drive to Jablonec nad Nisou', notes: PRAGUE_DRIVE, address: 'Jablonec nad Nisou, Czech Republic', period: 'Morning', messageSent: false, booked: false, travelMinutes: 85 },
+        { id: uid('s'), time: addMinutes(pickup, 100), type: 'hotel', title: 'Arrive and settle — ' + hotel, notes: 'Drop bags, then the rest of the day is free to fill from the place list.', address: '', period: 'Morning', messageSent: false, booked: false, travelMinutes: 15 },
+      ];
+    }
+    return [
+      { id: uid('s'), time: '08:00', type: 'meal', title: 'Breakfast', notes: 'At the hotel unless noted otherwise.', address: '', period: 'Morning', messageSent: false, booked: false, travelMinutes: null },
+      { id: uid('s'), time: '09:00', type: 'pickup', title: 'Leave for tours', notes: 'Van ready at the hotel.', address: '', period: 'Morning', messageSent: false, booked: false, travelMinutes: 5 },
+    ];
+  }
+
+  function emptyPlan(partial) {
+    const arrival = partial.arrivalDate || '';
+    const departure = partial.departureDate || '';
+    const dates = enumerateDates(arrival, departure);
+    const ctx = {
+      tourHotelName: partial.tourHotelName || '',
+      pragueHotelName: partial.pragueHotel?.name || '',
+      pragueAddress: partial.pragueHotel?.address || '',
+      pickupTime: partial.pragueHotel?.pickupTime || '08:00',
+    };
+    const dayCount = dates.length || Math.max(1, Number(partial.manualDays) || 3);
+    const days = [];
+    for (let i = 0; i < dayCount; i++) {
+      days.push({
+        id: uid('d'),
+        date: dates[i] || '',
+        blocks: defaultBlocks(i, ctx),
+      });
+    }
+    const plan = {
+      bookingKey: partial.bookingKey || DEMO_ID,
+      groupName: partial.groupName || 'Untitled group',
+      guests: (partial.guests || []).map(g => ensureGuestDebt({ ...g, lent: g.lent || 0, repayments: g.repayments || [] })),
+      arrivalDate: arrival,
+      departureDate: departure,
+      tourHotelName: partial.tourHotelName || '',
+      pragueHotel: {
+        name: partial.pragueHotel?.name || '',
+        address: partial.pragueHotel?.address || '',
+        pickupTime: partial.pragueHotel?.pickupTime || '08:00',
+      },
+      days,
+      source: partial.source || 'manual',
+    };
+    return normalizePlan(plan);
+  }
+
+  function buildDemoPlan() {
+    const arrival = '2026-09-16';
+    const departure = '2026-09-20';
+    const plan = emptyPlan({
+      bookingKey: DEMO_ID,
+      groupName: 'September beading ladies (sample)',
+      guests: [
+        { id: uid('g'), name: 'Margaret Ellis', lent: 0, repayments: [] },
+        { id: uid('g'), name: 'Helen Brooks', lent: 0, repayments: [] },
+        { id: uid('g'), name: 'Susan Clarke', lent: 0, repayments: [] },
+        { id: uid('g'), name: 'Patricia Ward', lent: 0, repayments: [] },
+        { id: uid('g'), name: 'Joan Bennett', lent: 0, repayments: [] },
+      ],
+      arrivalDate: arrival,
+      departureDate: departure,
+      tourHotelName: 'Na Basta',
+      pragueHotel: {
+        name: 'Hotel Yasmin',
+        address: 'Politických vězňů 12, 110 00 Prague',
+        pickupTime: '08:00',
+      },
+      source: 'demo',
+    });
+    const cat = defaultCatalogue();
+    const byName = (n) => cat.find(p => placeNameKey(p.name) === placeNameKey(n));
+    const day2 = plan.days[1];
+    if (day2) {
+      const museum = byName('Glass and jewellery museum in Jablonec') || cat.find(p => p.type === 'museum');
+      const lunch = byName('Na Baště') || cat.find(p => p.type === 'restaurant');
+      const factory = byName('Rutkovsky') || cat.find(p => p.type === 'factory');
+      if (museum) day2.blocks.push(
+        { id: uid('s'), time: '09:30', type: museum.type, title: museum.name, notes: museum.notes, address: museum.address, placeId: museum.id, period: 'Morning', messageSent: false, booked: false, travelMinutes: 15 }
+      );
+      if (lunch) day2.blocks.push(
+        { id: uid('s'), time: '12:30', type: lunch.type, title: lunch.name, notes: 'Group lunch.', address: lunch.address, placeId: lunch.id, period: 'Afternoon', messageSent: false, booked: false, travelMinutes: 15 }
+      );
+      if (factory) day2.blocks.push(
+        { id: uid('s'), time: '14:15', type: factory.type, title: factory.name, notes: factory.notes, address: factory.address, placeId: factory.id, period: 'Afternoon', messageSent: false, booked: false, travelMinutes: 25 }
+      );
+    }
+    return plan;
+  }
+
+  function loadStore() {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') || {};
+    } catch { return {}; }
+  }
+  function persist() {
+    const store = loadStore();
+    store.catalogue = state.catalogue;
+    store.plans = store.plans || {};
+    if (state.plan) store.plans[state.plan.bookingKey] = state.plan;
+    store.plans = Object.assign(store.plans, state.plans);
+    if (state.plan) store.plans[state.plan.bookingKey] = state.plan;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+    state.plans = store.plans;
+    maybeSaveSupabase();
+  }
+
+  let saveTimer = null;
+  function schedulePersist() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(persist, 250);
+  }
+
+  let autoSaveEnabled = false;
+  const AUTOSAVE_DELAY = 2000;
+  let autoSaveTimer = null;
+
+  function toggleAutoSave(enabled) {
+    autoSaveEnabled = !!enabled;
+    const status = document.getElementById('autosaveStatus');
+    if (!status) return;
+    if (autoSaveEnabled) {
+      status.textContent = 'On';
+      status.className = 'autosave-status saved';
+    } else {
+      status.textContent = '';
+      status.className = 'autosave-status';
+      clearTimeout(autoSaveTimer);
+    }
+    localStorage.setItem('planner_autosave_enabled', autoSaveEnabled ? 'true' : 'false');
+  }
+
+  function scheduleAutoSave() {
+    if (!autoSaveEnabled) {
+      schedulePersist();
+      return;
+    }
+    clearTimeout(saveTimer);
+    clearTimeout(autoSaveTimer);
+    const status = document.getElementById('autosaveStatus');
+    if (status) {
+      status.textContent = 'Unsaved';
+      status.className = 'autosave-status saving';
+    }
+    autoSaveTimer = setTimeout(() => {
+      if (status) {
+        status.textContent = 'Saving…';
+        status.className = 'autosave-status saving';
+      }
+      persist();
+      if (status) {
+        status.textContent = 'Saved';
+        status.className = 'autosave-status saved';
+        setTimeout(() => {
+          const el = document.getElementById('autosaveStatus');
+          if (el && el.textContent === 'Saved') el.textContent = 'On';
+        }, 2000);
+      }
+    }, AUTOSAVE_DELAY);
+  }
+
+  async function maybeSaveSupabase() {
+    if (!state.supabasePlanTable || !state.plan) return;
+    const bookingId = Number(state.plan.bookingKey);
+    try {
+      const row = {
+        booking_id: Number.isFinite(bookingId) ? bookingId : null,
+        payload: state.plan,
+      };
+      const { error } = await sb.from('planner_plans').upsert(row, { onConflict: 'booking_id' });
+      if (error) throw error;
+    } catch {
+      /* table may not exist yet — localStorage is enough for the prototype */
+    }
+  }
+
+  function effectiveView() {
+    if (state.viewPref === 'phone' || state.viewPref === 'detailed') return state.viewPref;
+    return window.innerWidth <= 820 ? 'phone' : 'detailed';
+  }
+  function setViewPref(v) {
+    state.viewPref = v;
+    localStorage.setItem('planner_view', v);
+    document.body.classList.toggle('view-phone', effectiveView() === 'phone');
+    document.body.classList.toggle('view-detailed', effectiveView() === 'detailed');
+    document.getElementById('btnPhoneView').classList.toggle('active', effectiveView() === 'phone');
+    document.getElementById('btnDetailedView').classList.toggle('active', effectiveView() === 'detailed');
+    render();
+  }
+
+  function guestNamesFromMembers(members) {
+    return (members || []).map(m => {
+      const name = [m.first_name, m.last_name].filter(Boolean).join(' ').trim();
+      return name ? ensureGuestDebt({ id: uid('g'), name, lent: 0, repayments: [] }) : null;
+    }).filter(Boolean);
+  }
+
+  function pragueFromBooking(b) {
+    const stays = b._hotel_stays || [];
+    const pragueStay = stays.find(s => {
+      const n = (s.hotels?.name || s.custom_hotel_name || '').toLowerCase();
+      return /prague|praha/.test(n);
+    });
+    const name = pragueStay?.hotels?.name || pragueStay?.custom_hotel_name || '';
+    return { name, address: '', pickupTime: '08:00' };
+  }
+
+  function planFromBooking(b) {
+    const key = String(b.id);
+    const existing = state.plans[key];
+    const guests = guestNamesFromMembers(b._members);
+    const prague = pragueFromBooking(b);
+    const base = emptyPlan({
+      bookingKey: key,
+      groupName: b.group_name || ('Booking #' + b.id),
+      guests: guests.length ? guests : [{ id: uid('g'), name: '' }],
+      arrivalDate: b.tour_arrival_date || '',
+      departureDate: b.departure_date || '',
+      tourHotelName: b.hotel_name || b.hotels?.name || '',
+      pragueHotel: prague,
+      source: 'booking',
+    });
+    if (!existing) return base;
+    existing.groupName = existing.groupName || base.groupName;
+    const named = (existing.guests || []).some(g => (g.name || '').trim());
+    if (!existing.guests?.length || !named) existing.guests = base.guests;
+    else existing.guests = existing.guests.map(g => ensureGuestDebt(g));
+    if (!existing.pragueHotel?.name && base.pragueHotel.name) existing.pragueHotel = base.pragueHotel;
+    if (!existing.tourHotelName) existing.tourHotelName = base.tourHotelName;
+    if (!existing.arrivalDate && base.arrivalDate) existing.arrivalDate = base.arrivalDate;
+    if (!existing.departureDate && base.departureDate) existing.departureDate = base.departureDate;
+    if (base.arrivalDate && (existing.arrivalDate !== base.arrivalDate || existing.departureDate !== base.departureDate)) {
+      existing.arrivalDate = base.arrivalDate;
+      existing.departureDate = base.departureDate;
+      mergeDays(existing, base.days);
+    }
+    return normalizePlan(existing);
+  }
+
+  function mergeDays(existing, freshDays) {
+    const byDate = {};
+    (existing.days || []).forEach(d => { if (d.date) byDate[d.date] = d; });
+    existing.days = freshDays.map((d, i) => byDate[d.date] || existing.days[i] || d);
+  }
+
+  function withTimeout(promise, ms, label) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error(label || 'Timed out')), ms)),
+    ]);
+  }
+
+  async function enrichBooking(b) {
+    if (!b || b._enriched) return b;
+    try {
+      const [members, stays] = await withTimeout(Promise.all([
+        sb.from('members').select('*').eq('booking_id', b.id).order('id'),
+        sb.from('booking_hotels').select('*, hotels(name)').eq('booking_id', b.id),
+      ]), 4000, 'Booking details timed out');
+      b._members = members.data || [];
+      b._hotel_stays = stays.data || [];
+    } catch (err) {
+      console.warn('Could not load members/hotels for booking', b.id, err);
+    }
+    b._enriched = true;
+    return b;
+  }
+
+  async function selectPlan(key) {
+    state.bookingKey = key;
+    if (key === DEMO_ID) {
+      state.plan = state.plans[DEMO_ID] || buildDemoPlan();
+    } else {
+      const b = state.bookings.find(x => String(x.id) === String(key));
+      if (b) {
+        await enrichBooking(b);
+        state.plan = planFromBooking(b);
+      } else {
+        state.plan = state.plans[key] || buildDemoPlan();
+      }
+    }
+    normalizePlan(state.plan);
+    state.plans[state.plan.bookingKey] = state.plan;
+    const today = todayISO();
+    const idx = state.plan.days.findIndex(d => d.date === today);
+    state.selectedDay = idx >= 0 ? idx : 0;
+    const url = new URL(location.href);
+    if (key === DEMO_ID) url.searchParams.delete('booking');
+    else url.searchParams.set('booking', key);
+    history.replaceState({}, '', url);
+    persist();
+    render();
+    fillGroupSelect();
+  }
+
+  function fillGroupSelect() {
+    const sel = document.getElementById('groupSelect');
+    const opts = [`<option value="${DEMO_ID}">Sample tour (demo)</option>`];
+    state.bookings.forEach(b => {
+      const label = (b.group_name || ('Booking #' + b.id)) + (b.tour_arrival_date ? ' — ' + formatDateDMY(b.tour_arrival_date) : '');
+      opts.push(`<option value="${b.id}">${escapeHtml(label)}</option>`);
+    });
+    sel.innerHTML = opts.join('');
+    sel.value = state.bookingKey;
+  }
+
+  function currentDay() {
+    return state.plan?.days[state.selectedDay] || state.plan?.days[0];
+  }
+
+  function addGuest() {
+    state.plan.guests.push(ensureGuestDebt({ id: uid('g'), name: '', lent: 0, repayments: [] }));
+    scheduleAutoSave();
+    render();
+    const inputs = document.querySelectorAll('[data-guest-name]');
+    const last = inputs[inputs.length - 1];
+    if (last) last.focus();
+  }
+  function removeGuest(id) {
+    state.plan.guests = state.plan.guests.filter(g => g.id !== id);
+    scheduleAutoSave();
+    render();
+  }
+    function addPlaceToDay(place, dayIndex) {
+    const day = state.plan.days[dayIndex];
+    if (!day) return;
+    const last = day.blocks[day.blocks.length - 1];
+    const time = last ? addMinutes(last.time || '09:00', 80) : '10:00';
+    day.blocks.push({
+      id: uid('s'),
+      time,
+      type: place.type || 'experience',
+      title: place.name,
+      notes: place.notes || '',
+      address: place.address || '',
+      placeId: place.id,
+      period: periodForTime(time),
+      messageSent: false,
+      booked: false,
+      travelMinutes: null,
+    });
+    seedTravelMinutes(day, day.blocks.length - 1);
+    scheduleAutoSave();
+    toast('Added ' + place.name);
+    closeSheet();
+    render();
+  }
+
+function addBlankStop() {
+    const day = currentDay();
+    if (!day) return;
+    const last = day.blocks[day.blocks.length - 1];
+    const time = last ? addMinutes(last.time || '09:00', 45) : '10:00';
+    day.blocks.push({
+      id: uid('s'), time, type: 'other', title: 'New stop', notes: '', address: '', period: periodForTime(time),
+      messageSent: false, booked: false, travelMinutes: null,
+    });
+    seedTravelMinutes(day, day.blocks.length - 1);
+    scheduleAutoSave();
+    render();
+  }
+  function removeStop(id) {
+    const day = currentDay();
+    if (!day) return;
+    day.blocks = day.blocks.filter(s => s.id !== id);
+    scheduleAutoSave();
+    render();
+  }
+  function moveStop(id, dir) {
+    const day = currentDay();
+    if (!day) return;
+    const i = day.blocks.findIndex(s => s.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= day.blocks.length) return;
+    const tmp = day.blocks[i];
+    day.blocks[i] = day.blocks[j];
+    day.blocks[j] = tmp;
+    scheduleAutoSave();
+    render();
+  }
+  function addManualDay() {
+    const last = state.plan.days[state.plan.days.length - 1];
+    let nextDate = '';
+    if (last?.date) {
+      const d = parseISODateUTC(last.date);
+      if (d) nextDate = toISODateUTC(new Date(d.getTime() + 86400000));
+    }
+    state.plan.days.push({
+      id: uid('d'),
+      date: nextDate,
+      blocks: defaultBlocks(state.plan.days.length, {
+        tourHotelName: state.plan.tourHotelName,
+        pragueHotelName: state.plan.pragueHotel?.name,
+        pragueAddress: state.plan.pragueHotel?.address,
+        pickupTime: state.plan.pragueHotel?.pickupTime,
+      }),
+    });
+    if (nextDate) state.plan.departureDate = nextDate;
+    state.selectedDay = state.plan.days.length - 1;
+    scheduleAutoSave();
+    render();
+  }
+  function rebuildFromDates() {
+    const dates = enumerateDates(state.plan.arrivalDate, state.plan.departureDate);
+    if (!dates.length) { toast('Enter arrival and departure dates first'); return; }
+    const ctx = {
+      tourHotelName: state.plan.tourHotelName,
+      pragueHotelName: state.plan.pragueHotel?.name,
+      pragueAddress: state.plan.pragueHotel?.address,
+      pickupTime: state.plan.pragueHotel?.pickupTime,
+    };
+    const byDate = {};
+    state.plan.days.forEach(d => { if (d.date) byDate[d.date] = d; });
+    state.plan.days = dates.map((date, i) => byDate[date] || { id: uid('d'), date, blocks: defaultBlocks(i, ctx) });
+    state.selectedDay = Math.min(state.selectedDay, state.plan.days.length - 1);
+    scheduleAutoSave();
+    render();
+  }
+
+  function shouldShowTravel(prev, next) {
+    if (!prev || !next) return false;
+    if (prev.type === 'travel' || next.type === 'travel') return false;
+    return true;
+  }
+
+
+  function setGuestLent(id, value) {
+    const g = state.plan.guests.find(x => x.id === id);
+    if (!g) return;
+    ensureGuestDebt(g);
+    g.lent = Math.max(0, Number(value) || 0);
+    scheduleAutoSave();
+    const bal = document.querySelector(`[data-debt-balance="${id}"]`);
+    if (bal) {
+      const owes = guestOwes(g);
+      bal.textContent = formatAmount(owes);
+      bal.classList.toggle('owes', owes > 0.004);
+      bal.classList.toggle('clear', owes <= 0.004);
+    }
+    const paid = document.querySelector(`[data-debt-paid="${id}"]`);
+    if (paid) paid.textContent = formatAmount(guestPaidBack(g));
+  }
+  function addGuestRepayment(guestId) {
+    const g = state.plan.guests.find(x => x.id === guestId);
+    if (!g) return;
+    ensureGuestDebt(g);
+    g.repayments.push({ id: uid('r'), date: todayISO(), amount: 0 });
+    scheduleAutoSave();
+    render();
+  }
+  function updateGuestRepayment(guestId, repayId, field, value) {
+    const g = state.plan.guests.find(x => x.id === guestId);
+    if (!g) return;
+    ensureGuestDebt(g);
+    const r = g.repayments.find(x => x.id === repayId);
+    if (!r) return;
+    if (field === 'amount') r.amount = Math.max(0, Number(value) || 0);
+    if (field === 'date') r.date = value || todayISO();
+    scheduleAutoSave();
+    const bal = document.querySelector(`[data-debt-balance="${guestId}"]`);
+    if (bal) {
+      const owes = guestOwes(g);
+      bal.textContent = formatAmount(owes);
+      bal.classList.toggle('owes', owes > 0.004);
+      bal.classList.toggle('clear', owes <= 0.004);
+    }
+    const paid = document.querySelector(`[data-debt-paid="${guestId}"]`);
+    if (paid) paid.textContent = formatAmount(guestPaidBack(g));
+  }
+  function removeGuestRepayment(guestId, repayId) {
+    const g = state.plan.guests.find(x => x.id === guestId);
+    if (!g) return;
+    ensureGuestDebt(g);
+    g.repayments = g.repayments.filter(r => r.id !== repayId);
+    scheduleAutoSave();
+    render();
+  }
+  function setStopTick(stopId, field, checked) {
+    const s = findStop(stopId);
+    if (!s) return;
+    ensureStopTicks(s);
+    if (field === 'messageSent') s.messageSent = !!checked;
+    if (field === 'booked') s.booked = !!checked;
+    if (s.booked) s.messageSent = true;
+    scheduleAutoSave();
+    render();
+  }
+  function setStopTravelMinutes(stopId, value) {
+    const s = findStop(stopId);
+    if (!s) return;
+    ensureStopTicks(s);
+    const n = Number(value);
+    s.travelMinutes = Number.isFinite(n) ? Math.max(0, Math.round(n)) : null;
+    scheduleAutoSave();
+  }
+  function addPlaceFromPicker(selectId) {
+    const sel = document.getElementById(selectId);
+    if (!sel || !sel.value) { toast('Choose a place from the list first'); return; }
+    const place = state.catalogue.find(p => p.id === sel.value);
+    if (!place) { toast('That place was not found'); return; }
+    addPlaceToDay(place, state.selectedDay);
+  }
+  function removePlace(id) {
+    state.catalogue = state.catalogue.filter(p => p.id !== id);
+    scheduleAutoSave();
+    render();
+  }
+
+    function renderGuests() {
+    return (state.plan.guests || []).map(g => {
+      ensureGuestDebt(g);
+      const paid = guestPaidBack(g);
+      const owes = guestOwes(g);
+      const repayRows = (g.repayments || []).map(r => `
+        <div class="repay-row">
+          <input type="date" data-repay-date="${g.id}" data-repay-id="${r.id}" value="${escapeHtml(r.date || '')}" aria-label="Repayment date">
+          <input type="number" inputmode="decimal" min="0" step="0.01" data-repay-amount="${g.id}" data-repay-id="${r.id}" value="${escapeHtml(String(r.amount ?? 0))}" aria-label="Repayment amount">
+          <button type="button" class="icon-btn" data-remove-repay="${g.id}" data-repay-id="${r.id}" aria-label="Remove repayment">×</button>
+        </div>
+      `).join('') || `<p class="muted">No daily repayments yet.</p>`;
+      return `
+      <div class="guest-block">
+        <div class="guest-row">
+          <input type="text" data-guest-name="${g.id}" value="${escapeHtml(g.name)}" placeholder="Lady / guest name">
+          <button type="button" class="icon-btn" data-remove-guest="${g.id}" aria-label="Remove guest">×</button>
+        </div>
+        <div class="debt-grid">
+          <div class="debt-field">
+            <label for="lent_${g.id}">Lent</label>
+            <input type="number" inputmode="decimal" min="0" step="0.01" id="lent_${g.id}" data-guest-lent="${g.id}" value="${escapeHtml(String(g.lent ?? 0))}" placeholder="0.00">
+          </div>
+          <div class="debt-field">
+            <label>Paid back</label>
+            <div class="debt-balance" data-debt-paid="${g.id}">${formatAmount(paid)}</div>
+          </div>
+          <div class="debt-field">
+            <label>Owes (balance)</label>
+            <div class="debt-balance ${owes > 0.004 ? 'owes' : 'clear'}" data-debt-balance="${g.id}">${formatAmount(owes)}</div>
+          </div>
+        </div>
+        <div class="row-between">
+          <span class="muted" style="font-weight:700;">Daily repayments</span>
+          <button type="button" class="btn btn-outline btn-sm" data-add-repay="${g.id}">Add today’s repayment</button>
+        </div>
+        <div class="repay-list">${repayRows}</div>
+        <p class="repay-note">Enter amounts yourself — nothing is invented.</p>
+      </div>`;
+    }).join('');
+  }
+
+  function renderCatalogue(compact) {
+    const filter = state.placeFilter;
+    const list = state.catalogue.filter(p => filter === 'all' || p.type === filter);
+    const chips = PLACE_TYPES.map(t => `
+      <button type="button" class="chip ${state.placeFilter === t.id ? 'on' : ''}" data-filter="${t.id}">${t.label}</button>
+    `).join('');
+    const contactOpts = (selected) => {
+      const blank = `<option value="" ${!selected ? 'selected' : ''}>Not set yet</option>`;
+      return blank + CONTACT_METHODS.map(c =>
+        `<option value="${c.id}" ${selected === c.id ? 'selected' : ''}>${c.label}</option>`
+      ).join('');
+    };
+    const places = list.map(p => {
+      ensurePlace(p);
+      return `
+      <div class="place-dir-item" data-place-id="${p.id}">
+        <div class="row-between">
+          <div>
+            <input type="text" data-place-name="${p.id}" value="${escapeHtml(p.name)}" placeholder="Place name" style="font-weight:800;margin-bottom:6px;">
+            ${p.contactMethod ? `<span class="contact-pill">${escapeHtml(contactLabel(p.contactMethod))}</span>` : '<span class="contact-pill">Contact not set</span>'}
+          </div>
+          <button type="button" class="icon-btn" data-remove-place="${p.id}" aria-label="Remove place">×</button>
+        </div>
+        <div class="dir-grid">
+          <div>
+            <label class="field-label">Subcategory</label>
+            <select data-place-type="${p.id}">
+              <option value="factory" ${p.type === 'factory' ? 'selected' : ''}>Factory</option>
+              <option value="shop" ${p.type === 'shop' ? 'selected' : ''}>Shop</option>
+              <option value="restaurant" ${p.type === 'restaurant' ? 'selected' : ''}>Restaurant</option>
+              <option value="experience" ${p.type === 'experience' ? 'selected' : ''}>Experience</option>
+              <option value="museum" ${p.type === 'museum' ? 'selected' : ''}>Museum</option>
+              <option value="school" ${p.type === 'school' ? 'selected' : ''}>School</option>
+              <option value="other" ${p.type === 'other' ? 'selected' : ''}>Other</option>
+            </select>
+          </div>
+          <div>
+            <label class="field-label">How we contact them</label>
+            <select data-place-contact-method="${p.id}">${contactOpts(p.contactMethod)}</select>
+          </div>
+          <div>
+            <label class="field-label">Contact detail</label>
+            <input type="text" data-place-contact-detail="${p.id}" value="${escapeHtml(p.contactDetail || '')}" placeholder="Number, email, or WhatsApp">
+          </div>
+          <div>
+            <label class="field-label">Address</label>
+            <input type="text" data-place-address="${p.id}" value="${escapeHtml(p.address || '')}" placeholder="Street, town">
+          </div>
+        </div>
+        <input type="text" data-place-notes="${p.id}" value="${escapeHtml(p.notes || '')}" placeholder="Notes / description (editable)" style="margin-top:8px;">
+        ${compact ? '' : `<button type="button" class="btn btn-primary btn-sm" style="margin-top:8px;" data-add-place="${p.id}">Add to this day</button>`}
+      </div>`;
+    }).join('') || `<p class="muted">No places in this filter yet.</p>`;
+
+    return `
+      <div class="filters">${chips}</div>
+      <div class="place-list">${places}</div>
+      ${compact ? '' : `
+        <div class="stack" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+          <div class="field-label">Add a place to the directory</div>
+          <input type="text" id="newPlaceName" placeholder="Name (e.g. factory or café)">
+          <select id="newPlaceType">
+            <option value="factory">Factory</option>
+            <option value="shop">Shop</option>
+            <option value="restaurant">Restaurant</option>
+            <option value="experience">Experience</option>
+            <option value="museum">Museum</option>
+            <option value="school">School</option>
+            <option value="other">Other</option>
+          </select>
+          <select id="newPlaceContactMethod">
+            <option value="">Not set yet</option>
+            ${CONTACT_METHODS.map(c => `<option value="${c.id}">${c.label}</option>`).join('')}
+          </select>
+          <input type="text" id="newPlaceContactDetail" placeholder="Contact detail (number / email)">
+          <input type="text" id="newPlaceAddress" placeholder="Address">
+          <button type="button" class="btn btn-outline" id="btnAddPlace">Save to Places</button>
+          <p class="muted">This list feeds the day-schedule picker. Grouped by subcategory when you add a stop.</p>
+        </div>
+      `}
+    `;
+  }
+
+function renderTimeline(day, large) {
+    if (!day) return '<p class="muted">No days yet.</p>';
+    const blocks = day.blocks || [];
+    let html = '<div class="timeline">';
+    blocks.forEach((s, i) => {
+      ensureStopTicks(s);
+      seedTravelMinutes(day, i);
+      const next = blocks[i + 1];
+      html += `
+        <article class="stop">
+          <div class="stop-time">
+            <input type="time" data-stop-time="${s.id}" value="${escapeHtml(s.time || '')}" aria-label="Time">
+          </div>
+          <div class="rail"><div class="dot ${escapeHtml(s.type || '')}"></div></div>
+          <div>
+            <div><span class="badge">${escapeHtml(s.period || periodForTime(s.time))}</span><span class="badge">${escapeHtml(typeLabel(s.type))}</span></div>
+            <div class="stop-title"><input type="text" data-stop-title="${s.id}" value="${escapeHtml(s.title || '')}"></div>
+            <div class="stop-notes"><input type="text" data-stop-notes="${s.id}" value="${escapeHtml(s.notes || '')}" placeholder="Notes"></div>
+            <div class="stop-notes"><input type="text" data-stop-address="${s.id}" value="${escapeHtml(s.address || '')}" placeholder="Address"></div>
+            ${s.address ? `<div class="muted"><a href="${appleMapsUrl(s.title, s.address)}" target="_blank" rel="noopener">Maps</a></div>` : ''}
+            <div class="booking-ticks" role="group" aria-label="Booking status">
+              <label class="tick ${s.messageSent ? 'on-message' : ''}">
+                <input type="checkbox" data-tick-message="${s.id}" ${s.messageSent ? 'checked' : ''}>
+                Message sent
+              </label>
+              <label class="tick ${s.booked ? 'on-booked' : ''}">
+                <input type="checkbox" data-tick-booked="${s.id}" ${s.booked ? 'checked' : ''}>
+                Booked
+              </label>
+            </div>
+          </div>
+          <div class="stop-actions">
+            <button type="button" class="icon-btn" data-move="${s.id}" data-dir="-1" aria-label="Move up">↑</button>
+            <button type="button" class="icon-btn" data-move="${s.id}" data-dir="1" aria-label="Move down">↓</button>
+            <button type="button" class="icon-btn" data-remove-stop="${s.id}" aria-label="Remove stop">×</button>
+          </div>
+        </article>
+      `;
+      if (shouldShowTravel(s, next) || true) {
+        // show travel estimate into this stop (from previous / hotel)
+        const mins = s.travelMinutes == null ? '' : String(s.travelMinutes);
+        const label = i === 0 ? 'From hotel / previous' : 'From previous stop';
+        html += `<div class="travel-note">🚐 ${escapeHtml(label)}:
+          <label class="muted">≈ <input type="number" inputmode="numeric" min="0" step="5" data-travel-mins="${s.id}" value="${escapeHtml(mins)}" aria-label="Travel minutes"> min (±5)</label>
+          <span class="muted">editable estimate</span>
+        </div>`;
+      }
+      if (shouldShowTravel(s, next)) {
+        const hook = (s.address && next.address)
+          ? `<span class="hook" title="Exact travel time later — Maps API not wired in this prototype.">Exact travel time later — Maps API not wired in this prototype.</span>`
+          : `<span class="hook">Exact travel time later — Maps API not wired in this prototype.</span>`;
+        html += `<div class="travel-note" style="opacity:.85;">${hook}</div>`;
+      }
+    });
+    html += '</div>';
+    return html;
+  }
+
+function renderDayTabs() {
+    const today = todayISO();
+    return `<div class="day-tabs">${state.plan.days.map((d, i) => {
+      const isToday = d.date && d.date === today;
+      return `<button type="button" class="day-tab ${i === state.selectedDay ? 'active' : ''} ${isToday ? 'today' : ''}" data-day="${i}">
+        <div class="d-label">${isToday ? 'Today · ' : ''}Day ${i + 1}</div>
+        <div class="d-date">${d.date ? `${weekdayName(d.date)} ${formatDateDMY(d.date)}` : 'Date not set'}</div>
+      </button>`;
+    }).join('')}</div>`;
+  }
+
+  function renderHotelCard() {
+    const h = state.plan.pragueHotel || {};
+    const name = h.name || 'Prague hotel / airport';
+    const time = h.pickupTime || '08:00';
+    return `
+      <div class="hotel-card">
+        <div class="muted">Prague pick-up</div>
+        <div class="name">${escapeHtml(name)}</div>
+        <div class="meta">Pick-up ${escapeHtml(time)}${h.address ? ' · ' + escapeHtml(h.address) : ''}</div>
+        <a class="maps-btn" href="${appleMapsUrl(name, h.address)}" target="_blank" rel="noopener">Open in Apple Maps</a>
+        <div class="stack" style="margin-top:10px;">
+          <label class="field-label">Hotel name</label>
+          <input type="text" id="pragueName" value="${escapeHtml(h.name || '')}" placeholder="Hotel name in Prague">
+          <label class="field-label">Address (optional)</label>
+          <input type="text" id="pragueAddress" value="${escapeHtml(h.address || '')}" placeholder="Street, Prague">
+          <label class="field-label">Pick-up time</label>
+          <input type="time" id="pragueTime" value="${escapeHtml(time)}">
+        </div>
+      </div>
+    `;
+  }
+
+  function render() {
+    const view = effectiveView();
+    document.body.classList.toggle('view-phone', view === 'phone');
+    document.body.classList.toggle('view-detailed', view === 'detailed');
+    document.getElementById('btnPhoneView').classList.toggle('active', view === 'phone');
+    document.getElementById('btnDetailedView').classList.toggle('active', view === 'detailed');
+    if (!state.plan) return;
+
+    const today = todayISO();
+    const todayIdx = state.plan.days.findIndex(d => d.date === today);
+    const day = currentDay();
+    const live = state.liveBookings
+      ? `<span class="pill">Live bookings loaded</span>`
+      : `<span class="pill warn">Sample / local plan — bookings will appear here when Supabase is reachable</span>`;
+    const auth = state.sessionEmail
+      ? `<span class="pill">${escapeHtml(state.sessionEmail)}</span>`
+      : `<span class="muted">No login required for the sample tour</span>`;
+    const resetDemo = state.plan.bookingKey === DEMO_ID
+      ? `<button type="button" class="btn btn-outline btn-sm" id="btnResetDemo">Reset sample tour</button>`
+      : '';
+
+    const datesRow = `
+      <div class="stack">
+        <label class="field-label">Group name</label>
+        <input type="text" id="groupName" value="${escapeHtml(state.plan.groupName || '')}">
+        <div class="row-between">
+          <div style="flex:1;min-width:140px;">
+            <label class="field-label">Arrival</label>
+            <input type="text" id="arrivalDate" value="${escapeHtml(state.plan.arrivalDate ? formatDateDMY(state.plan.arrivalDate) : '')}" placeholder="DD/MM/YYYY">
+          </div>
+          <div style="flex:1;min-width:140px;">
+            <label class="field-label">Departure</label>
+            <input type="text" id="departureDate" value="${escapeHtml(state.plan.departureDate ? formatDateDMY(state.plan.departureDate) : '')}" placeholder="DD/MM/YYYY">
+          </div>
+        </div>
+        <label class="field-label">Tour hotel (Jablonec area)</label>
+        <input type="text" id="tourHotel" value="${escapeHtml(state.plan.tourHotelName || '')}" placeholder="e.g. Na Basta">
+        <button type="button" class="btn btn-outline btn-sm" id="btnRebuildDays">Rebuild days from dates</button>
+      </div>
+    `;
+
+    const tripSummary = `
+      <div class="trip-summary">
+        <div class="trip-title">${escapeHtml(state.plan.groupName || 'Tour group')}</div>
+        <div class="trip-meta">
+          <span>📅 ${state.plan.arrivalDate ? formatDateDMY(state.plan.arrivalDate) : '—'} – ${state.plan.departureDate ? formatDateDMY(state.plan.departureDate) : '—'}</span>
+          <span>🏨 Tour hotel: ${escapeHtml(state.plan.tourHotelName || 'Not set')}</span>
+          <span>🏙 Prague: ${escapeHtml(state.plan.pragueHotel?.name || 'Not set')}</span>
+        </div>
+      </div>
+    `;
+
+    const guestsCard = `
+      <div class="card">
+        <div class="row-between"><h2>Ladies / guests</h2>
+          <button type="button" class="btn btn-outline btn-sm" id="btnAddGuest">Add name</button></div>
+        <div id="guestList">${renderGuests()}</div>
+        <p class="muted">Seeded from booking members when a live booking is selected. Light debt tracking (lent / paid back / owes) and daily repayments stay on this device with the plan.</p>
+      </div>
+    `;
+
+    const phoneTodayNote = todayIdx < 0
+      ? `<p class="muted">Today (${formatDateDMY(today)}) is outside this tour — showing Day ${state.selectedDay + 1}.</p>`
+      : (todayIdx === state.selectedDay ? `<p class="muted">Today’s plan is first. Switch days above if you need another date.</p>` : '');
+
+    const dayCard = `
+      <div class="card">
+        <div class="row-between">
+          <h2>${view === 'phone' ? 'Today’s plan' : 'Day timeline'}</h2>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button type="button" class="btn btn-outline btn-sm" id="btnAddDay">Add a day</button>
+            <button type="button" class="btn btn-primary btn-sm phone-only" id="btnOpenSheet">Browse places</button>
+          </div>
+        </div>
+        ${renderDayTabs()}
+        ${view === 'phone' ? phoneTodayNote : ''}
+        ${renderPlacePickerSelect('dayPlacePicker')}
+        ${renderTimeline(day, view === 'phone')}
+        <div class="row-between" style="margin-top:10px;">
+          <span class="muted">${(day?.blocks || []).length} parts of the day</span>
+        </div>
+      </div>
+    `;
+
+    const app = document.getElementById('app');
+    if (view === 'phone') {
+      app.innerHTML = `
+        <div class="status-row">${live}${auth}${resetDemo}</div>
+        ${tripSummary}
+        ${renderHotelCard()}
+        <div style="height:12px;"></div>
+        ${dayCard}
+        <div style="height:12px;"></div>
+        ${guestsCard}
+        <div style="height:12px;"></div>
+        <div class="card">
+          <h2>Places directory</h2>
+          <p class="muted" style="margin-bottom:8px;">Maintainable list of everywhere you visit — contact method, detail and address.</p>
+          ${renderCatalogue(false)}
+        </div>
+        <div style="height:12px;"></div>
+        <div class="card">
+          <h2>Dates &amp; hotel</h2>
+          ${datesRow}
+        </div>
+      `;
+    } else {
+      app.innerHTML = `
+        <div class="status-row">${live}${auth}${resetDemo}</div>
+        ${tripSummary}
+        <div class="grid-3">
+          <div class="stack">
+            <div class="card">
+              <h2>Group</h2>
+              ${datesRow}
+            </div>
+            ${guestsCard}
+            <div class="card">
+              <h2>Prague hotel</h2>
+              ${renderHotelCard()}
+            </div>
+          </div>
+          <div>${dayCard}</div>
+          <div class="card desktop-only">
+            <div class="row-between"><h2>Places directory</h2></div>
+            <p class="muted" style="margin-bottom:8px;">Full list with contact method, detail and address. Day picker is grouped by subcategory.</p>
+            ${renderCatalogue(false)}
+          </div>
+        </div>
+      `;
+    }
+    bindDynamic();
+  }
+
+  function parseEnteredDate(value) {
+    const s = String(value || '').trim();
+    if (!s) return '';
+    let m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+    if (m) return s;
+    m = /^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})$/.exec(s);
+    if (!m) return '';
+    const d = Number(m[1]), mo = Number(m[2]), y = Number(m[3]);
+    const dt = new Date(Date.UTC(y, mo - 1, d));
+    if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return '';
+    return toISODateUTC(dt);
+  }
+
+  function bindDynamic() {
+    const q = (sel) => document.querySelector(sel);
+    q('#groupName')?.addEventListener('input', e => { state.plan.groupName = e.target.value; scheduleAutoSave(); });
+    q('#tourHotel')?.addEventListener('input', e => { state.plan.tourHotelName = e.target.value; scheduleAutoSave(); });
+    q('#arrivalDate')?.addEventListener('change', e => {
+      state.plan.arrivalDate = parseEnteredDate(e.target.value);
+      e.target.value = state.plan.arrivalDate ? formatDateDMY(state.plan.arrivalDate) : e.target.value;
+      scheduleAutoSave();
+    });
+    q('#departureDate')?.addEventListener('change', e => {
+      state.plan.departureDate = parseEnteredDate(e.target.value);
+      e.target.value = state.plan.departureDate ? formatDateDMY(state.plan.departureDate) : e.target.value;
+      scheduleAutoSave();
+    });
+    q('#pragueName')?.addEventListener('input', e => { state.plan.pragueHotel.name = e.target.value; scheduleAutoSave(); });
+    q('#pragueAddress')?.addEventListener('input', e => { state.plan.pragueHotel.address = e.target.value; scheduleAutoSave(); });
+    q('#pragueTime')?.addEventListener('input', e => { state.plan.pragueHotel.pickupTime = e.target.value; scheduleAutoSave(); });
+    q('#btnAddGuest')?.addEventListener('click', addGuest);
+    q('#btnAddDay')?.addEventListener('click', addManualDay);
+    q('#btnRebuildDays')?.addEventListener('click', rebuildFromDates);
+    q('#btnAddStop')?.addEventListener('click', addBlankStop);
+    q('#btnOpenSheet')?.addEventListener('click', openSheet);
+    q('#btnResetDemo')?.addEventListener('click', () => {
+      state.plans[DEMO_ID] = buildDemoPlan();
+      state.catalogue = defaultCatalogue();
+      selectPlan(DEMO_ID);
+      toast('Sample tour restored');
+    });
+
+    document.querySelectorAll('[data-guest-name]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const g = state.plan.guests.find(x => x.id === inp.getAttribute('data-guest-name'));
+        if (g) { g.name = inp.value; scheduleAutoSave(); }
+      });
+    });
+    document.querySelectorAll('[data-remove-guest]').forEach(btn => {
+      btn.addEventListener('click', () => removeGuest(btn.getAttribute('data-remove-guest')));
+    });
+    document.querySelectorAll('[data-guest-lent]').forEach(inp => {
+      inp.addEventListener('input', () => setGuestLent(inp.getAttribute('data-guest-lent'), inp.value));
+      inp.addEventListener('change', () => setGuestLent(inp.getAttribute('data-guest-lent'), inp.value));
+    });
+    document.querySelectorAll('[data-add-repay]').forEach(btn => {
+      btn.addEventListener('click', () => addGuestRepayment(btn.getAttribute('data-add-repay')));
+    });
+    document.querySelectorAll('[data-repay-amount]').forEach(inp => {
+      inp.addEventListener('input', () => updateGuestRepayment(inp.getAttribute('data-repay-amount'), inp.getAttribute('data-repay-id'), 'amount', inp.value));
+      inp.addEventListener('change', () => updateGuestRepayment(inp.getAttribute('data-repay-amount'), inp.getAttribute('data-repay-id'), 'amount', inp.value));
+    });
+    document.querySelectorAll('[data-repay-date]').forEach(inp => {
+      inp.addEventListener('change', () => updateGuestRepayment(inp.getAttribute('data-repay-date'), inp.getAttribute('data-repay-id'), 'date', inp.value));
+    });
+    document.querySelectorAll('[data-remove-repay]').forEach(btn => {
+      btn.addEventListener('click', () => removeGuestRepayment(btn.getAttribute('data-remove-repay'), btn.getAttribute('data-repay-id')));
+    });
+    document.querySelectorAll('[data-tick-message]').forEach(inp => {
+      inp.addEventListener('change', () => setStopTick(inp.getAttribute('data-tick-message'), 'messageSent', inp.checked));
+    });
+    document.querySelectorAll('[data-tick-booked]').forEach(inp => {
+      inp.addEventListener('change', () => setStopTick(inp.getAttribute('data-tick-booked'), 'booked', inp.checked));
+    });
+    document.querySelectorAll('[data-travel-mins]').forEach(inp => {
+      inp.addEventListener('change', () => setStopTravelMinutes(inp.getAttribute('data-travel-mins'), inp.value));
+    });
+    document.querySelectorAll('[data-stop-address]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const s = findStop(inp.getAttribute('data-stop-address'));
+        if (s) { s.address = inp.value; scheduleAutoSave(); }
+      });
+    });
+    document.querySelectorAll('[data-place-picker-add]').forEach(btn => {
+      btn.addEventListener('click', () => addPlaceFromPicker(btn.getAttribute('data-place-picker-add')));
+    });
+    const dayPicker = document.getElementById('dayPlacePicker');
+    if (dayPicker) {
+      dayPicker.addEventListener('change', () => {
+        if (dayPicker.value) addPlaceFromPicker('dayPlacePicker');
+      });
+    }
+    document.querySelectorAll('[data-day]').forEach(btn => {
+      btn.addEventListener('click', () => { state.selectedDay = Number(btn.getAttribute('data-day')); render(); });
+    });
+    document.querySelectorAll('[data-stop-time]').forEach(inp => {
+      inp.addEventListener('change', () => {
+        const s = findStop(inp.getAttribute('data-stop-time'));
+        if (s) { s.time = inp.value; s.period = periodForTime(inp.value); scheduleAutoSave(); }
+      });
+    });
+    document.querySelectorAll('[data-stop-title]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const s = findStop(inp.getAttribute('data-stop-title'));
+        if (s) { s.title = inp.value; scheduleAutoSave(); }
+      });
+    });
+    document.querySelectorAll('[data-stop-notes]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const s = findStop(inp.getAttribute('data-stop-notes'));
+        if (s) { s.notes = inp.value; scheduleAutoSave(); }
+      });
+    });
+    document.querySelectorAll('[data-remove-stop]').forEach(btn => {
+      btn.addEventListener('click', () => removeStop(btn.getAttribute('data-remove-stop')));
+    });
+    document.querySelectorAll('[data-move]').forEach(btn => {
+      btn.addEventListener('click', () => moveStop(btn.getAttribute('data-move'), Number(btn.getAttribute('data-dir'))));
+    });
+    bindCatalogue(document.getElementById('app'));
+  }
+
+  function bindCatalogue(root, opts = {}) {
+    const refresh = () => { if (opts.onFilter) opts.onFilter(); else render(); };
+    root.querySelectorAll('[data-filter]').forEach(btn => {
+      btn.addEventListener('click', () => { state.placeFilter = btn.getAttribute('data-filter'); refresh(); });
+    });
+    root.querySelectorAll('[data-add-place]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const place = state.catalogue.find(p => p.id === btn.getAttribute('data-add-place'));
+        if (place) addPlaceToDay(place, state.selectedDay);
+      });
+    });
+    root.querySelectorAll('[data-place-name]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const p = state.catalogue.find(x => x.id === inp.getAttribute('data-place-name'));
+        if (p) { p.name = inp.value; scheduleAutoSave(); }
+      });
+    });
+    root.querySelectorAll('[data-place-address]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const p = state.catalogue.find(x => x.id === inp.getAttribute('data-place-address'));
+        if (p) { p.address = inp.value; scheduleAutoSave(); }
+      });
+    });
+    root.querySelectorAll('[data-place-type]').forEach(sel => {
+      sel.addEventListener('change', () => {
+        const p = state.catalogue.find(x => x.id === sel.getAttribute('data-place-type'));
+        if (p) { p.type = sel.value; scheduleAutoSave(); refresh(); }
+      });
+    });
+    root.querySelectorAll('[data-place-contact-method]').forEach(sel => {
+      sel.addEventListener('change', () => {
+        const p = state.catalogue.find(x => x.id === sel.getAttribute('data-place-contact-method'));
+        if (p) { p.contactMethod = sel.value; scheduleAutoSave(); refresh(); }
+      });
+    });
+    root.querySelectorAll('[data-place-contact-detail]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const p = state.catalogue.find(x => x.id === inp.getAttribute('data-place-contact-detail'));
+        if (p) { p.contactDetail = inp.value; scheduleAutoSave(); }
+      });
+    });
+    root.querySelectorAll('[data-place-notes]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const p = state.catalogue.find(x => x.id === inp.getAttribute('data-place-notes'));
+        if (p) { p.notes = inp.value; scheduleAutoSave(); }
+      });
+    });
+    root.querySelectorAll('[data-remove-place]').forEach(btn => {
+      btn.addEventListener('click', () => removePlace(btn.getAttribute('data-remove-place')));
+    });
+    root.querySelector('#btnAddPlace')?.addEventListener('click', () => {
+      addCataloguePlace();
+      if (opts.onFilter) opts.onFilter();
+    });
+  }
+
+  function findStop(id) {
+    for (const day of state.plan.days) {
+      const s = day.blocks.find(b => b.id === id);
+      if (s) return s;
+    }
+    return null;
+  }
+
+  function addCataloguePlace() {
+    const name = document.getElementById('newPlaceName')?.value.trim();
+    if (!name) { toast('Enter a place name'); return; }
+    const place = ensurePlace({
+      id: uid('c'),
+      name,
+      type: document.getElementById('newPlaceType')?.value || 'other',
+      contactMethod: document.getElementById('newPlaceContactMethod')?.value || '',
+      contactDetail: document.getElementById('newPlaceContactDetail')?.value.trim() || '',
+      address: document.getElementById('newPlaceAddress')?.value.trim() || '',
+      notes: '',
+    });
+    state.catalogue.push(place);
+    scheduleAutoSave();
+    toast('Saved to Places');
+    render();
+  }
+
+  function openSheet() {
+    const sheet = document.getElementById('sheet');
+    const body = document.getElementById('sheetBody');
+    body.innerHTML = renderPlacePickerSelect('sheetPlacePicker', 'btnSheetAddStop') + renderCatalogue(false);
+    sheet.classList.add('open');
+    sheet.setAttribute('aria-hidden', 'false');
+    bindCatalogue(body, { onFilter: openSheet });
+    body.querySelectorAll('[data-place-picker-add]').forEach(btn => {
+      btn.addEventListener('click', () => addPlaceFromPicker(btn.getAttribute('data-place-picker-add')));
+    });
+    const sheetPicker = document.getElementById('sheetPlacePicker');
+    if (sheetPicker) {
+      sheetPicker.addEventListener('change', () => {
+        if (sheetPicker.value) addPlaceFromPicker('sheetPlacePicker');
+      });
+    }
+    document.getElementById('btnSheetAddStop')?.addEventListener('click', addBlankStop);
+  }
+  function closeSheet() {
+    const sheet = document.getElementById('sheet');
+    sheet.classList.remove('open');
+    sheet.setAttribute('aria-hidden', 'true');
+    document.getElementById('sheetBody').innerHTML = '';
+  }
+
+  async function loadLiveBookings() {
+    try {
+      try {
+        const sessionRes = await withTimeout(sb.auth.getSession(), 2500, 'Session lookup timed out');
+        state.sessionEmail = sessionRes?.data?.session?.user?.email || '';
+      } catch (err) {
+        console.warn(err);
+      }
+      const { data, error } = await withTimeout(
+        sb.from('bookings')
+          .select('id, group_name, tour_arrival_date, departure_date, hotel_id, extra_notes, hotels(name)')
+          .order('tour_arrival_date', { ascending: false })
+          .limit(80),
+        5000,
+        'Bookings lookup timed out'
+      );
+      if (error) throw error;
+      state.bookings = (data || []).map(b => ({
+        ...b,
+        hotel_name: b.hotels?.name,
+        _members: [],
+        _hotel_stays: [],
+        _enriched: false,
+      }));
+      state.liveBookings = true;
+    } catch (err) {
+      console.warn('Planner bookings not loaded:', err);
+      state.liveBookings = false;
+    }
+    try {
+      const probe = await withTimeout(sb.from('planner_plans').select('id').limit(1), 2000, 'Planner table probe timed out');
+      state.supabasePlanTable = !probe.error;
+    } catch {
+      state.supabasePlanTable = false;
+    }
+  }
+
+  async function init() {
+    const savedAutoSave = localStorage.getItem('planner_autosave_enabled') === 'true';
+    const toggle = document.getElementById('autosaveToggle');
+    if (savedAutoSave && toggle) {
+      toggle.checked = true;
+      toggleAutoSave(true);
+    }
+
+    const store = loadStore();
+    state.catalogue = mergeCatalogueSeed(store.catalogue);
+    state.plans = store.plans || {};
+    if (!state.plans[DEMO_ID]) state.plans[DEMO_ID] = buildDemoPlan();
+
+    const params = new URLSearchParams(location.search);
+    const requested = params.get('booking');
+    const viewParam = params.get('view');
+    if (viewParam === 'phone' || viewParam === 'detailed') state.viewPref = viewParam;
+
+    state.catalogue = normalizeCatalogue(state.catalogue);
+
+    const localKey = (requested && requested !== DEMO_ID)
+      ? String(requested)
+      : DEMO_ID;
+    if (localKey !== DEMO_ID && state.plans[localKey]) {
+      await selectPlan(localKey);
+    } else {
+      await selectPlan(DEMO_ID);
+    }
+
+    await loadLiveBookings();
+    fillGroupSelect();
+    if (requested && requested !== DEMO_ID) {
+      const exists = state.bookings.some(b => String(b.id) === String(requested));
+      if (exists) {
+        await selectPlan(String(requested));
+      } else if (state.plans[requested]) {
+        await selectPlan(String(requested));
+        toast('Booking details offline — using the saved plan on this device');
+      } else {
+        toast('That booking was not found — showing the sample tour');
+        await selectPlan(DEMO_ID);
+      }
+    } else {
+      render();
+    }
+  }
+
+  document.getElementById('groupSelect').addEventListener('change', e => selectPlan(e.target.value));
+  document.getElementById('btnPhoneView').addEventListener('click', () => setViewPref('phone'));
+  document.getElementById('btnDetailedView').addEventListener('click', () => setViewPref('detailed'));
+  document.getElementById('btnTheme').addEventListener('click', () => {
+    const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('theme', next);
+  });
+  document.getElementById('sheetClose').addEventListener('click', closeSheet);
+  document.getElementById('sheet').addEventListener('click', e => { if (e.target.id === 'sheet') closeSheet(); });
+  window.addEventListener('resize', () => {
+    if (state.viewPref !== 'auto') return;
+    document.body.classList.toggle('view-phone', effectiveView() === 'phone');
+    document.body.classList.toggle('view-detailed', effectiveView() === 'detailed');
+  });
+
+  init();
+</script>
+</body>
+</html>
