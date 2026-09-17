@@ -1339,6 +1339,26 @@
     return /^https?:\/\/(maps\.apple\.com|maps\.apple)\b/i.test(String(addr || '').trim());
   }
 
+  /** Known beading-area tour hotels — never leave Maps with a bare “Park Hotel”. */
+  const KNOWN_TOUR_HOTEL_ADDRESSES = [
+    { match: /park\s*hotel|parkhotel/i, address: 'Kostelní 892, 468 51 Smržovka, Czech Republic', city: 'Smržovka' },
+    { match: /na\s*ba[sš]t/i, address: 'Horní náměstí 5, 466 01 Jablonec nad Nisou, Czech Republic', city: 'Jablonec nad Nisou' },
+  ];
+
+  function knownTourHotelAddress(name) {
+    const n = String(name || '').trim();
+    if (!n) return '';
+    const hit = KNOWN_TOUR_HOTEL_ADDRESSES.find(k => k.match.test(n));
+    return hit ? hit.address : '';
+  }
+
+  function knownTourHotelCity(name) {
+    const n = String(name || '').trim();
+    if (!n) return '';
+    const hit = KNOWN_TOUR_HOTEL_ADDRESSES.find(k => k.match.test(n));
+    return hit ? hit.city : '';
+  }
+
   function mapsQuery(name, address) {
     // Free-text address only (village/town or fuller street). Never use contact details.
     const addr = (address || '').trim();
@@ -1352,15 +1372,24 @@
       if (n && !addr.toLowerCase().includes(n.toLowerCase())) parts.push(n);
       parts.push(addr);
       let q = parts.join(', ');
-      if (!/\bczech\b|\bčesk|\bjablonec\b|\bliberec\b|\bturnov\b|\bprague\b|\bpraha\b|\bkoberov/i.test(q)) {
+      if (!/\bczech\b|\bčesk|\bjablonec\b|\bliberec\b|\bturnov\b|\bprague\b|\bpraha\b|\bkoberov|\bsmržovka\b|\bsmrzovka\b/i.test(q)) {
         q = q + ', Czech Republic';
       }
       return q;
     }
+    // Bare hotel names: prefer the known beading-area street (Park Hotel → Smržovka, not a random Park Hotel).
+    const known = knownTourHotelAddress(name);
+    if (known) return known;
     const n = (name || '').trim();
     if (!n) return 'Czech Republic';
     // Never send a bare place name alone — Maps often jumps to the wrong country.
-    if (/\bczech\b|\bčesk|\bjablonec\b|\bliberec\b|\bturnov\b|\bkoberov/i.test(n)) return n;
+    if (/\bczech\b|\bčesk|\bjablonec\b|\bliberec\b|\bturnov\b|\bkoberov|\bsmržovka\b|\bsmrzovka\b/i.test(n)) return n;
+    const city = knownTourHotelCity(n);
+    if (city) return n + ', ' + city + ', Czech Republic';
+    // Other bare hotel / pension names: pin to the beading-area city, not a random namesake abroad.
+    if (/\bhotel\b|\bpenzion\b|\bpension\b|\bubytov/i.test(n)) {
+      return n + ', Jablonec nad Nisou, Czech Republic';
+    }
     return n + ', Czech Republic';
   }
   function appleMapsUrl(name, address) {
@@ -1389,6 +1418,33 @@
     const q = pragueHotelMapsQuery(name, address);
     const idAttr = id ? ` id="${escapeHtml(id)}"` : '';
     return `<a class="maps-btn maps-btn-inline" data-prague-maps="1"${idAttr} href="${href}" target="_blank" rel="noopener" title="Search Apple Maps: ${escapeHtml(q)}">${escapeHtml(text)}</a>`;
+  }
+  /** Tour hotel Maps: prefer Places street; otherwise known beading-area address / city — never bare “Park Hotel”. */
+  function tourHotelMapsQuery(name, address) {
+    const addr = (address || '').trim();
+    if (addr) {
+      if (addressLooksLikeMapsUrl(addr)) return addr;
+      return mapsQuery(name, addr);
+    }
+    const known = knownTourHotelAddress(name);
+    if (known) return known;
+    const n = (name || '').trim();
+    if (!n) return 'Jablonec nad Nisou, Czech Republic';
+    if (/\bjablonec\b|\bsmržovka\b|\bsmrzovka\b|\bzásada\b|\bzasada\b|\bczech\b/i.test(n)) return n;
+    const city = knownTourHotelCity(n) || 'Jablonec nad Nisou';
+    return n + ', ' + city;
+  }
+  function tourHotelAppleMapsUrl(name, address) {
+    const addr = (address || '').trim();
+    if (addressLooksLikeMapsUrl(addr)) return addr;
+    return 'https://maps.apple.com/?q=' + encodeURIComponent(tourHotelMapsQuery(name, address));
+  }
+  function tourHotelMapsButtonHtml(name, address, label, id) {
+    const href = tourHotelAppleMapsUrl(name, address);
+    const text = label || 'Open in Apple Maps';
+    const q = tourHotelMapsQuery(name, address);
+    const idAttr = id ? ` id="${escapeHtml(id)}"` : '';
+    return `<a class="maps-btn maps-btn-inline" data-tour-hotel-maps="1"${idAttr} href="${href}" target="_blank" rel="noopener" title="Search Apple Maps: ${escapeHtml(q)}">${escapeHtml(text)}</a>`;
   }
   function typeLabel(t) {
     const singular = {
@@ -1487,7 +1543,11 @@
     const name = (stop && stop.title) || '';
     const place = placeById(stop && (stop.placeId || stop.place_id));
     const placeName = (place && place.name) || name;
-    const address = resolveStopAddress(stop);
+    const address = resolveStopAddress(stop) || knownTourHotelAddress(placeName || name);
+    const isTourHotel = (place && place.type === 'hotel') || !!knownTourHotelAddress(placeName || name);
+    if (isTourHotel) {
+      return tourHotelMapsButtonHtml(placeName || name, address, label || 'Open in Apple Maps');
+    }
     return mapsButtonHtml(placeName || name, address, label || 'Open in Apple Maps');
   }
 
@@ -1870,9 +1930,9 @@
       { id: 'ks10', name: 'Precious factory outlet', type: 'shop', address: '', notes: 'Outlet in Zásada.', contactMethod: '', contactDetail: '' },
       { id: 'kr01', name: 'Černá Studnice', type: 'restaurant', address: '', notes: '', contactMethod: '', contactDetail: '' },
       { id: 'kr02', name: 'Petřín', type: 'restaurant', address: '', notes: 'Great for last evening meal — need to book.', contactMethod: '', contactDetail: '' },
-      { id: 'kr03', name: 'Na Baště', type: 'restaurant', address: '', notes: 'Also known as Na Basta.', contactMethod: '', contactDetail: '' },
+      { id: 'kr03', name: 'Na Baště', type: 'restaurant', address: 'Horní náměstí 5, 466 01 Jablonec nad Nisou, Czech Republic', notes: 'Also known as Na Basta.', contactMethod: '', contactDetail: '' },
       { id: 'kr04', name: 'Splzov motorest', type: 'restaurant', address: '', notes: 'Best garlic soup.', contactMethod: '', contactDetail: '' },
-      { id: 'kr05', name: 'Park hotel', type: 'restaurant', address: '', notes: 'Food / hotel dining.', contactMethod: '', contactDetail: '' },
+      { id: 'kr05', name: 'Park hotel', type: 'restaurant', address: 'Kostelní 892, 468 51 Smržovka, Czech Republic', notes: 'Food / hotel dining — Parkhotel Smržovka.', contactMethod: '', contactDetail: '' },
       { id: 'kr06', name: 'Snack at supermarket', type: 'restaurant', address: '', notes: 'Light food stop — supermarket snack.', contactMethod: '', contactDetail: '' },
       { id: 'ke01', name: 'Poniklá Christmas decoration', type: 'experience', address: '', notes: 'Look around; amazing private museums / local way of life in a poor hard area in the past.', contactMethod: '', contactDetail: '' },
       { id: 'ke02', name: 'Family Oliver cutting glass', type: 'experience', address: '', notes: 'Chance to cut into their own small mirror.', contactMethod: '', contactDetail: '' },
@@ -1884,8 +1944,8 @@
       { id: 'kh01', name: 'Glass school in Jablonec', type: 'school', address: '', notes: 'Small shop — see what the kids are making.', contactMethod: '', contactDetail: '' },
       { id: 'kh02', name: 'Glass school in Železný Brod', type: 'school', address: '', notes: '', contactMethod: '', contactDetail: '' },
       // Hotels already named in the booking app / Places notes — not a long fake list
-      { id: 'ht01', name: 'Park hotel', type: 'hotel', address: '', notes: 'Beading-area hotel (also has restaurant dining as a separate Places entry).', contactMethod: '', contactDetail: '' },
-      { id: 'ht02', name: 'Na Basta', type: 'hotel', address: '', notes: 'Also known as Na Baště. Common tour hotel in the beading area.', contactMethod: '', contactDetail: '' },
+      { id: 'ht01', name: 'Park hotel', type: 'hotel', address: 'Kostelní 892, 468 51 Smržovka, Czech Republic', notes: 'Parkhotel Smržovka — beading-area tour hotel (also has restaurant dining as a separate Places entry).', contactMethod: '', contactDetail: '' },
+      { id: 'ht02', name: 'Na Basta', type: 'hotel', address: 'Horní náměstí 5, 466 01 Jablonec nad Nisou, Czech Republic', notes: 'Also known as Na Baště. Common tour hotel in the beading area.', contactMethod: '', contactDetail: '' },
     ]);
   }
 
@@ -1959,9 +2019,22 @@
 
   function tourHotelAddress() {
     const place = getTourHotelPlace();
-    if (place && place.address) return place.address;
+    if (place && String(place.address || '').trim()) return String(place.address).trim();
     const name = (place && place.name) || state.plan?.tourHotelName || '';
-    return name ? (name + ', Czech Republic') : '';
+    return name ? tourHotelMapsQuery(name, '') : '';
+  }
+
+  /** Fill empty Places addresses for known tour hotels (Park Hotel → Smržovka street, etc.). */
+  function ensureKnownTourHotelAddresses() {
+    let changed = false;
+    (state.catalogue || []).forEach(p => {
+      if (!p || String(p.address || '').trim()) return;
+      const known = knownTourHotelAddress(p.name);
+      if (!known) return;
+      p.address = known;
+      changed = true;
+    });
+    return changed;
   }
 
   function isArrivalDayIndex(dayIndex) {
@@ -3548,7 +3621,7 @@
           <div>
             <label class="field-label">Address</label>
             <input type="text" data-place-address="${p.id}" value="${escapeHtml(p.address || '')}" placeholder="Village, town, or street">
-            <div class="maps-under-field">${mapsButtonHtml(p.name, p.address, 'Open in Apple Maps')}</div>
+            <div class="maps-under-field">${(p.type === 'hotel' || knownTourHotelAddress(p.name)) ? tourHotelMapsButtonHtml(p.name, p.address || knownTourHotelAddress(p.name), 'Open in Apple Maps') : mapsButtonHtml(p.name, p.address, 'Open in Apple Maps')}</div>
           </div>
         </div>
         <div class="dir-grid" style="margin-top:8px;">
@@ -4345,7 +4418,7 @@ function renderDayTabs() {
       opts.push('<option value="" disabled>No hotels in Places yet — add one on the Places tab</option>');
     }
     const place = getTourHotelPlace();
-    const maps = place ? mapsButtonHtml(place.name, place.address, 'Open in Apple Maps') : '';
+    const maps = place ? tourHotelMapsButtonHtml(place.name, place.address || knownTourHotelAddress(place.name), 'Open in Apple Maps') : '';
     return `
       <label class="field-label" for="tourHotel">Staying at</label>
       <select id="tourHotel" aria-label="Tour hotel — overnight base in the beading area">
@@ -4395,14 +4468,14 @@ function renderDayTabs() {
     if (!name) {
       return `<div class="day-origin warn"><div class="muted">Day starting point</div><div class="name">No tour hotel selected</div><div class="meta">Choose <strong>Staying at</strong> above (Places → Hotels). We do not add a duplicate “arrive hotel” stop each day.</div></div>`;
     }
-    const addr = (place && place.address) || '';
+    const addr = (place && String(place.address || '').trim()) || knownTourHotelAddress(name) || '';
     return `
       <div class="day-origin">
         <div class="origin-kind">Overnight base · day starting point</div>
         <div class="name">🏨 ${escapeHtml(name)}</div>
         <div class="meta">
           ${addr ? `<span>${escapeHtml(addr)}</span>` : `<span>Add an address on the Places tab for better travel estimates</span>`}
-          ${mapsButtonHtml(name, addr, 'Open in Apple Maps')}
+          ${tourHotelMapsButtonHtml(name, addr, 'Open in Apple Maps')}
         </div>
         <div class="origin-note">Tour hotel in the beading area — start of today’s stops after arrival day.</div>
       </div>
@@ -4549,7 +4622,11 @@ function renderDayTabs() {
     const item = document.querySelector(`.place-dir-item[data-place-id="${CSS.escape(placeId)}"]`);
     if (!item) return;
     const maps = item.querySelector('.maps-under-field');
-    if (maps) maps.innerHTML = mapsButtonHtml(p.name, p.address, 'Open in Apple Maps');
+    if (maps) {
+      maps.innerHTML = (p.type === 'hotel' || knownTourHotelAddress(p.name))
+        ? tourHotelMapsButtonHtml(p.name, p.address || knownTourHotelAddress(p.name), 'Open in Apple Maps')
+        : mapsButtonHtml(p.name, p.address, 'Open in Apple Maps');
+    }
   }
 
   function updatePlaceContactPill(placeId) {
@@ -5301,6 +5378,11 @@ function renderDayTabs() {
       if (state.supabasePlacesTable) await uploadCatalogueSeed();
     }
     state.catalogue = normalizeCatalogue(state.catalogue);
+    if (ensureKnownTourHotelAddresses()) {
+      syncEmptyStopAddressesFromCatalogue();
+      try { await savePlacesToSupabase(); } catch (_) { /* best-effort */ }
+      scheduleAutoSave();
+    }
 
     // Prefetch cloud plan for requested booking into local cache
     const localKey = (requested && requested !== DEMO_ID)
