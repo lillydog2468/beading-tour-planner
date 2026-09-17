@@ -425,6 +425,34 @@
 
     .day-glance-icon { font-size: 14px; line-height: 1; text-align: center; opacity: .92; }
     .day-glance-title .glance-nick { font-weight: 800; }
+    .day-glance-hint {
+      font-size: 11px; font-weight: 600; color: var(--text-secondary);
+      margin: -2px 0 6px; line-height: 1.3;
+    }
+    .day-glance-item {
+      display: grid;
+      grid-template-columns: 18px 1fr;
+      gap: 2px;
+      align-items: center;
+      border-radius: 8px;
+    }
+    .day-glance-item.dragging { opacity: .45; }
+    .day-glance-item.drag-over {
+      box-shadow: inset 0 2px 0 0 var(--accent);
+    }
+    .day-glance-handle {
+      cursor: grab;
+      color: var(--text-secondary);
+      font-size: 13px;
+      line-height: 1;
+      text-align: center;
+      user-select: none;
+      padding: 8px 0;
+      -webkit-user-select: none;
+    }
+    .day-glance-handle:active { cursor: grabbing; }
+    .day-glance-item .day-glance-row { min-width: 0; }
+    .view-phone .day-glance-handle { padding: 12px 0; font-size: 15px; }
     .rough-draft-banner {
       margin-top: 8px;
       padding: 8px 10px;
@@ -1105,14 +1133,80 @@
     if (s.travelMode !== 'clear' && s.travelMode !== 'traffic') s.travelMode = s.travelMode || null;
     return s;
   }
+  /** Short family-friendly labels — Keith / Simi can edit in Places. */
+  const DEFAULT_NICKNAMES = {
+    kf01: 'Rut', kf02: 'Mat', kf03: 'GB', kf04: 'Lucka', kf05: 'Peg',
+    kf06: 'Clever fam', kf07: 'Ral', kf08: 'Oliver', kf09: 'Janov', kf10: 'Pes',
+    kf11: 'Black', kf12: 'Buttons', kf13: 'Press', kf14: 'Lamp', kf15: 'Lhot',
+    kf16: 'Clever',
+    ks01: 'Antik', ks02: 'Držkov', ks03: 'Vlad', ks04: 'Bijou NS', ks05: 'Bijou C',
+    ks06: 'Ráj', ks07: 'House', ks08: 'Smrž', ks09: 'Haberdash', ks10: 'Preciosa',
+    kr01: 'Studnice', kr02: 'Petřín', kr03: 'Baště food', kr04: 'Splzov',
+    kr05: 'Park food', kr06: 'Snack',
+    ke01: 'Poniklá', ke02: 'Oliver cut', ke03: 'Koralex',
+    km01: 'Museum J', km02: 'Museum ŽB', km03: 'Soviet cars', km04: 'Cars Smrž',
+    kh01: 'School J', kh02: 'School ŽB',
+    ht01: 'Park', ht02: 'Basta',
+    pass01: 'Pass',
+  };
+
+  /** Optional per-place emoji when type icon is too generic (e.g. Studnice = tower). */
+  const DEFAULT_ICONS = {
+    // Prefer distinctive place icons over generic type (Keith: Studnice is a tower)
+    kr01: '🗼', // Černá Studnice — viewpoint / tower
+    kr06: '🛒', // Snack at supermarket
+    kr05: '🍽️', // Park hotel dining
+    km01: '🏛️', km02: '🏛️', km03: '🚗', km04: '🚗',
+    kh01: '🏫', kh02: '🏫',
+    ht01: '🏨', ht02: '🏨',
+    ke01: '🎄', // Poniklá Christmas
+    ke02: '✂️', ke03: '✨',
+    kf10: '💎', kf11: '🖤', kf12: '🔘', kf13: '🔘', kf14: '🔥', kf15: '✨',
+    ks01: '🏪', ks02: '🏪', ks03: '🏪', ks04: '🏪', ks05: '🏪',
+    ks06: '💎', ks07: '🏪', ks08: '🏪', ks09: '🧵', ks10: '🏪',
+    // Factories / Pass leave blank → type icon 🏭 unless set in Places
+  };
+
+  function inventShortNickname(name) {
+    const raw = String(name || '').trim();
+    if (!raw) return '';
+    if (raw.length <= 12) return raw;
+    const skip = new Set(['glass', 'beads', 'bead', 'the', 'of', 'in', 'and', 'shop', 'factory', 'old', 'small', 'at', 'a', 'an']);
+    const words = raw.replace(/[—–]/g, ' ').split(/\s+/).filter(Boolean);
+    for (const w of words) {
+      const clean = w.replace(/[^A-Za-zÀ-ž0-9]/g, '');
+      if (clean.length >= 3 && !skip.has(clean.toLowerCase())) {
+        return clean.length <= 12 ? clean : clean.slice(0, 10);
+      }
+    }
+    return raw.slice(0, 10).trim() + '…';
+  }
+
+  function abbreviateTitle(title) {
+    const t = String(title || '').trim();
+    if (!t) return '';
+    if (t.length <= 14) return t;
+    const first = t.split(/\s+/)[0].replace(/[—–,]/g, '');
+    if (first.length >= 4 && first.length <= 14) return first;
+    return t.slice(0, 12).trim() + '…';
+  }
+
   function ensurePlace(p) {
     if (!p) return p;
     if (p.contactMethod == null) p.contactMethod = '';
     p.contactDetail = p.contactDetail || '';
     p.address = p.address || '';
     p.notes = p.notes || '';
-    p.nickname = p.nickname || '';
+    if (p.nickname == null) p.nickname = '';
+    if (p.icon == null) p.icon = '';
     p.type = p.type || 'other';
+    if (!String(p.nickname).trim()) {
+      const seeded = (p.id && DEFAULT_NICKNAMES[p.id]) || inventShortNickname(p.name);
+      if (seeded) p.nickname = seeded;
+    }
+    if (!String(p.icon).trim() && p.id && DEFAULT_ICONS[p.id]) {
+      p.icon = DEFAULT_ICONS[p.id];
+    }
     return p;
   }
   function normalizePlan(plan) {
@@ -2196,6 +2290,7 @@
       address: p.address || null,
       notes: p.notes || null,
       nickname: p.nickname || null,
+      icon: p.icon || null,
       sort_order: typeof p.sortOrder === 'number' ? p.sortOrder : (index + 1),
       updated_at: new Date().toISOString(),
     };
@@ -2211,6 +2306,7 @@
       address: r.address || '',
       notes: r.notes || '',
       nickname: r.nickname || '',
+      icon: r.icon || '',
       sortOrder: r.sort_order == null ? 0 : Number(r.sort_order),
     });
   }
@@ -2625,21 +2721,95 @@
     scheduleAutoSave();
     render();
   }
+  function redistributeBlockTimes(day) {
+    if (!day || !Array.isArray(day.blocks)) return;
+    const times = day.blocks.map(b => b.time);
+    const sorted = times.slice().sort((a, b) => {
+      const am = timeToMinutes(a), bm = timeToMinutes(b);
+      if (am == null && bm == null) return 0;
+      if (am == null) return 1;
+      if (bm == null) return -1;
+      return am - bm;
+    });
+    day.blocks.forEach((b, i) => {
+      b.time = sorted[i] || '';
+      b.period = periodForTime(b.time);
+    });
+  }
+
+  function reorderDayBlocks(day, fromIdx, toIdx) {
+    if (!day || !Array.isArray(day.blocks)) return false;
+    const n = day.blocks.length;
+    if (fromIdx < 0 || toIdx < 0 || fromIdx >= n || toIdx >= n || fromIdx === toIdx) return false;
+    const [item] = day.blocks.splice(fromIdx, 1);
+    day.blocks.splice(toIdx, 0, item);
+    redistributeBlockTimes(day);
+    day.blocks.forEach((_, i) => {
+      if (day.blocks[i] && day.blocks[i].travelMinutes == null) seedTravelMinutes(day, i);
+    });
+    return true;
+  }
+
   function moveStop(id, dir) {
     const day = currentDay();
     if (!day) return;
     const i = day.blocks.findIndex(s => s.id === id);
     const j = i + dir;
     if (i < 0 || j < 0 || j >= day.blocks.length) return;
-    const tmp = day.blocks[i];
-    day.blocks[i] = day.blocks[j];
-    day.blocks[j] = tmp;
-    // “From …” text follows the new order on render; re-seed only blank estimates.
-    [i, j].forEach(idx => {
-      if (day.blocks[idx] && day.blocks[idx].travelMinutes == null) seedTravelMinutes(day, idx);
-    });
+    if (!reorderDayBlocks(day, i, j)) return;
     scheduleAutoSave();
     render();
+  }
+
+  function bindDayGlanceDrag() {
+    const list = document.getElementById('dayGlanceList');
+    if (!list) return;
+    let dragFrom = null;
+    list.querySelectorAll('.day-glance-item').forEach(item => {
+      item.addEventListener('dragstart', (e) => {
+        dragFrom = Number(item.getAttribute('data-glance-index'));
+        item.classList.add('dragging');
+        try {
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', String(dragFrom));
+        } catch (_) {}
+      });
+      item.addEventListener('dragend', () => {
+        item.classList.remove('dragging');
+        list.querySelectorAll('.day-glance-item').forEach(el => el.classList.remove('drag-over'));
+        dragFrom = null;
+      });
+      item.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        try { e.dataTransfer.dropEffect = 'move'; } catch (_) {}
+        list.querySelectorAll('.day-glance-item').forEach(el => el.classList.remove('drag-over'));
+        item.classList.add('drag-over');
+      });
+      item.addEventListener('dragleave', () => item.classList.remove('drag-over'));
+      item.addEventListener('drop', (e) => {
+        e.preventDefault();
+        item.classList.remove('drag-over');
+        const toIdx = Number(item.getAttribute('data-glance-index'));
+        let fromIdx = dragFrom;
+        if (fromIdx == null || Number.isNaN(fromIdx)) {
+          try { fromIdx = Number(e.dataTransfer.getData('text/plain')); } catch (_) { fromIdx = NaN; }
+        }
+        if (Number.isNaN(fromIdx) || Number.isNaN(toIdx) || fromIdx === toIdx) return;
+        const day = currentDay();
+        if (!day) return;
+        // Indices are on the filtered titled-stops list — map via stop ids
+        const titled = (day.blocks || []).filter(s => s && String(s.title || '').trim());
+        const fromStop = titled[fromIdx];
+        const toStop = titled[toIdx];
+        if (!fromStop || !toStop) return;
+        const realFrom = day.blocks.findIndex(s => s.id === fromStop.id);
+        const realTo = day.blocks.findIndex(s => s.id === toStop.id);
+        if (!reorderDayBlocks(day, realFrom, realTo)) return;
+        scheduleAutoSave();
+        render();
+        toast('Stops reordered');
+      });
+    });
   }
   function addManualDay() {
     const last = state.plan.days[state.plan.days.length - 1];
@@ -2847,7 +3017,7 @@
       if (filter !== 'all' && (p.type || 'other') !== filter) return false;
       if (!q) return true;
       const hay = [
-        p.name, p.address, p.notes, p.contactDetail, typeLabel(p.type), contactLabel(p.contactMethod)
+        p.name, p.nickname, p.icon, p.address, p.notes, p.contactDetail, typeLabel(p.type), contactLabel(p.contactMethod)
       ].map(x => String(x || '').toLowerCase()).join(' ');
       return hay.includes(q);
     });
@@ -2886,7 +3056,7 @@
           const sel = state.selectedPlaceId === p.id ? ' selected' : '';
           return `
         <button type="button" class="place-name-item${sel}" data-select-place="${p.id}" aria-pressed="${state.selectedPlaceId === p.id ? 'true' : 'false'}">
-          <span class="pname">${escapeHtml(p.name || 'Unnamed place')}</span>
+          <span class="pname">${p.icon ? escapeHtml(p.icon) + ' ' : ''}${escapeHtml(p.name || 'Unnamed place')}${p.nickname && String(p.nickname).trim() && p.nickname !== p.name ? (' <span class="muted">(' + escapeHtml(p.nickname) + ')</span>') : ''}</span>
           <span class="ptype">${escapeHtml(typeLabel(p.type))}</span>
         </button>`;
         }).join('')
@@ -2934,7 +3104,16 @@
             <div class="maps-under-field">${mapsButtonHtml(p.name, p.address, 'Open in Apple Maps')}</div>
           </div>
         </div>
-        <input type="text" data-place-nickname="${p.id}" value="${escapeHtml(p.nickname || '')}" placeholder="Nickname / short name (Day at a glance)" style="margin-top:8px;" title="Optional short name shown in Day at a glance">
+        <div class="dir-grid" style="margin-top:8px;">
+          <div>
+            <label class="field-label">Nickname</label>
+            <input type="text" data-place-nickname="${p.id}" value="${escapeHtml(p.nickname || '')}" placeholder="Short name for Day at a glance" title="Shown in Day at a glance instead of the full title">
+          </div>
+          <div>
+            <label class="field-label">Icon (emoji)</label>
+            <input type="text" data-place-icon="${p.id}" value="${escapeHtml(p.icon || '')}" placeholder="Leave blank for type icon" maxlength="8" title="Optional emoji for Day at a glance — e.g. tower for Studnice">
+          </div>
+        </div>
         <input type="text" data-place-notes="${p.id}" value="${escapeHtml(p.notes || '')}" placeholder="Notes / description (editable)" style="margin-top:8px;">
         ${showAddToDay ? `<div class="add-to-day-row">
           <div class="time-field">
@@ -2945,7 +3124,7 @@
         </div>` : ''}
       </div>`;
     } else {
-      detailHtml = `<p class="places-detail-empty">Select a place from the list to edit its name, type, contact, address and notes. Or add a new place on the left — it will open here straight away.</p>`;
+      detailHtml = `<p class="places-detail-empty">Select a place from the list to edit its name, nickname, icon, type, contact, address and notes. Or add a new place on the left — it will open here straight away.</p>`;
     }
 
     const addBox = compact ? '' : `
@@ -3001,12 +3180,21 @@
     return map[String(type || 'other')] || map.other;
   }
 
+  /** Prefer place.icon when set (e.g. Studnice tower); else type emoji. */
+  function placeIconForStop(stop) {
+    if (!stop) return placeTypeIcon('other');
+    const place = placeById(stop.placeId || stop.place_id);
+    const custom = place && String(place.icon || '').trim();
+    if (custom) return custom;
+    return placeTypeIcon(stop.type);
+  }
+
   function glanceLabelForStop(stop) {
     if (!stop) return '';
     const place = placeById(stop.placeId || stop.place_id);
     const nick = place && String(place.nickname || '').trim();
     if (nick) return nick;
-    return String(stop.title || '').trim();
+    return abbreviateTitle(stop.title || '');
   }
 
   function renderDayGlance(day) {
@@ -3019,22 +3207,26 @@
         <p class="day-glance-empty">No stops yet — add places below.</p>
       </div>`;
     }
-    const rows = stops.map(s => {
+    const rows = stops.map((s, idx) => {
       const time = String(s.time || '').trim();
       const timeLabel = time || '—';
       const label = glanceLabelForStop(s);
       const fullTitle = String(s.title || '').trim();
-      const icon = placeTypeIcon(s.type);
+      const icon = placeIconForStop(s);
       const tip = fullTitle && fullTitle !== label ? (fullTitle + ' — jump to this stop') : 'Jump to this stop';
-      return `<li><button type="button" class="day-glance-row" data-glance-stop="${escapeHtml(s.id)}" title="${escapeHtml(tip)}">
-        <span class="day-glance-time">${escapeHtml(timeLabel)}</span>
-        <span class="day-glance-icon" aria-hidden="true">${icon}</span>
-        <span class="day-glance-title"><span class="glance-nick">${escapeHtml(label)}</span></span>
-      </button></li>`;
+      return `<li class="day-glance-item" draggable="true" data-glance-index="${idx}" data-glance-stop-id="${escapeHtml(s.id)}">
+        <span class="day-glance-handle" title="Drag to reorder" aria-hidden="true">⠿</span>
+        <button type="button" class="day-glance-row" data-glance-stop="${escapeHtml(s.id)}" title="${escapeHtml(tip)}">
+          <span class="day-glance-time">${escapeHtml(timeLabel)}</span>
+          <span class="day-glance-icon" aria-hidden="true">${icon}</span>
+          <span class="day-glance-title"><span class="glance-nick">${escapeHtml(label)}</span></span>
+        </button>
+      </li>`;
     }).join('');
     return `<div class="day-glance" aria-label="Day at a glance">
       <div class="day-glance-label">Day at a glance</div>
-      <ul class="day-glance-list">${rows}</ul>
+      <p class="day-glance-hint">Drag ⠿ to reorder · dropping Places into the glance comes later</p>
+      <ul class="day-glance-list" id="dayGlanceList">${rows}</ul>
     </div>`;
   }
 
@@ -3285,6 +3477,7 @@ function renderDayTabs() {
     if (active && active.closest && active.closest('#app')) {
       const focusAttrs = [
         'data-place-name', 'data-place-address', 'data-place-contact-detail', 'data-place-notes',
+        'data-place-nickname', 'data-place-icon',
         'data-place-type', 'data-place-contact-method', 'data-add-place-time',
         'data-stop-title', 'data-stop-notes', 'data-stop-address', 'data-stop-time', 'data-stop-travel',
         'data-guest-name', 'data-guest-lent', 'data-repay-amount', 'data-repay-date'
@@ -3684,6 +3877,7 @@ function renderDayTabs() {
     document.querySelectorAll('[data-glance-stop]').forEach(btn => {
       btn.addEventListener('click', () => focusStopFromGlance(btn.getAttribute('data-glance-stop')));
     });
+    bindDayGlanceDrag();
     document.querySelectorAll('[data-stop-time]').forEach(inp => {
       // Safari / mobile: bind input+change+blur, but NEVER commit from a detached node
       // (render() destroys the input; its empty blur/input was wiping real times to cloud).
@@ -3857,6 +4051,16 @@ function renderDayTabs() {
       inp.addEventListener('change', () => {
         const p = state.catalogue.find(x => x.id === inp.getAttribute('data-place-nickname'));
         if (p) { p.nickname = inp.value; scheduleAutoSave(); render(); }
+      });
+    });
+    root.querySelectorAll('[data-place-icon]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const p = state.catalogue.find(x => x.id === inp.getAttribute('data-place-icon'));
+        if (p) { p.icon = inp.value; scheduleAutoSave(); }
+      });
+      inp.addEventListener('change', () => {
+        const p = state.catalogue.find(x => x.id === inp.getAttribute('data-place-icon'));
+        if (p) { p.icon = inp.value; scheduleAutoSave(); render(); }
       });
     });
     root.querySelectorAll('[data-place-notes]').forEach(inp => {
