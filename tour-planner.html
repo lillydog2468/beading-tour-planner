@@ -552,6 +552,8 @@
     placeFilter: 'all',
     liveBookings: false,
     supabasePlanTable: false,
+    supabasePlacesTable: false,
+    cloudSaveOk: false,
   };
 
   function uid(prefix) {
@@ -934,7 +936,10 @@
   }
   function persist() {
     const store = loadStore();
-    store.catalogue = state.catalogue;
+    // Never wipe cloud/local catalogue with an empty in-memory list
+    if (Array.isArray(state.catalogue) && state.catalogue.length) {
+      store.catalogue = state.catalogue;
+    }
     store.plans = store.plans || {};
     if (state.plan) store.plans[state.plan.bookingKey] = state.plan;
     store.plans = Object.assign(store.plans, state.plans);
@@ -981,36 +986,193 @@
       status.textContent = 'Unsaved';
       status.className = 'autosave-status saving';
     }
-    autoSaveTimer = setTimeout(() => {
+    autoSaveTimer = setTimeout(async () => {
       if (status) {
         status.textContent = 'Saving…';
         status.className = 'autosave-status saving';
       }
       persist();
+      // persist kicks off cloud save; wait briefly then show result
+      await waitForCloudSaveHint();
       if (status) {
-        status.textContent = 'Saved';
+        status.textContent = state.cloudSaveOk ? 'Cloud saved' : 'Saved locally';
         status.className = 'autosave-status saved';
         setTimeout(() => {
           const el = document.getElementById('autosaveStatus');
-          if (el && el.textContent === 'Saved') el.textContent = 'On';
-        }, 2000);
+          if (el && (el.textContent === 'Cloud saved' || el.textContent === 'Saved locally')) {
+            el.textContent = autoSaveEnabled ? 'On' : '';
+          }
+        }, 2500);
       }
     }, AUTOSAVE_DELAY);
   }
 
-  async function maybeSaveSupabase() {
-    if (!state.supabasePlanTable || !state.plan) return;
-    const bookingId = Number(state.plan.bookingKey);
-    try {
-      const row = {
-        booking_id: Number.isFinite(bookingId) ? bookingId : null,
-        payload: state.plan,
-      };
-      const { error } = await sb.from('planner_plans').upsert(row, { onConflict: 'booking_id' });
-      if (error) throw error;
-    } catch {
-      /* table may not exist yet — localStorage is enough for the prototype */
+  function waitForCloudSaveHint() {
+    return new Promise(resolve => setTimeout(resolve, 600));
+  }
+
+  function setCloudStatus(ok, detail) {
+    state.cloudSaveOk = !!ok;
+    const status = document.getElementById('autosaveStatus');
+    if (!status || autoSaveEnabled) return;
+    if (ok) {
+      status.textContent = detail || 'Cloud saved';
+      status.className = 'autosave-status saved';
     }
+  }
+
+  function placeToRow(p, index) {
+    return {
+      client_id: String(p.id),
+      name: p.name || 'Untitled place',
+      place_type: p.type || 'other',
+      contact_method: p.contactMethod || null,
+      contact_detail: p.contactDetail || null,
+      address: p.address || null,
+      notes: p.notes || null,
+      sort_order: typeof p.sortOrder === 'number' ? p.sortOrder : (index + 1),
+      updated_at: new Date().toISOString(),
+    };
+  }
+
+  function rowToPlace(r) {
+    return ensurePlace({
+      id: r.client_id || ('p' + r.id),
+      name: r.name || '',
+      type: r.place_type || 'other',
+      contactMethod: r.contact_method || '',
+      contactDetail: r.contact_detail || '',
+      address: r.address || '',
+      notes: r.notes || '',
+      sortOrder: r.sort_order == null ? 0 : Number(r.sort_order),
+    });
+  }
+
+  function mergeCatalogueLists(primary, secondary) {
+    const byId = new Map();
+    const byName = new Map();
+    function add(list, preferExisting) {
+      (list || []).forEach(raw => {
+        const p = ensurePlace({ ...raw });
+        if (!p.id) p.id = uid('p');
+        const nk = placeNameKey(p.name);
+        if (byId.has(p.id)) {
+          if (!preferExisting) byId.set(p.id, { ...byId.get(p.id), ...p, id: p.id });
+          return;
+        }
+        if (nk && byName.has(nk)) {
+          if (!preferExisting) {
+            const prev = byName.get(nk);
+            const merged = { ...prev, ...p, id: prev.id };
+            byId.set(prev.id, merged);
+            byName.set(nk, merged);
+          }
+          return;
+        }
+        byId.set(p.id, p);
+        if (nk) byName.set(nk, p);
+      });
+    }
+    // secondary first, then primary wins on conflict
+    add(secondary, false);
+    add(primary, false);
+    return normalizeCatalogue([...byId.values()]);
+  }
+
+  async function fetchCloudPlaces() {
+    if (!state.supabasePlacesTable) return null;
+    try {
+      const { data, error } = await withTimeout(
+        sb.from('planner_places').select('*').order('sort_order', { ascending: true }),
+        5000,
+        'Places lookup timed out'
+      );
+      if (error) throw error;
+      return (data || []).map(rowToPlace);
+    } catch (err) {
+      console.warn('Cloud places not loaded:', err);
+      return null;
+    }
+  }
+
+  async function uploadCatalogueSeed() {
+    if (!state.supabasePlacesTable) return false;
+    const seed = defaultCatalogue();
+    try {
+      const rows = seed.map((p, i) => placeToRow(p, i));
+      const { error } = await sb.from('planner_places').upsert(rows, { onConflict: 'client_id' });
+      if (error) throw error;
+      return true;
+    } catch (err) {
+      console.warn('Could not upload place seed:', err);
+      return false;
+    }
+  }
+
+  async function savePlacesToSupabase() {
+    if (!state.supabasePlacesTable) return false;
+    if (!Array.isArray(state.catalogue) || !state.catalogue.length) return false;
+    try {
+      const rows = state.catalogue.map((p, i) => placeToRow(p, i));
+      const { error } = await sb.from('planner_places').upsert(rows, { onConflict: 'client_id' });
+      if (error) throw error;
+      return true;
+    } catch (err) {
+      console.warn('Could not save places to Supabase:', err);
+      return false;
+    }
+  }
+
+  async function loadPlanFromSupabase(key) {
+    if (!state.supabasePlanTable || !key) return null;
+    try {
+      let q;
+      if (key === DEMO_ID || !/^[0-9]+$/.test(String(key))) {
+        q = sb.from('planner_plans').select('*').eq('client_key', String(key)).maybeSingle();
+      } else {
+        q = sb.from('planner_plans').select('*').eq('booking_id', Number(key)).maybeSingle();
+      }
+      const { data, error } = await withTimeout(q, 4000, 'Plan lookup timed out');
+      if (error) throw error;
+      if (!data || !data.payload) return null;
+      const plan = normalizePlan({ ...data.payload, bookingKey: String(key) });
+      return plan;
+    } catch (err) {
+      console.warn('Cloud plan not loaded:', err);
+      return null;
+    }
+  }
+
+  async function maybeSaveSupabase() {
+    let placesOk = false;
+    let planOk = false;
+    try {
+      placesOk = await savePlacesToSupabase();
+    } catch (err) {
+      console.warn(err);
+    }
+    if (state.supabasePlanTable && state.plan) {
+      try {
+        const key = String(state.plan.bookingKey || DEMO_ID);
+        const isBooking = /^[0-9]+$/.test(key);
+        const row = {
+          payload: state.plan,
+          updated_at: new Date().toISOString(),
+          booking_id: isBooking ? Number(key) : null,
+          client_key: isBooking ? ('booking:' + key) : key,
+        };
+        // Prefer unique booking_id when set; otherwise unique client_key (demo)
+        const onConflict = isBooking ? 'booking_id' : 'client_key';
+        const { error } = await sb.from('planner_plans').upsert(row, { onConflict });
+        if (error) throw error;
+        planOk = true;
+      } catch (err) {
+        console.warn('Could not save plan to Supabase:', err);
+      }
+    }
+    const ok = placesOk || planOk;
+    setCloudStatus(ok, ok ? 'Cloud saved' : '');
+    return ok;
   }
 
   function effectiveView() {
@@ -1107,12 +1269,17 @@
 
   async function selectPlan(key) {
     state.bookingKey = key;
+    const cloudPlan = await loadPlanFromSupabase(key);
+    if (cloudPlan) {
+      state.plans[key] = cloudPlan;
+    }
     if (key === DEMO_ID) {
       state.plan = state.plans[DEMO_ID] || buildDemoPlan();
     } else {
       const b = state.bookings.find(x => String(x.id) === String(key));
       if (b) {
         await enrichBooking(b);
+        // planFromBooking merges local/cloud existing with booking metadata
         state.plan = planFromBooking(b);
       } else {
         state.plan = state.plans[key] || buildDemoPlan();
@@ -1959,6 +2126,12 @@ function renderDayTabs() {
     } catch {
       state.supabasePlanTable = false;
     }
+    try {
+      const probePlaces = await withTimeout(sb.from('planner_places').select('id').limit(1), 2000, 'Places table probe timed out');
+      state.supabasePlacesTable = !probePlaces.error;
+    } catch {
+      state.supabasePlacesTable = false;
+    }
   }
 
   async function init() {
@@ -1970,7 +2143,9 @@ function renderDayTabs() {
     }
 
     const store = loadStore();
-    state.catalogue = mergeCatalogueSeed(store.catalogue);
+    const localCatalogue = Array.isArray(store.catalogue) && store.catalogue.length
+      ? normalizeCatalogue(store.catalogue)
+      : [];
     state.plans = store.plans || {};
     if (!state.plans[DEMO_ID]) state.plans[DEMO_ID] = buildDemoPlan();
 
@@ -1979,18 +2154,39 @@ function renderDayTabs() {
     const viewParam = params.get('view');
     if (viewParam === 'phone' || viewParam === 'detailed') state.viewPref = viewParam;
 
+    // Probe tables first so cloud places/plans can load before first render
+    await loadLiveBookings();
+
+    let cloudPlaces = await fetchCloudPlaces();
+    if (cloudPlaces && !cloudPlaces.length) {
+      await uploadCatalogueSeed();
+      cloudPlaces = await fetchCloudPlaces();
+    }
+    if (cloudPlaces && cloudPlaces.length) {
+      // Cloud is source of truth; merge any newer local-only places carefully
+      state.catalogue = mergeCatalogueLists(cloudPlaces, localCatalogue);
+      // Also ensure seed names exist (in case cloud was partial)
+      state.catalogue = mergeCatalogueSeed(state.catalogue);
+    } else {
+      state.catalogue = mergeCatalogueSeed(localCatalogue);
+      // Best-effort upload so other devices get the catalogue
+      if (state.supabasePlacesTable) await uploadCatalogueSeed();
+    }
     state.catalogue = normalizeCatalogue(state.catalogue);
 
+    // Prefetch cloud plan for requested booking into local cache
     const localKey = (requested && requested !== DEMO_ID)
       ? String(requested)
       : DEMO_ID;
+    const prefetch = await loadPlanFromSupabase(localKey);
+    if (prefetch) state.plans[localKey] = prefetch;
+
     if (localKey !== DEMO_ID && state.plans[localKey]) {
       await selectPlan(localKey);
     } else {
       await selectPlan(DEMO_ID);
     }
 
-    await loadLiveBookings();
     fillGroupSelect();
     if (requested && requested !== DEMO_ID) {
       const exists = state.bookings.some(b => String(b.id) === String(requested));
@@ -2005,6 +2201,9 @@ function renderDayTabs() {
       }
     } else {
       render();
+    }
+    if (state.supabasePlacesTable || state.supabasePlanTable) {
+      setCloudStatus(true, 'Cloud ready');
     }
   }
 
