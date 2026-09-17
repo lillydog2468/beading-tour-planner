@@ -1001,7 +1001,13 @@
       plan.day1OriginType = 'prague';
     }
     plan.guests = (plan.guests || []).map(g => ensureGuestDebt(g));
-    (plan.days || []).forEach(d => { (d.blocks || []).forEach(ensureStopTicks); });
+    (plan.days || []).forEach(d => {
+      (d.blocks || []).forEach(s => {
+        // Stable id required so data-stop-time survives re-render mid-edit
+        if (!s.id) s.id = uid('s');
+        ensureStopTicks(s);
+      });
+    });
     // Resolve hotel place id from catalogue when possible (keeps Staying at in sync)
     if (plan.tourHotelPlaceId) {
       const byId = (state.catalogue || []).find(p => p.id === plan.tourHotelPlaceId);
@@ -3221,8 +3227,13 @@ function renderDayTabs() {
       btn.addEventListener('click', () => { state.selectedDay = Number(btn.getAttribute('data-day')); render(); });
     });
     document.querySelectorAll('[data-stop-time]').forEach(inp => {
-      inp.addEventListener('change', () => {
-        const s = findStop(inp.getAttribute('data-stop-time'));
+      // Safari / mobile time pickers often skip or delay `change`; bind input+change+blur
+      // so the value is committed to the stop before any re-render can wipe the field.
+      let renderQueued = false;
+      const commit = () => {
+        const id = inp.getAttribute('data-stop-time');
+        if (!id) return;
+        const s = findStop(id);
         if (!s) return;
         // Blank clears the time — valid for week planning before times are set
         s.time = String(inp.value || '').trim() === '' ? '' : normaliseStopTime(inp.value, '');
@@ -3230,8 +3241,17 @@ function renderDayTabs() {
         const day = state.plan.days.find(d => (d.blocks || []).some(b => b.id === s.id));
         if (day) sortDayBlocks(day);
         scheduleAutoSave();
-        render();
-      });
+        // Re-render so lunch/snack 12:30 sorts before 15:00; coalesce input+change+blur
+        if (renderQueued) return;
+        renderQueued = true;
+        queueMicrotask(() => {
+          renderQueued = false;
+          render(); // captureUiState restores focus on data-stop-time
+        });
+      };
+      inp.addEventListener('input', commit);
+      inp.addEventListener('change', commit);
+      inp.addEventListener('blur', commit);
     });
     document.querySelectorAll('[data-stop-title]').forEach(inp => {
       inp.addEventListener('input', () => {
@@ -3348,8 +3368,11 @@ function renderDayTabs() {
   }
 
   function findStop(id) {
+    if (id == null || id === '') return null;
+    if (!state.plan || !Array.isArray(state.plan.days)) return null;
+    const sid = String(id);
     for (const day of state.plan.days) {
-      const s = day.blocks.find(b => b.id === id);
+      const s = (day.blocks || []).find(b => b && String(b.id) === sid);
       if (s) return s;
     }
     return null;
