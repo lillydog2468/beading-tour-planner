@@ -542,8 +542,8 @@
           <div class="sub">Check the day’s plan on your phone</div>
         </div>
         <nav class="view-nav" aria-label="Main">
-          <a href="booking-form.html">Bookings</a>
-          <a href="analytics.html">Analytics</a>
+          <a href="booking-form.html" id="navBookings">Bookings</a>
+          <a href="analytics.html" id="navAnalytics">Analytics</a>
           <a href="tour-planner.html" class="active">Planner</a>
         </nav>
       </div>
@@ -2595,6 +2595,25 @@ function renderDayTabs() {
       state.supabasePlacesTable = false;
     }
   }
+
+  // On GitHub Pages preview, sibling booking/analytics pages are absent — point at live Netlify.
+  const LIVE_BOOKINGS_ORIGIN = 'https://keith-booking-form.netlify.app';
+  function fixExternalNavLinks() {
+    const onGithubPages = location.hostname.includes('github.io');
+    const bookings = document.getElementById('navBookings');
+    const analytics = document.getElementById('navAnalytics');
+    if (bookings) {
+      bookings.href = onGithubPages
+        ? (LIVE_BOOKINGS_ORIGIN + '/booking-form.html')
+        : 'booking-form.html';
+    }
+    if (analytics) {
+      analytics.href = onGithubPages
+        ? (LIVE_BOOKINGS_ORIGIN + '/analytics.html')
+        : 'analytics.html';
+    }
+  }
+  fixExternalNavLinks();
 
   async function init() {
     const savedAutoSave = localStorage.getItem('planner_autosave_enabled') === 'true';
