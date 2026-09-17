@@ -1100,7 +1100,7 @@
     if (!stop || stop.type !== 'pickup') return false;
     const t = String(stop.title || '');
     // Day-1 origin pick-ups are titled “Airport pick-up — …” or “Hotel pick-up — {Prague hotel}”.
-    // Day-2+ tour-hotel pick-up is plain “Hotel pick-up” (no em dash) and must not match here.
+    // Day-2+ morning start is “Leave hotel at 09:00” (no em dash) and must not match here.
     if (/airport pick-up/i.test(t)) return true;
     if (/hotel pick-up\s*[—–-]/i.test(t)) return true;
     return false;
@@ -1548,7 +1548,6 @@
   }
 
   function defaultBlocks(dayIndex, ctx) {
-    const hotel = ctx.tourHotelName || 'the group hotel';
     const useAirport = ctx.day1OriginType === 'airport' && ctx.hasAirport;
     const prague = ctx.pragueHotelName || 'Prague hotel';
     const pickup = ctx.pickupTime || '08:00';
@@ -1565,9 +1564,9 @@
         { id: uid('s'), time: addMinutes(pickup, 15), type: 'travel', title: 'Drive to the beading area (Jablonec nad Nisou)', notes: PRAGUE_DRIVE, address: 'Jablonec nad Nisou, Czech Republic', period: 'Morning', messageSent: false, booked: false, travelMinutes: null, travelMode: null },
       ];
     }
+    // Days after arrival: no hotel breakfast on the schedule — morning starts with leaving the tour hotel.
     return [
-      { id: uid('s'), time: '08:00', type: 'meal', title: 'Breakfast', notes: 'At ' + hotel + ' unless noted otherwise.', address: '', period: 'Morning', messageSent: false, booked: false, travelMinutes: null },
-      { id: uid('s'), time: '09:00', type: 'pickup', title: 'Hotel pick-up', notes: 'Collect the group at the tour hotel and leave for today’s stops.', address: '', period: 'Morning', messageSent: false, booked: false, travelMinutes: 5 },
+      { id: uid('s'), time: '09:00', type: 'pickup', title: 'Leave hotel at 09:00', notes: '', address: '', period: 'Morning', messageSent: false, booked: false, travelMinutes: null },
     ];
   }
 
@@ -1671,7 +1670,7 @@
     let score = 0;
     const days = Array.isArray(plan.days) ? plan.days : [];
     score += days.length * 10;
-    const genericTitle = /^(breakfast|leave for tours|pick-up from prague hotel\s*\/?\s*airport)$/i;
+    const genericTitle = /^(breakfast|leave for tours|leave hotel( at \d{2}:\d{2})?|hotel pick-up|pick-up from prague hotel\s*\/?\s*airport)$/i;
     const genericNotes = /hotel unless noted|van ready at the hotel|confirm the meeting point the night before/i;
     days.forEach(d => {
       (d.blocks || []).forEach(b => {
