@@ -1963,6 +1963,7 @@
     persist();
     render();
     fillGroupSelect();
+    fixExternalNavLinks();
   }
 
   function fillGroupSelect() {
@@ -3171,17 +3172,40 @@ function renderDayTabs() {
     }
   }
 
-  // On GitHub Pages preview, sibling booking/analytics pages are absent — point at live Netlify.
+  // On GitHub Pages: prefer same-origin booking-form.html when present; else Netlify.
+  // Analytics stays on Netlify until a Pages copy exists.
   const LIVE_BOOKINGS_ORIGIN = 'https://keith-booking-form.netlify.app';
-  function fixExternalNavLinks() {
+  let pagesHasBookingForm = null; // null = not probed yet
+
+  function bookingsQueryForCurrentPlan() {
+    const key = state.bookingKey;
+    if (key && key !== DEMO_ID && /^[0-9]+$/.test(String(key))) {
+      return '?booking=' + encodeURIComponent(String(key)) + '&layout=layout';
+    }
+    return '';
+  }
+
+  async function fixExternalNavLinks() {
     const onGithubPages = location.hostname.includes('github.io');
     const bookings = document.getElementById('navBookings');
     const analytics = document.getElementById('navAnalytics');
-    if (bookings) {
-      bookings.href = onGithubPages
-        ? (LIVE_BOOKINGS_ORIGIN + '/booking-form.html')
-        : 'booking-form.html';
+    const qs = bookingsQueryForCurrentPlan();
+
+    let bookingsHref = 'booking-form.html' + qs;
+    if (onGithubPages) {
+      if (pagesHasBookingForm === null) {
+        try {
+          const probe = await fetch('booking-form.html', { method: 'GET', cache: 'no-store', headers: { 'Range': 'bytes=0-0' } });
+          pagesHasBookingForm = probe.ok || probe.status === 206;
+        } catch (_) {
+          pagesHasBookingForm = false;
+        }
+      }
+      bookingsHref = pagesHasBookingForm
+        ? ('booking-form.html' + qs)
+        : (LIVE_BOOKINGS_ORIGIN + '/booking-form.html' + qs);
     }
+    if (bookings) bookings.href = bookingsHref;
     if (analytics) {
       analytics.href = onGithubPages
         ? (LIVE_BOOKINGS_ORIGIN + '/analytics.html')
