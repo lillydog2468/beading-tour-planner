@@ -399,6 +399,32 @@
     [data-theme="dark"] .tick.on-booked { background: rgba(34,197,94,.14); }
     .view-phone .tick { font-size: 15px; min-height: 48px; padding: 10px 14px; }
 
+    .address-row {
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    }
+    .address-row input[type="text"] { flex: 1 1 160px; min-width: 140px; }
+    .maps-btn-inline, .maps-under-field .maps-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 12px; min-height: 40px; border-radius: 10px;
+      border: 1px solid var(--border); background: var(--surface);
+      color: var(--accent); font-weight: 700; font-size: 13px; text-decoration: none;
+    }
+    .maps-btn-inline:hover, .maps-under-field .maps-btn:hover { border-color: var(--accent); }
+    .maps-under-field { margin-top: 6px; min-height: 8px; }
+    .tick-skip { font-size: 12px; margin-top: 6px; font-weight: 600; }
+
+    .add-to-day-row {
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end;
+      margin-top: 10px;
+    }
+    .add-to-day-row .time-field { display: flex; flex-direction: column; gap: 4px; min-width: 120px; }
+    .add-to-day-row input[type="time"] {
+      min-height: 44px; font-size: 16px; font-weight: 800; padding: 6px 10px;
+    }
+    .picker-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin-top: 8px; }
+    .picker-actions .time-field { display: flex; flex-direction: column; gap: 4px; min-width: 120px; }
+    .picker-actions input[type="time"] { min-height: 44px; font-size: 16px; font-weight: 800; }
+
     /* Travel estimate */
     .travel-note {
       display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
@@ -622,25 +648,75 @@
     const total = ((h || 0) * 60 + (m || 0) + mins + 24 * 60) % (24 * 60);
     return String(Math.floor(total / 60)).padStart(2, '0') + ':' + String(total % 60).padStart(2, '0');
   }
+  function timeToMinutes(hhmm) {
+    const m = /^(\d{1,2}):(\d{2})/.exec(String(hhmm || '').trim());
+    if (!m) return null;
+    const h = Number(m[1]), min = Number(m[2]);
+    if (!Number.isFinite(h) || !Number.isFinite(min) || h > 23 || min > 59) return null;
+    return h * 60 + min;
+  }
+  function compareStopTime(a, b) {
+    const am = timeToMinutes(a && a.time);
+    const bm = timeToMinutes(b && b.time);
+    if (am == null && bm == null) return 0;
+    if (am == null) return 1; // untimed last
+    if (bm == null) return -1;
+    return am - bm;
+  }
+  function sortDayBlocks(day) {
+    if (!day || !Array.isArray(day.blocks)) return;
+    day.blocks.sort(compareStopTime);
+  }
+  function suggestNextStopTime(day) {
+    const timed = (day && day.blocks || []).filter(b => timeToMinutes(b.time) != null);
+    if (!timed.length) return '10:00';
+    timed.sort(compareStopTime);
+    const last = timed[timed.length - 1];
+    return addMinutes(last.time, 60);
+  }
+  function normaliseStopTime(value, fallback) {
+    const mins = timeToMinutes(value);
+    if (mins == null) return fallback || '10:00';
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+  }
   function mapsQuery(name, address) {
+    // Free-text address only (village/town or fuller street). Never use contact details.
     const addr = (address || '').trim();
     if (addr) return addr;
-    const n = (name || '').trim() || 'Prague hotel';
-    if (/prague|praha/i.test(n)) return n;
-    return n + ', Prague';
+    const n = (name || '').trim();
+    if (!n) return 'Czech Republic';
+    // Place name alone is fine for Apple Maps search (e.g. factory in a known town).
+    return n;
   }
   function appleMapsUrl(name, address) {
-    return 'https://maps.apple.com/?q=' + encodeURIComponent(mapsQuery(name, address));
+    const q = mapsQuery(name, address);
+    // https works in browser; Apple devices hand off to Maps
+    return 'https://maps.apple.com/?q=' + encodeURIComponent(q);
   }
   function typeLabel(t) {
     const singular = {
       factory: 'Factory', shop: 'Shop', restaurant: 'Restaurant',
       experience: 'Experience', museum: 'Museum', school: 'School',
-      other: 'Other', hotel: 'Hotel', meal: 'Meal', travel: 'Travel', pickup: 'Pick-up',
+      other: 'Other', hotel: 'Hotel', meal: 'Meal', travel: 'Travel',
+      pickup: 'Hotel pickup',
     };
     if (singular[t]) return singular[t];
     const hit = PLACE_TYPES.find(p => p.id === t);
     return hit ? hit.label.replace(/s$/, '') : (t || 'Stop');
+  }
+  /** Hotel pickup / travel / meals do not need Message sent or Booked ticks. */
+  function stopNeedsBookingTicks(s) {
+    const t = (s && s.type) || '';
+    return !['pickup', 'hotel', 'meal', 'travel'].includes(t);
+  }
+  function mapsButtonHtml(name, address, label) {
+    const q = (address || '').trim() || (name || '').trim();
+    if (!q) return '';
+    const href = appleMapsUrl(name, address);
+    const text = label || 'Open in Apple Maps';
+    return `<a class="maps-btn maps-btn-inline" href="${href}" target="_blank" rel="noopener" title="Open address in Apple Maps">${escapeHtml(text)}</a>`;
   }
 
   const CONTACT_METHODS = [
@@ -758,6 +834,7 @@
       opts.push('</optgroup>');
     });
     if (!groups.length) opts.push('<option value="" disabled>No places in the list yet</option>');
+    const suggested = suggestNextStopTime(currentDay && currentDay());
     return `
       <div class="place-picker">
         <label class="field-label" for="${selectId}">Add from Places list</label>
@@ -765,10 +842,14 @@
           ${opts.join('')}
         </select>
         <div class="picker-actions">
+          <div class="time-field">
+            <label class="field-label" for="${selectId}_time">Time</label>
+            <input type="time" id="${selectId}_time" value="${escapeHtml(suggested)}" aria-label="Time for this stop">
+          </div>
           <button type="button" class="btn btn-primary" data-place-picker-add="${selectId}">Add selected place</button>
           <button type="button" class="btn btn-outline" id="${blankId}">Add blank stop</button>
         </div>
-        <p class="muted" style="margin-top:6px;">Grouped as factories, shops, restaurants, experiences, museums and schools. Maintain the full list in Places below.</p>
+        <p class="muted" style="margin-top:6px;">Choose a time, then add. Grouped as factories, shops, restaurants, experiences, museums and schools.</p>
       </div>
     `;
   }
@@ -837,15 +918,15 @@
     const prague = ctx.pragueHotelName || 'Prague hotel / airport';
     const pickup = ctx.pickupTime || '08:00';
     if (dayIndex === 0) {
+      // One morning Hotel pickup, then the drive — no separate arrive/leave pair.
       return [
-        { id: uid('s'), time: pickup, type: 'pickup', title: 'Pick-up from ' + prague, notes: 'Hotel or airport — confirm the meeting point the night before.', address: ctx.pragueAddress || '', period: 'Morning', messageSent: false, booked: false, travelMinutes: null },
-        { id: uid('s'), time: addMinutes(pickup, 15), type: 'travel', title: 'Drive to Jablonec nad Nisou', notes: PRAGUE_DRIVE, address: 'Jablonec nad Nisou, Czech Republic', period: 'Morning', messageSent: false, booked: false, travelMinutes: 85 },
-        { id: uid('s'), time: addMinutes(pickup, 100), type: 'hotel', title: 'Arrive and settle — ' + hotel, notes: 'Drop bags, then the rest of the day is free to fill from the place list.', address: '', period: 'Morning', messageSent: false, booked: false, travelMinutes: 15 },
+        { id: uid('s'), time: pickup, type: 'pickup', title: 'Hotel pickup — ' + prague, notes: 'Collect the group and leave for the beading area. Confirm the meeting point the night before.', address: ctx.pragueAddress || '', period: 'Morning', messageSent: false, booked: false, travelMinutes: null },
+        { id: uid('s'), time: addMinutes(pickup, 15), type: 'travel', title: 'Drive to the beading area (Jablonec nad Nisou)', notes: PRAGUE_DRIVE, address: 'Jablonec nad Nisou, Czech Republic', period: 'Morning', messageSent: false, booked: false, travelMinutes: 85 },
       ];
     }
     return [
-      { id: uid('s'), time: '08:00', type: 'meal', title: 'Breakfast', notes: 'At the hotel unless noted otherwise.', address: '', period: 'Morning', messageSent: false, booked: false, travelMinutes: null },
-      { id: uid('s'), time: '09:00', type: 'pickup', title: 'Leave for tours', notes: 'Van ready at the hotel.', address: '', period: 'Morning', messageSent: false, booked: false, travelMinutes: 5 },
+      { id: uid('s'), time: '08:00', type: 'meal', title: 'Breakfast', notes: 'At ' + hotel + ' unless noted otherwise.', address: '', period: 'Morning', messageSent: false, booked: false, travelMinutes: null },
+      { id: uid('s'), time: '09:00', type: 'pickup', title: 'Hotel pickup', notes: 'Collect the group at the hotel and leave for today’s stops.', address: '', period: 'Morning', messageSent: false, booked: false, travelMinutes: 5 },
     ];
   }
 
@@ -1327,11 +1408,10 @@
     scheduleAutoSave();
     render();
   }
-    function addPlaceToDay(place, dayIndex) {
+  function addPlaceToDay(place, dayIndex, chosenTime) {
     const day = state.plan.days[dayIndex];
     if (!day) return;
-    const last = day.blocks[day.blocks.length - 1];
-    const time = last ? addMinutes(last.time || '09:00', 80) : '10:00';
+    const time = normaliseStopTime(chosenTime, suggestNextStopTime(day));
     day.blocks.push({
       id: uid('s'),
       time,
@@ -1345,22 +1425,24 @@
       booked: false,
       travelMinutes: null,
     });
-    seedTravelMinutes(day, day.blocks.length - 1);
+    sortDayBlocks(day);
+    const idx = day.blocks.findIndex(b => b.title === place.name && b.time === time);
+    seedTravelMinutes(day, idx >= 0 ? idx : day.blocks.length - 1);
     scheduleAutoSave();
-    toast('Added ' + place.name);
+    toast('Added ' + place.name + ' at ' + time);
     closeSheet();
     render();
   }
 
-function addBlankStop() {
+  function addBlankStop() {
     const day = currentDay();
     if (!day) return;
-    const last = day.blocks[day.blocks.length - 1];
-    const time = last ? addMinutes(last.time || '09:00', 45) : '10:00';
+    const time = suggestNextStopTime(day);
     day.blocks.push({
       id: uid('s'), time, type: 'other', title: 'New stop', notes: '', address: '', period: periodForTime(time),
       messageSent: false, booked: false, travelMinutes: null,
     });
+    sortDayBlocks(day);
     seedTravelMinutes(day, day.blocks.length - 1);
     scheduleAutoSave();
     render();
@@ -1504,7 +1586,11 @@ function addBlankStop() {
     if (!sel || !sel.value) { toast('Choose a place from the list first'); return; }
     const place = state.catalogue.find(p => p.id === sel.value);
     if (!place) { toast('That place was not found'); return; }
-    addPlaceToDay(place, state.selectedDay);
+    const timeEl = document.getElementById(selectId + '_time');
+    const chosen = timeEl && timeEl.value ? timeEl.value : suggestNextStopTime(currentDay());
+    addPlaceToDay(place, state.selectedDay, chosen);
+    if (timeEl) timeEl.value = suggestNextStopTime(currentDay());
+    sel.value = '';
   }
   function removePlace(id) {
     state.catalogue = state.catalogue.filter(p => p.id !== id);
@@ -1557,6 +1643,7 @@ function addBlankStop() {
   function renderCatalogue(compact) {
     const filter = state.placeFilter;
     const list = state.catalogue.filter(p => filter === 'all' || p.type === filter);
+    const suggestedTime = suggestNextStopTime(currentDay && currentDay());
     const chips = PLACE_TYPES.map(t => `
       <button type="button" class="chip ${state.placeFilter === t.id ? 'on' : ''}" data-filter="${t.id}">${t.label}</button>
     `).join('');
@@ -1600,11 +1687,18 @@ function addBlankStop() {
           </div>
           <div>
             <label class="field-label">Address</label>
-            <input type="text" data-place-address="${p.id}" value="${escapeHtml(p.address || '')}" placeholder="Street, town">
+            <input type="text" data-place-address="${p.id}" value="${escapeHtml(p.address || '')}" placeholder="Village, town, or street">
+            <div class="maps-under-field">${mapsButtonHtml(p.name, p.address, 'Open in Apple Maps')}</div>
           </div>
         </div>
         <input type="text" data-place-notes="${p.id}" value="${escapeHtml(p.notes || '')}" placeholder="Notes / description (editable)" style="margin-top:8px;">
-        ${compact ? '' : `<button type="button" class="btn btn-primary btn-sm" style="margin-top:8px;" data-add-place="${p.id}">Add to this day</button>`}
+        ${compact ? '' : `<div class="add-to-day-row">
+          <div class="time-field">
+            <label class="field-label" for="add_time_${p.id}">Time</label>
+            <input type="time" id="add_time_${p.id}" data-add-place-time="${p.id}" value="${escapeHtml(suggestedTime)}" aria-label="Time">
+          </div>
+          <button type="button" class="btn btn-primary btn-sm" data-add-place="${p.id}">Add to this day</button>
+        </div>`}
       </div>`;
     }).join('') || `<p class="muted">No places in this filter yet.</p>`;
 
@@ -1639,6 +1733,7 @@ function addBlankStop() {
 
 function renderTimeline(day, large) {
     if (!day) return '<p class="muted">No days yet.</p>';
+    sortDayBlocks(day);
     const blocks = day.blocks || [];
     let html = '<div class="timeline">';
     blocks.forEach((s, i) => {
@@ -1655,8 +1750,11 @@ function renderTimeline(day, large) {
             <div><span class="badge">${escapeHtml(s.period || periodForTime(s.time))}</span><span class="badge">${escapeHtml(typeLabel(s.type))}</span></div>
             <div class="stop-title"><input type="text" data-stop-title="${s.id}" value="${escapeHtml(s.title || '')}"></div>
             <div class="stop-notes"><input type="text" data-stop-notes="${s.id}" value="${escapeHtml(s.notes || '')}" placeholder="Notes"></div>
-            <div class="stop-notes"><input type="text" data-stop-address="${s.id}" value="${escapeHtml(s.address || '')}" placeholder="Address"></div>
-            ${s.address ? `<div class="muted"><a href="${appleMapsUrl(s.title, s.address)}" target="_blank" rel="noopener">Maps</a></div>` : ''}
+            <div class="stop-notes address-row">
+              <input type="text" data-stop-address="${s.id}" value="${escapeHtml(s.address || '')}" placeholder="Address (village/town or street)" aria-label="Address">
+              ${mapsButtonHtml(s.title, s.address, 'Open in Apple Maps')}
+            </div>
+            ${stopNeedsBookingTicks(s) ? `
             <div class="booking-ticks" role="group" aria-label="Booking status">
               <label class="tick ${s.messageSent ? 'on-message' : ''}">
                 <input type="checkbox" data-tick-message="${s.id}" ${s.messageSent ? 'checked' : ''}>
@@ -1666,7 +1764,7 @@ function renderTimeline(day, large) {
                 <input type="checkbox" data-tick-booked="${s.id}" ${s.booked ? 'checked' : ''}>
                 Booked
               </label>
-            </div>
+            </div>` : `<p class="muted tick-skip">No message / booked ticks for ${escapeHtml(typeLabel(s.type).toLowerCase())}.</p>`}
           </div>
           <div class="stop-actions">
             <button type="button" class="icon-btn" data-move="${s.id}" data-dir="-1" aria-label="Move up">↑</button>
@@ -1944,23 +2042,26 @@ function renderDayTabs() {
         const s = findStop(inp.getAttribute('data-stop-address'));
         if (s) { s.address = inp.value; scheduleAutoSave(); }
       });
+      // Refresh Apple Maps link after editing address (village/town or street)
+      inp.addEventListener('change', () => { scheduleAutoSave(); render(); });
     });
     document.querySelectorAll('[data-place-picker-add]').forEach(btn => {
       btn.addEventListener('click', () => addPlaceFromPicker(btn.getAttribute('data-place-picker-add')));
     });
-    const dayPicker = document.getElementById('dayPlacePicker');
-    if (dayPicker) {
-      dayPicker.addEventListener('change', () => {
-        if (dayPicker.value) addPlaceFromPicker('dayPlacePicker');
-      });
-    }
+    // Place select no longer auto-adds — Keith picks Time, then taps Add selected place.
     document.querySelectorAll('[data-day]').forEach(btn => {
       btn.addEventListener('click', () => { state.selectedDay = Number(btn.getAttribute('data-day')); render(); });
     });
     document.querySelectorAll('[data-stop-time]').forEach(inp => {
       inp.addEventListener('change', () => {
         const s = findStop(inp.getAttribute('data-stop-time'));
-        if (s) { s.time = inp.value; s.period = periodForTime(inp.value); scheduleAutoSave(); }
+        if (!s) return;
+        s.time = normaliseStopTime(inp.value, s.time || '10:00');
+        s.period = periodForTime(s.time);
+        const day = state.plan.days.find(d => (d.blocks || []).some(b => b.id === s.id));
+        if (day) sortDayBlocks(day);
+        scheduleAutoSave();
+        render();
       });
     });
     document.querySelectorAll('[data-stop-title]').forEach(inp => {
@@ -1991,8 +2092,12 @@ function renderDayTabs() {
     });
     root.querySelectorAll('[data-add-place]').forEach(btn => {
       btn.addEventListener('click', () => {
-        const place = state.catalogue.find(p => p.id === btn.getAttribute('data-add-place'));
-        if (place) addPlaceToDay(place, state.selectedDay);
+        const id = btn.getAttribute('data-add-place');
+        const place = state.catalogue.find(p => p.id === id);
+        if (!place) return;
+        const timeEl = root.querySelector(`[data-add-place-time="${id}"]`);
+        const chosen = timeEl && timeEl.value ? timeEl.value : suggestNextStopTime(currentDay());
+        addPlaceToDay(place, state.selectedDay, chosen);
       });
     });
     root.querySelectorAll('[data-place-name]').forEach(inp => {
@@ -2006,6 +2111,7 @@ function renderDayTabs() {
         const p = state.catalogue.find(x => x.id === inp.getAttribute('data-place-address'));
         if (p) { p.address = inp.value; scheduleAutoSave(); }
       });
+      inp.addEventListener('change', () => { scheduleAutoSave(); refresh(); });
     });
     root.querySelectorAll('[data-place-type]').forEach(sel => {
       sel.addEventListener('change', () => {
@@ -2076,12 +2182,7 @@ function renderDayTabs() {
     body.querySelectorAll('[data-place-picker-add]').forEach(btn => {
       btn.addEventListener('click', () => addPlaceFromPicker(btn.getAttribute('data-place-picker-add')));
     });
-    const sheetPicker = document.getElementById('sheetPlacePicker');
-    if (sheetPicker) {
-      sheetPicker.addEventListener('change', () => {
-        if (sheetPicker.value) addPlaceFromPicker('sheetPlacePicker');
-      });
-    }
+    // Sheet place select: pick Time, then tap Add selected place (no auto-add).
     document.getElementById('btnSheetAddStop')?.addEventListener('click', addBlankStop);
   }
   function closeSheet() {
