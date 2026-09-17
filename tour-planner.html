@@ -766,12 +766,27 @@
     const m = mins % 60;
     return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
   }
+  function addressLooksLikeMapsUrl(addr) {
+    return /^https?:\/\/(maps\.apple\.com|maps\.apple)\b/i.test(String(addr || '').trim());
+  }
+
   function mapsQuery(name, address) {
     // Free-text address only (village/town or fuller street). Never use contact details.
     const addr = (address || '').trim();
     if (addr) {
       // Apple Maps share/frame links are usable as the Maps href itself (handled in appleMapsUrl).
-      return addr;
+      if (addressLooksLikeMapsUrl(addr)) return addr;
+      // Plain text: qualify with place name + Czech Republic so Maps does not jump countries
+      // (e.g. bare "koberovy" or bare "Rutkovsky" → "Rutkovsky, Koberovy, Czech Republic").
+      const n = (name || '').trim();
+      const parts = [];
+      if (n && !addr.toLowerCase().includes(n.toLowerCase())) parts.push(n);
+      parts.push(addr);
+      let q = parts.join(', ');
+      if (!/\bczech\b|\bčesk|\bjablonec\b|\bliberec\b|\bturnov\b|\bprague\b|\bpraha\b|\bkoberov/i.test(q)) {
+        q = q + ', Czech Republic';
+      }
+      return q;
     }
     const n = (name || '').trim();
     if (!n) return 'Czech Republic';
@@ -782,7 +797,7 @@
   function appleMapsUrl(name, address) {
     const addr = (address || '').trim();
     // Pasted Apple Maps links (maps.apple.com / maps.apple/p/…) open directly.
-    if (/^https?:\/\/(maps\.apple\.com|maps\.apple)\b/i.test(addr)) return addr;
+    if (addressLooksLikeMapsUrl(addr)) return addr;
     const q = mapsQuery(name, address);
     // https works in browser; Apple devices hand off to Maps
     return 'https://maps.apple.com/?q=' + encodeURIComponent(q);
@@ -845,15 +860,27 @@
     return '';
   }
 
-  /** If a linked stop has no address yet, copy from the Places catalogue (does not overwrite notes). */
+  /**
+   * Copy Places address onto a linked stop when the stop address is empty,
+   * or when Places has a richer Apple Maps URL and the stop only has plain text.
+   * Does not wipe stop notes.
+   */
   function hydrateStopAddressFromPlace(stop) {
     if (!stop) return false;
-    if (String(stop.address || '').trim()) return false;
     const place = placeById(stop.placeId || stop.place_id);
-    const addr = place && String(place.address || '').trim();
-    if (!addr) return false;
-    stop.address = addr;
-    return true;
+    if (!place) return false;
+    const placeAddr = String(place.address || '').trim();
+    if (!placeAddr) return false;
+    const stopAddr = String(stop.address || '').trim();
+    if (!stopAddr) {
+      stop.address = placeAddr;
+      return true;
+    }
+    if (addressLooksLikeMapsUrl(placeAddr) && !addressLooksLikeMapsUrl(stopAddr)) {
+      stop.address = placeAddr;
+      return true;
+    }
+    return false;
   }
 
   function syncEmptyStopAddressesFromCatalogue(placeIdFilter) {
@@ -869,11 +896,32 @@
     return changed;
   }
 
+  /**
+   * When Keith corrects a stop address (e.g. pastes the right Apple Maps link),
+   * also update the linked Places directory entry so next time Maps is correct.
+   * Does not wipe Places when the stop address is cleared to empty.
+   */
+  function syncStopAddressToPlace(stop) {
+    if (!stop) return false;
+    const pid = stop.placeId || stop.place_id;
+    if (!pid) return false;
+    const addr = String(stop.address || '').trim();
+    if (!addr) return false;
+    const place = placeById(pid);
+    if (!place) return false;
+    if (String(place.address || '').trim() === addr) return false;
+    place.address = addr;
+    return true;
+  }
+
   function stopMapsButtonHtml(stop, label) {
     const name = (stop && stop.title) || '';
+    const place = placeById(stop && (stop.placeId || stop.place_id));
+    const placeName = (place && place.name) || name;
     const address = resolveStopAddress(stop);
-    return mapsButtonHtml(name, address, label || 'Open in Apple Maps');
+    return mapsButtonHtml(placeName || name, address, label || 'Open in Apple Maps');
   }
+
 
   const CONTACT_METHODS = [
     { id: 'whatsapp', label: 'WhatsApp' },
@@ -2572,9 +2620,10 @@ function renderTimeline(day, large) {
             <div class="stop-title"><input type="text" data-stop-title="${s.id}" value="${escapeHtml(s.title || '')}"></div>
             <div class="stop-notes"><input type="text" data-stop-notes="${s.id}" value="${escapeHtml(s.notes || '')}" placeholder="Notes"></div>
             <div class="stop-notes address-row">
-              <input type="text" data-stop-address="${s.id}" value="${escapeHtml(resolveStopAddress(s))}" placeholder="Address (village/town or street)" aria-label="Address">
+              <input type="text" data-stop-address="${s.id}" value="${escapeHtml(resolveStopAddress(s))}" placeholder="Address (village/town or street) or Apple Maps link" aria-label="Address">
               ${stopMapsButtonHtml(s, 'Open in Apple Maps')}
             </div>
+            ${(s.placeId || s.place_id) ? '<p class="muted address-places-hint">Saved to Places directory too</p>' : ''}
             ${stopNeedsBookingTicks(s) ? `
             <div class="booking-ticks" role="group" aria-label="Booking status">
               <label class="tick ${s.messageSent ? 'on-message' : ''}">
@@ -3152,8 +3201,18 @@ function renderDayTabs() {
         const s = findStop(inp.getAttribute('data-stop-address'));
         if (s) { s.address = inp.value; scheduleAutoSave(); }
       });
-      // Refresh Apple Maps link after editing address (village/town or street)
-      inp.addEventListener('change', () => { scheduleAutoSave(); render(); });
+      // On blur/confirm: keep stop address, and if linked to Places, copy into the catalogue
+      // so the factory/shop remembers the corrected Apple Maps link next time.
+      inp.addEventListener('change', () => {
+        const s = findStop(inp.getAttribute('data-stop-address'));
+        if (s) {
+          s.address = inp.value;
+          // Non-empty only — clearing the stop field must not wipe Places
+          if (String(s.address || '').trim()) syncStopAddressToPlace(s);
+        }
+        scheduleAutoSave();
+        render();
+      });
     });
     document.querySelectorAll('[data-place-picker-add]').forEach(btn => {
       btn.addEventListener('click', () => addPlaceFromPicker(btn.getAttribute('data-place-picker-add')));
