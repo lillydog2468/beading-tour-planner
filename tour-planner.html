@@ -579,10 +579,98 @@
     }
 
     .day-glance-icon {
-      font-size: 16px; line-height: 1; text-align: center; opacity: .92;
-      flex-shrink: 0; width: 1.5em; min-width: 1.5em;
-      user-select: none;
+      font-size: 14px; line-height: 1; text-align: center;
+      flex-shrink: 0; user-select: none;
+      display: inline-flex; align-items: center; justify-content: center;
     }
+    /* Coloured ring / disc behind type glyphs — tray, day chips, glance */
+    .type-icon-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1.7em;
+      height: 1.7em;
+      min-width: 1.7em;
+      border-radius: 999px;
+      font-size: 13px;
+      line-height: 1;
+      border: 2px solid transparent;
+      box-sizing: border-box;
+      flex-shrink: 0;
+      vertical-align: middle;
+    }
+    .type-icon-badge.type-factory {
+      background: color-mix(in srgb, var(--factory) 22%, #fff);
+      border-color: var(--factory);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--factory) 35%, transparent);
+    }
+    .type-icon-badge.type-shop {
+      background: color-mix(in srgb, var(--shop) 22%, #fff);
+      border-color: var(--shop);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--shop) 35%, transparent);
+    }
+    .type-icon-badge.type-restaurant,
+    .type-icon-badge.type-meal {
+      background: color-mix(in srgb, var(--restaurant) 24%, #fff);
+      border-color: var(--restaurant);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--restaurant) 35%, transparent);
+    }
+    .type-icon-badge.type-hotel {
+      background: color-mix(in srgb, var(--hotel) 24%, #fff);
+      border-color: var(--hotel);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--hotel) 35%, transparent);
+    }
+    .type-icon-badge.type-museum {
+      background: color-mix(in srgb, var(--museum) 24%, #fff);
+      border-color: var(--museum);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--museum) 35%, transparent);
+    }
+    .type-icon-badge.type-school {
+      background: color-mix(in srgb, var(--school) 22%, #fff);
+      border-color: var(--school);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--school) 35%, transparent);
+    }
+    .type-icon-badge.type-experience {
+      background: color-mix(in srgb, var(--experience) 22%, #fff);
+      border-color: var(--experience);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--experience) 35%, transparent);
+    }
+    .type-icon-badge.type-travel {
+      background: color-mix(in srgb, var(--travel) 22%, #fff);
+      border-color: var(--travel);
+    }
+    .type-icon-badge.type-pickup {
+      background: color-mix(in srgb, var(--pickup) 22%, #fff);
+      border-color: var(--pickup);
+    }
+    .type-icon-badge.type-other {
+      background: color-mix(in srgb, var(--accent) 16%, #fff);
+      border-color: var(--accent);
+    }
+    [data-theme="dark"] .type-icon-badge.type-factory,
+    [data-theme="dark"] .type-icon-badge.type-shop,
+    [data-theme="dark"] .type-icon-badge.type-restaurant,
+    [data-theme="dark"] .type-icon-badge.type-meal,
+    [data-theme="dark"] .type-icon-badge.type-hotel,
+    [data-theme="dark"] .type-icon-badge.type-museum,
+    [data-theme="dark"] .type-icon-badge.type-school,
+    [data-theme="dark"] .type-icon-badge.type-experience,
+    [data-theme="dark"] .type-icon-badge.type-travel,
+    [data-theme="dark"] .type-icon-badge.type-pickup,
+    [data-theme="dark"] .type-icon-badge.type-other {
+      background: color-mix(in srgb, currentColor 18%, var(--surface-alt));
+    }
+    [data-theme="dark"] .type-icon-badge.type-factory { color: var(--factory); background: rgba(124, 58, 237, .28); }
+    [data-theme="dark"] .type-icon-badge.type-shop { color: var(--shop); background: rgba(29, 78, 216, .28); }
+    [data-theme="dark"] .type-icon-badge.type-restaurant,
+    [data-theme="dark"] .type-icon-badge.type-meal { color: var(--restaurant); background: rgba(194, 65, 12, .28); }
+    [data-theme="dark"] .type-icon-badge.type-hotel { color: var(--hotel); background: rgba(180, 83, 9, .28); }
+    [data-theme="dark"] .type-icon-badge.type-museum { color: var(--museum); background: rgba(161, 98, 7, .28); }
+    [data-theme="dark"] .type-icon-badge.type-school { color: var(--school); background: rgba(190, 24, 93, .28); }
+    [data-theme="dark"] .type-icon-badge.type-experience { color: var(--experience); background: rgba(15, 118, 110, .28); }
+    [data-theme="dark"] .type-icon-badge.type-travel { color: var(--travel); background: rgba(107, 114, 128, .28); }
+    [data-theme="dark"] .type-icon-badge.type-pickup { color: var(--pickup); background: rgba(79, 70, 229, .28); }
+    [data-theme="dark"] .type-icon-badge.type-other { color: var(--accent); background: rgba(99, 102, 241, .22); }
     .day-glance-title .glance-nick { font-weight: 800; }
     .day-glance-hint {
       font-size: 11px; font-weight: 600; color: var(--text-secondary);
@@ -973,14 +1061,52 @@
       background: var(--accent-soft);
       box-shadow: 0 0 0 3px var(--accent-glow);
     }
-    .rough-place-chip.used {
-      opacity: .45;
-      cursor: not-allowed;
-      text-decoration: line-through;
+    .rough-place-chip.on-plan {
+      border-style: dashed;
+      background: color-mix(in srgb, var(--accent-soft) 55%, var(--surface));
     }
-    .rough-place-chip .rp-icon { font-size: 15px; line-height: 1; }
+    .rough-place-chip.return-visit {
+      opacity: .82;
+      border-style: dashed;
+      border-color: var(--border);
+      background: var(--surface-alt);
+    }
+    .rough-place-chip .rp-mark {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      letter-spacing: .01em;
+      white-space: nowrap;
+    }
+    .rough-place-chip .rp-icon {
+      font-size: 13px; line-height: 1;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .rough-place-chip .rp-icon .type-icon-badge { width: 1.65em; height: 1.65em; min-width: 1.65em; font-size: 12px; }
     .rough-place-chip .rp-nick {
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 9em;
+    }
+    .rough-tray-show-used {
+      display: flex; align-items: center; gap: 8px;
+      margin: 8px 0 4px; font-size: 12px; font-weight: 600;
+      color: var(--text-secondary); cursor: pointer; user-select: none;
+    }
+    .rough-tray-show-used input { width: 16px; height: 16px; accent-color: var(--accent); }
+    .rough-tray-used-block {
+      margin-top: 10px; padding-top: 8px;
+      border-top: 1px dashed var(--border);
+    }
+    .rough-tray-used-head {
+      font-size: 12px; font-weight: 700; color: var(--text-secondary);
+      margin: 0 0 6px;
+    }
+    .rough-stop-actions .rough-again {
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .01em;
+      padding: 0 6px;
+      min-width: auto;
     }
     .rough-week {
       display: grid;
@@ -1068,10 +1194,11 @@
     /* Rough stop times use shared .time-wheel-btn */
 
     .rough-stop-icon {
-      font-size: 16px; text-align: center; line-height: 1;
-      width: 1.5em; min-width: 1.5em; flex-shrink: 0;
-      user-select: none;
+      font-size: 13px; text-align: center; line-height: 1;
+      flex-shrink: 0; user-select: none;
+      display: inline-flex; align-items: center; justify-content: center;
     }
+    .rough-stop-icon .type-icon-badge { width: 1.65em; height: 1.65em; min-width: 1.65em; }
     .rough-stop-nick {
       font-weight: 800; font-size: 13px;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -1170,47 +1297,74 @@
       border-color: rgba(244, 63, 94, .28);
       color: #fda4af;
     }
-    /* Day columns tint by how packed they are (calm → busy) — warm & subtle */
+    /* Day columns tint by how packed they are (quiet → busy) — strong, obvious scale */
     .rough-day.load-calm {
-      background: #f3faf6;
-      border-color: #cfe8d8;
+      background: linear-gradient(165deg, #bbf7d0 0%, #dcfce7 45%, #f0fdf4 100%);
+      border-color: #16a34a;
       border-style: solid;
+      border-width: 2px;
+      box-shadow: inset 6px 0 0 #15803d;
     }
     .rough-day.load-easy {
-      background: #fffbeb;
-      border-color: #f5e6b8;
+      background: linear-gradient(165deg, #fde047 0%, #fef08a 40%, #fefce8 100%);
+      border-color: #ca8a04;
       border-style: solid;
+      border-width: 2px;
+      box-shadow: inset 6px 0 0 #eab308;
     }
     .rough-day.load-steady {
-      background: #fff7ed;
-      border-color: #f5d0a9;
+      background: linear-gradient(165deg, #fb923c 0%, #fdba74 35%, #ffedd5 100%);
+      border-color: #ea580c;
       border-style: solid;
+      border-width: 2px;
+      box-shadow: inset 6px 0 0 #c2410c;
     }
     .rough-day.load-busy {
-      background: #fff1f2;
-      border-color: #f5c2c7;
+      background: linear-gradient(165deg, #450a0a 0%, #7f1d1d 35%, #9f1239 70%, #be123c 100%);
+      border-color: #450a0a;
       border-style: solid;
+      border-width: 2px;
+      box-shadow: inset 6px 0 0 #1c1917, 0 0 0 1px rgba(127, 29, 29, .45);
+      color: #fff;
+    }
+    .rough-day.load-calm .rough-day-load-hint { color: #14532d; font-weight: 800; }
+    .rough-day.load-easy .rough-day-load-hint { color: #713f12; font-weight: 800; }
+    .rough-day.load-steady .rough-day-load-hint { color: #7c2d12; font-weight: 800; }
+    .rough-day.load-busy .rough-day-title,
+    .rough-day.load-busy .rough-day-date,
+    .rough-day.load-busy .rough-day-load-hint,
+    .rough-day.load-busy .rough-empty-day { color: #fff; }
+    .rough-day.load-busy .rough-day-date { color: #fecdd3; }
+    .rough-day.load-busy .rough-day-load-hint { color: #ffe4e6; font-weight: 800; }
+    .rough-day.load-busy.drag-over {
+      background: linear-gradient(165deg, #7f1d1d 0%, #be123c 55%, #e11d48 100%);
+      border-color: #fecdd3;
     }
     [data-theme="dark"] .rough-day.load-calm {
-      background: rgba(34, 197, 94, .08);
-      border-color: rgba(34, 197, 94, .28);
+      background: linear-gradient(165deg, rgba(22, 163, 74, .55) 0%, rgba(34, 197, 94, .22) 100%);
+      border-color: #4ade80;
+      box-shadow: inset 6px 0 0 #22c55e;
     }
     [data-theme="dark"] .rough-day.load-easy {
-      background: rgba(251, 191, 36, .08);
-      border-color: rgba(251, 191, 36, .28);
+      background: linear-gradient(165deg, rgba(202, 138, 4, .55) 0%, rgba(234, 179, 8, .22) 100%);
+      border-color: #facc15;
+      box-shadow: inset 6px 0 0 #eab308;
     }
     [data-theme="dark"] .rough-day.load-steady {
-      background: rgba(249, 115, 22, .1);
-      border-color: rgba(249, 115, 22, .3);
+      background: linear-gradient(165deg, rgba(234, 88, 12, .6) 0%, rgba(249, 115, 22, .28) 100%);
+      border-color: #fb923c;
+      box-shadow: inset 6px 0 0 #f97316;
     }
     [data-theme="dark"] .rough-day.load-busy {
-      background: rgba(244, 63, 94, .1);
-      border-color: rgba(244, 63, 94, .3);
+      background: linear-gradient(165deg, #1c1917 0%, #450a0a 40%, #7f1d1d 100%);
+      border-color: #fb7185;
+      box-shadow: inset 6px 0 0 #9f1239;
+      color: #fff;
     }
     .rough-day-load-hint {
       margin-top: 2px;
       font-size: 11px;
-      font-weight: 600;
+      font-weight: 700;
       color: var(--text-secondary);
     }
     .rough-selected-banner {
@@ -1326,6 +1480,7 @@
     roughTrayFilter: 'all',
     roughTraySearch: '',
     roughSelectedPlaceId: null,
+    roughShowUsed: false,
     liveBookings: false,
     supabasePlanTable: false,
     supabasePlacesTable: false,
@@ -3300,10 +3455,8 @@
   function addPlaceToDay(place, dayIndex, chosenTime) {
     const day = state.plan.days[dayIndex];
     if (!day || !place) return;
-    if (place.id && placeUsedInWeek(place.id)) {
-      toast('That place is already on the week — remove it first to re-add');
-      return;
-    }
+    const alreadyUsed = !!(place.id && placeUsedInWeek(place.id));
+    const foodReuse = isLunchLikePlace(place);
     const rawChosen = String(chosenTime == null ? '' : chosenTime).trim();
     let time = '';
     let timeApprox = false;
@@ -3334,12 +3487,15 @@
     const idx = day.blocks.findIndex(b => b.title === place.name && b.time === time);
     seedTravelMinutes(day, idx >= 0 ? idx : day.blocks.length - 1);
     scheduleAutoSave();
+    let extra = '';
+    if (alreadyUsed && foodReuse) extra = ' — food can go on several days';
+    else if (alreadyUsed) extra = ' — return visit';
     if (time && timeApprox) {
-      toast('Added ' + place.name + ' at about ' + time + ' (approximate — tweak if you like)');
+      toast('Added ' + place.name + ' at about ' + time + ' (approximate — tweak if you like)' + extra);
     } else if (time) {
-      toast('Added ' + place.name + ' at ' + time);
+      toast('Added ' + place.name + ' at ' + time + extra);
     } else {
-      toast('Added ' + place.name + ' (time later)');
+      toast('Added ' + place.name + ' (time later)' + extra);
     }
     closeSheet();
     render();
@@ -3849,6 +4005,20 @@
     return map[String(type || 'other')] || map.other;
   }
 
+  function normalisePlaceType(type) {
+    const t = String(type || 'other').toLowerCase();
+    if (t === 'meal') return 'meal';
+    const known = ['factory', 'shop', 'restaurant', 'hotel', 'museum', 'school', 'experience', 'pickup', 'travel', 'other'];
+    return known.includes(t) ? t : 'other';
+  }
+
+  /** Glyph + coloured ring so place types read at a glance. */
+  function renderTypeIconBadge(type, glyph) {
+    const t = normalisePlaceType(type);
+    const icon = glyph != null && String(glyph).trim() !== '' ? String(glyph) : placeTypeIcon(t);
+    return `<span class="type-icon-badge type-${t}" title="${escapeHtml(typeLabel(t))}">${icon}</span>`;
+  }
+
   /** Prefer place.icon when set (e.g. Studnice tower); else type emoji. */
   function placeIconForStop(stop) {
     if (!stop) return placeTypeIcon('other');
@@ -3856,6 +4026,24 @@
     const custom = place && String(place.icon || '').trim();
     if (custom) return custom;
     return placeTypeIcon(stop.type);
+  }
+
+  function placeTypeForStop(stop) {
+    if (!stop) return 'other';
+    const place = placeById(stop.placeId || stop.place_id);
+    if (place && place.type) return place.type;
+    return stop.type || 'other';
+  }
+
+  function renderStopTypeIcon(stop) {
+    return renderTypeIconBadge(placeTypeForStop(stop), placeIconForStop(stop));
+  }
+
+  function renderPlaceTypeIcon(place) {
+    if (!place) return renderTypeIconBadge('other');
+    ensurePlace(place);
+    const custom = String(place.icon || '').trim();
+    return renderTypeIconBadge(place.type || 'other', custom || placeTypeIcon(place.type));
   }
 
   function glanceLabelForStop(stop) {
@@ -3883,6 +4071,16 @@
   function placeUsedInWeek(placeId) {
     if (!placeId) return false;
     return usedPlaceIdsInWeek().has(placeId);
+  }
+
+  /** Food / lunch-like places stay in the tray and may be added to several days. */
+  function isFoodTrayPlace(placeOrStop) {
+    return isLunchLikePlace(placeOrStop);
+  }
+
+  /** Non-food places leave the main tray once planned once (return visit via Show used / Again). */
+  function placeLeavesTrayWhenUsed(placeOrStop) {
+    return !isFoodTrayPlace(placeOrStop);
   }
 
   /** Counts for Rough tray filters: visited = already on any day this week. */
@@ -3976,7 +4174,8 @@
     if (n <= 0) return { key: 'calm', label: 'Quiet day', count: n };
     if (n === 1) return { key: 'easy', label: 'Light day', count: n };
     if (n === 2) return { key: 'steady', label: 'Steady day', count: n };
-    return { key: 'busy', label: 'Busy day', count: n };
+    if (n === 3) return { key: 'busy', label: 'Busy day', count: n };
+    return { key: 'busy', label: 'Very busy day', count: n };
   }
 
   function isRoughSystemStop(stop) {
@@ -4283,31 +4482,41 @@
     const used = usedPlaceIdsInWeek();
     const filter = state.roughTrayFilter || 'all';
     const q = String(state.roughTraySearch || '').trim().toLowerCase();
-    const list = (state.catalogue || []).filter(p => {
+    const matchesFilter = (p) => {
       if (!p || !p.id) return false;
-      // Once used anywhere this week, leave the tray (returns when removed from a day)
-      if (used.has(p.id)) return false;
       if (filter !== 'all' && (p.type || 'other') !== filter) return false;
       if (!q) return true;
       const hay = [p.name, p.nickname, p.icon, typeLabel(p.type)]
         .map(x => String(x || '').toLowerCase()).join(' ');
       return hay.includes(q);
+    };
+    const list = [];
+    const usedList = [];
+    (state.catalogue || []).forEach(p => {
+      if (!matchesFilter(p)) return;
+      const isUsed = used.has(p.id);
+      // Food / lunch-like stay in the main tray even when already on a day
+      if (!isUsed || isFoodTrayPlace(p)) {
+        list.push(p);
+      } else if (state.roughShowUsed) {
+        // Non-food already planned once — only when "Show used" is on (return visit)
+        usedList.push(p);
+      }
     });
-    list.sort((a, b) => placeChipLabel(a).localeCompare(placeChipLabel(b), 'en', { sensitivity: 'base' }));
-    return { list, used };
+    const byNick = (a, b) => placeChipLabel(a).localeCompare(placeChipLabel(b), 'en', { sensitivity: 'base' });
+    list.sort(byNick);
+    usedList.sort(byNick);
+    return { list, usedList, used };
   }
 
   function addPlaceToRoughDay(placeId, dayIndex) {
     const place = placeById(placeId);
     if (!place) { toast('Place not found'); return; }
-    if (placeUsedInWeek(place.id)) {
-      toast('Already used this week — remove it from a day to free it');
-      return;
-    }
     const day = state.plan && state.plan.days ? state.plan.days[dayIndex] : null;
     if (!day) { toast('Day not found'); return; }
     state.roughSelectedPlaceId = null;
     // Blank time → auto-schedule approximate spacing (editable on the stop chip)
+    // Food may be added to several days; non-food may be a return visit
     addPlaceToDay(place, dayIndex, '');
   }
 
@@ -4326,8 +4535,36 @@
     render();
   }
 
+  function renderRoughPlaceChip(p, usedSet, opts) {
+    const optsSafe = opts || {};
+    const isUsed = !!(p && p.id && usedSet && usedSet.has(p.id));
+    const food = isFoodTrayPlace(p);
+    const sel = state.roughSelectedPlaceId === p.id ? ' selected' : '';
+    const onPlan = isUsed && food ? ' on-plan' : '';
+    const retCls = optsSafe.returnVisit ? ' return-visit' : '';
+    const icon = renderPlaceTypeIcon(p);
+    const nick = placeChipLabel(p);
+    let tip = escapeHtml(p.name || nick) + ' — drag to a day, or tap then tap a day';
+    let mark = '';
+    if (optsSafe.returnVisit) {
+      tip = escapeHtml(p.name || nick) + ' — already planned once; tap to add a return visit';
+      mark = '<span class="rp-mark">return</span>';
+    } else if (isUsed && food) {
+      tip = escapeHtml(p.name || nick) + ' — already on the week; food stays available for other days';
+      mark = '<span class="rp-mark">on plan</span>';
+    }
+    return `<button type="button" class="rough-place-chip${sel}${onPlan}${retCls}"
+      draggable="true"
+      data-rough-place="${escapeHtml(p.id)}"
+      title="${tip}">
+      <span class="rp-icon" aria-hidden="true">${icon}</span>
+      <span class="rp-nick">${escapeHtml(nick)}</span>
+      ${mark}
+    </button>`;
+  }
+
   function renderRoughTray() {
-    const { list } = filteredRoughTrayPlaces();
+    const { list, usedList, used } = filteredRoughTrayPlaces();
     const activeFilter = state.roughTrayFilter || 'all';
     const chips = PLACE_TYPES.map(t => {
       const label = roughTrayFilterLabel(t.id);
@@ -4339,30 +4576,32 @@
       return `<button type="button" class="chip ${activeFilter === t.id ? 'on' : ''}" data-rough-filter="${t.id}" title="${tip}">${escapeHtml(label)}${stat}</button>`;
     }).join('');
     const placeChips = list.length
-      ? list.map(p => {
-          const sel = state.roughSelectedPlaceId === p.id ? ' selected' : '';
-          const icon = placeChipIcon(p);
-          const nick = placeChipLabel(p);
-          const tip = escapeHtml(p.name || nick) + ' — drag to a day, or tap then tap a day';
-          return `<button type="button" class="rough-place-chip${sel}"
-            draggable="true"
-            data-rough-place="${escapeHtml(p.id)}"
-            title="${tip}">
-            <span class="rp-icon" aria-hidden="true">${icon}</span>
-            <span class="rp-nick">${escapeHtml(nick)}</span>
-          </button>`;
-        }).join('')
-      : '<p class="muted" style="margin:0;font-size:13px;">No places left in the tray for this filter — remove a stop from a day to free it, or clear the search.</p>';
+      ? list.map(p => renderRoughPlaceChip(p, used, {})).join('')
+      : '<p class="muted" style="margin:0;font-size:13px;">No places in the tray for this filter — try another type, clear the search, or tick <strong>Show used</strong> for a return visit.</p>';
+    const usedBlock = state.roughShowUsed
+      ? (`<div class="rough-tray-used-block" id="roughTrayUsed">
+          <p class="rough-tray-used-head">Already planned once — tap for a return visit</p>
+          ${usedList.length
+            ? usedList.map(p => renderRoughPlaceChip(p, used, { returnVisit: true })).join('')
+            : '<p class="muted" style="margin:0;font-size:12px;">Nothing used yet for this filter (food stays in the main list above).</p>'}
+        </div>`)
+      : '';
     const countSentence = roughTrayCountSentence(activeFilter);
+    const showUsedChecked = state.roughShowUsed ? ' checked' : '';
     return `
       <aside class="rough-tray" aria-label="Places tray">
         <h3>Places tray</h3>
-        <p class="rough-tray-hint">Drag a chip onto a day, or tap a place then tap <strong>Add to Day</strong>. Once placed on any day this week, it leaves the tray until you remove it.</p>
+        <p class="rough-tray-hint">Drag a chip onto a day, or tap a place then tap <strong>Add to Day</strong>. <strong>Food</strong> (restaurants / snacks) stays in the tray so you can put it on several days. Other places leave once planned — tick <strong>Show used</strong> (or tap <strong>Again</strong> on a stop) for a return visit.</p>
         <label class="field-label" for="roughTraySearch">Search</label>
         <input type="search" id="roughTraySearch" class="rough-tray-search" value="${escapeHtml(state.roughTraySearch || '')}" placeholder="Filter by nickname or name…" autocomplete="off">
         <div class="rough-tray-chips" role="group" aria-label="Filter by type">${chips}</div>
         <p class="rough-tray-counts" id="roughTrayCounts" aria-live="polite">${escapeHtml(countSentence)}</p>
+        <label class="rough-tray-show-used" for="roughShowUsed">
+          <input type="checkbox" id="roughShowUsed"${showUsedChecked}>
+          Show used places (return visit)
+        </label>
         <div class="rough-tray-list" id="roughTrayList">${placeChips}</div>
+        ${usedBlock}
       </aside>
     `;
   }
@@ -4378,12 +4617,19 @@
       const system = isRoughSystemStop(s);
       const time = String(s.time || '').trim();
       const label = glanceLabelForStop(s);
-      const icon = placeIconForStop(s);
+      const icon = renderStopTypeIcon(s);
       const upDis = idx === 0 ? ' disabled' : '';
       const downDis = idx === stops.length - 1 ? ' disabled' : '';
-      // Always show × — including drive/travel & hotel pickup (was missing on system stops)
-      const removeTip = system ? 'Remove this stop' : 'Remove — returns to tray';
+      const placeId = s.placeId || s.place_id || '';
+      const food = isFoodTrayPlace(s) || (placeId && isFoodTrayPlace(placeById(placeId)));
+      // Food never left the tray; non-food returns when removed
+      const removeTip = system
+        ? 'Remove this stop'
+        : (food ? 'Remove this stop' : 'Remove — returns to tray');
       const removeBtn = `<button type="button" class="rough-remove" data-rough-remove="${escapeHtml(s.id)}" title="${removeTip}" aria-label="Remove ${escapeHtml(label)}">×</button>`;
+      const againBtn = (!system && placeId && !food)
+        ? `<button type="button" class="rough-again" data-rough-again="${escapeHtml(placeId)}" title="Return visit — select to add again on another day" aria-label="Return visit for ${escapeHtml(label)}">Again</button>`
+        : '';
       return `<li class="rough-stop${system ? ' system' : ''}" data-rough-stop-id="${escapeHtml(s.id)}" title="${escapeHtml(String(s.title || label))}">
         ${renderTimeWheelControl(s, 'rough', 'Time for ' + label)}
         <span class="rough-stop-icon" aria-hidden="true">${icon}</span>
@@ -4391,6 +4637,7 @@
         <div class="rough-stop-actions">
           <button type="button" data-rough-move="${escapeHtml(s.id)}" data-rough-day="${dayIndex}" data-dir="-1" aria-label="Move up"${upDis}>↑</button>
           <button type="button" data-rough-move="${escapeHtml(s.id)}" data-rough-day="${dayIndex}" data-dir="1" aria-label="Move down"${downDis}>↓</button>
+          ${againBtn}
           ${removeBtn}
         </div>
       </li>`;
@@ -4398,7 +4645,7 @@
     const empty = placeStops.length
       ? ''
       : '<p class="rough-empty-day">Drop a place here (or tap Add to Day).</p>';
-    const selReady = !!state.roughSelectedPlaceId && !placeUsedInWeek(state.roughSelectedPlaceId);
+    const selReady = !!state.roughSelectedPlaceId;
     const load = roughDayLoadLevel(day);
     const loadStops = load.count === 1 ? '1 place stop' : (load.count + ' place stops');
     return `
@@ -4424,10 +4671,15 @@
     let selectedBanner = '';
     if (state.roughSelectedPlaceId) {
       const p = placeById(state.roughSelectedPlaceId);
-      if (p && !placeUsedInWeek(p.id)) {
+      if (p) {
+        const used = placeUsedInWeek(p.id);
+        const food = isFoodTrayPlace(p);
+        let note = ' — tap <em>Add to Day N</em> on a day column';
+        if (used && food) note = ' — food; add to another day if you like';
+        else if (used) note = ' — return visit; tap <em>Add to Day N</em>';
         selectedBanner = `
           <div class="rough-selected-banner" role="status">
-            <span>Selected: ${placeChipIcon(p)} <strong>${escapeHtml(placeChipLabel(p))}</strong> — tap <em>Add to Day N</em> on a day column</span>
+            <span>Selected: ${renderPlaceTypeIcon(p)} <strong>${escapeHtml(placeChipLabel(p))}</strong>${note}</span>
             <button type="button" class="btn-clear-sel" id="btnRoughClearSel">Clear</button>
           </div>`;
       }
@@ -4469,6 +4721,13 @@
         render();
       });
     });
+    const showUsedEl = document.getElementById('roughShowUsed');
+    if (showUsedEl) {
+      showUsedEl.addEventListener('change', () => {
+        state.roughShowUsed = !!showUsedEl.checked;
+        render();
+      });
+    }
     document.getElementById('btnRoughClearSel')?.addEventListener('click', () => {
       state.roughSelectedPlaceId = null;
       render();
@@ -4478,15 +4737,11 @@
     document.querySelectorAll('[data-rough-place]').forEach(chip => {
       const placeId = chip.getAttribute('data-rough-place');
       chip.addEventListener('click', () => {
-        if (placeUsedInWeek(placeId)) return;
+        // Food reuse + return visit: used chips stay selectable
         state.roughSelectedPlaceId = state.roughSelectedPlaceId === placeId ? null : placeId;
         render();
       });
       chip.addEventListener('dragstart', e => {
-        if (placeUsedInWeek(placeId)) {
-          e.preventDefault();
-          return;
-        }
         e.dataTransfer.setData('text/plain', placeId);
         e.dataTransfer.setData('application/x-rough-place', placeId);
         e.dataTransfer.effectAllowed = 'copy';
@@ -4533,6 +4788,16 @@
     document.querySelectorAll('[data-rough-remove]').forEach(btn => {
       btn.addEventListener('click', () => removeRoughStop(btn.getAttribute('data-rough-remove')));
     });
+    document.querySelectorAll('[data-rough-again]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const placeId = btn.getAttribute('data-rough-again');
+        if (!placeId) return;
+        state.roughSelectedPlaceId = placeId;
+        state.roughShowUsed = true;
+        toast('Return visit ready — tap Add to Day on another day');
+        render();
+      });
+    });
     document.querySelectorAll('[data-rough-move]').forEach(btn => {
       btn.addEventListener('click', () => {
         const dayIndex = Number(btn.getAttribute('data-rough-day'));
@@ -4556,7 +4821,7 @@
       const time = String(s.time || '').trim();
       const label = glanceLabelForStop(s);
       const fullTitle = String(s.title || '').trim();
-      const icon = placeIconForStop(s);
+      const icon = renderStopTypeIcon(s);
       const tip = fullTitle && fullTitle !== label ? (fullTitle + ' — jump to this stop') : 'Jump to this stop';
       const upDis = idx === 0 ? ' disabled' : '';
       const downDis = idx === stops.length - 1 ? ' disabled' : '';
