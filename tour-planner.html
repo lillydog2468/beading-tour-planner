@@ -686,6 +686,7 @@
           <a href="booking-form.html" id="navBookings">Bookings</a>
           <a href="analytics.html" id="navAnalytics">Analytics</a>
           <a href="tour-planner.html" class="active">Planner</a>
+          <a href="places-stats.html" id="navPlacesStats">Places stats</a>
         </nav>
       </div>
       <div class="topbar-actions">
@@ -3727,7 +3728,7 @@ function renderDayTabs() {
   }
 
   // On GitHub Pages: prefer same-origin booking-form.html when present; else Netlify.
-  // Analytics stays on Netlify until a Pages copy exists.
+  // On github.io prefer same-origin pages when present; otherwise fall back to Netlify.
   const LIVE_BOOKINGS_ORIGIN = 'https://keith-booking-form.netlify.app';
   let pagesHasBookingForm = null; // null = not probed yet
 
@@ -3739,32 +3740,44 @@ function renderDayTabs() {
     return '';
   }
 
+  async function probeSameOrigin(path) {
+    try {
+      const probe = await fetch(path, { method: 'GET', cache: 'no-store', headers: { 'Range': 'bytes=0-0' } });
+      return probe.ok || probe.status === 206;
+    } catch (_) {
+      return false;
+    }
+  }
+
   async function fixExternalNavLinks() {
     const onGithubPages = location.hostname.includes('github.io');
     const bookings = document.getElementById('navBookings');
     const analytics = document.getElementById('navAnalytics');
+    const placesStats = document.getElementById('navPlacesStats');
     const qs = bookingsQueryForCurrentPlan();
 
     let bookingsHref = 'booking-form.html' + qs;
+    let analyticsHref = 'analytics.html';
+    let placesHref = 'places-stats.html';
+
     if (onGithubPages) {
       if (pagesHasBookingForm === null) {
-        try {
-          const probe = await fetch('booking-form.html', { method: 'GET', cache: 'no-store', headers: { 'Range': 'bytes=0-0' } });
-          pagesHasBookingForm = probe.ok || probe.status === 206;
-        } catch (_) {
-          pagesHasBookingForm = false;
-        }
+        pagesHasBookingForm = await probeSameOrigin('booking-form.html');
       }
+      const [hasAnalytics, hasPlacesStats] = await Promise.all([
+        probeSameOrigin('analytics.html'),
+        probeSameOrigin('places-stats.html')
+      ]);
       bookingsHref = pagesHasBookingForm
         ? ('booking-form.html' + qs)
         : (LIVE_BOOKINGS_ORIGIN + '/booking-form.html' + qs);
+      analyticsHref = hasAnalytics ? 'analytics.html' : (LIVE_BOOKINGS_ORIGIN + '/analytics.html');
+      placesHref = hasPlacesStats ? 'places-stats.html' : (LIVE_BOOKINGS_ORIGIN + '/places-stats.html');
     }
+
     if (bookings) bookings.href = bookingsHref;
-    if (analytics) {
-      analytics.href = onGithubPages
-        ? (LIVE_BOOKINGS_ORIGIN + '/analytics.html')
-        : 'analytics.html';
-    }
+    if (analytics) analytics.href = analyticsHref;
+    if (placesStats) placesStats.href = placesHref;
   }
   fixExternalNavLinks();
 
