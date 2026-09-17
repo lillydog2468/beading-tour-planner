@@ -3227,27 +3227,49 @@ function renderDayTabs() {
       btn.addEventListener('click', () => { state.selectedDay = Number(btn.getAttribute('data-day')); render(); });
     });
     document.querySelectorAll('[data-stop-time]').forEach(inp => {
-      // Safari / mobile time pickers often skip or delay `change`; bind input+change+blur
-      // so the value is committed to the stop before any re-render can wipe the field.
+      // Safari / mobile: bind input+change+blur, but NEVER commit from a detached node
+      // (render() destroys the input; its empty blur/input was wiping real times to cloud).
       let renderQueued = false;
-      const commit = () => {
-        const id = inp.getAttribute('data-stop-time');
-        if (!id) return;
-        const s = findStop(id);
-        if (!s) return;
-        // Blank clears the time — valid for week planning before times are set
-        s.time = String(inp.value || '').trim() === '' ? '' : normaliseStopTime(inp.value, '');
-        s.period = periodForTime(s.time);
+      const finalize = (s) => {
         const day = state.plan.days.find(d => (d.blocks || []).some(b => b.id === s.id));
         if (day) sortDayBlocks(day);
         scheduleAutoSave();
-        // Re-render so lunch/snack 12:30 sorts before 15:00; coalesce input+change+blur
         if (renderQueued) return;
         renderQueued = true;
         queueMicrotask(() => {
           renderQueued = false;
           render(); // captureUiState restores focus on data-stop-time
         });
+      };
+      const commit = (evt) => {
+        if (!inp.isConnected) return; // ignore events from nodes already replaced by render()
+        const id = inp.getAttribute('data-stop-time');
+        if (!id) return;
+        const s = findStop(id);
+        if (!s) return;
+        const raw = String(inp.value || '').trim();
+        const type = evt && evt.type;
+
+        if (!raw) {
+          // Do not clear on intermediate empty `input` (iOS picker) or on blur.
+          // Only clear when change fires with empty while still connected.
+          if (type !== 'change') return;
+          // Never let a synthetic empty commit overwrite a non-empty time
+          // (change+empty while connected is an intentional clear).
+          s.time = '';
+          s.period = periodForTime(s.time);
+          finalize(s);
+          return;
+        }
+
+        s.time = normaliseStopTime(inp.value, '');
+        s.period = periodForTime(s.time);
+
+        // input: update in-memory only (no sort/save/render — avoids re-entrancy wipe)
+        if (type === 'input') return;
+
+        // change, or connected blur with non-empty: sort, save, render once
+        finalize(s);
       };
       inp.addEventListener('input', commit);
       inp.addEventListener('change', commit);
