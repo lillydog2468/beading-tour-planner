@@ -478,10 +478,62 @@
     .place-picker select { width: 100%; min-height: 48px; font-size: 16px; margin-bottom: 8px; }
     .place-picker .picker-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
-    /* Places directory */
-    .place-dir-item {
+    /* Places directory — master-detail */
+    .places-md {
+      display: grid;
+      grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+      gap: 14px;
+      align-items: start;
+    }
+    @media (max-width: 720px) {
+      .places-md { grid-template-columns: 1fr; }
+    }
+    .places-master {
+      display: flex; flex-direction: column; gap: 10px;
+      min-width: 0;
+    }
+    .places-master .place-search {
+      width: 100%; min-height: 44px; font-size: 16px;
+    }
+    .place-name-list {
       border: 1px solid var(--border); border-radius: 12px;
-      padding: 12px; margin-bottom: 10px; background: var(--surface-alt);
+      background: var(--surface-alt);
+      max-height: min(55vh, 520px);
+      overflow: auto;
+    }
+    .place-name-item {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 8px; width: 100%; text-align: left;
+      padding: 10px 12px; border: none; border-bottom: 1px solid var(--border);
+      background: transparent; color: var(--text); cursor: pointer;
+      font: inherit; font-weight: 600; font-size: 14px;
+    }
+    .place-name-item:last-child { border-bottom: none; }
+    .place-name-item:hover { background: var(--accent-glow); }
+    .place-name-item.selected {
+      background: var(--accent-soft);
+      box-shadow: inset 3px 0 0 var(--accent);
+      color: var(--accent);
+    }
+    .place-name-item .pname { flex: 1; min-width: 0; word-break: break-word; }
+    .place-name-item .ptype {
+      flex-shrink: 0; font-size: 11px; font-weight: 800;
+      text-transform: uppercase; letter-spacing: .03em;
+      color: var(--text-secondary); padding-top: 2px;
+    }
+    .place-name-empty { padding: 14px 12px; color: var(--text-secondary); font-size: 14px; }
+    .places-add-box {
+      border: 1px solid var(--border); border-radius: 12px;
+      padding: 10px; background: var(--surface);
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .places-detail {
+      border: 1px solid var(--border); border-radius: 12px;
+      padding: 14px; background: var(--surface-alt);
+      min-height: 200px; min-width: 0;
+    }
+    .places-detail .place-dir-item {
+      border: none; padding: 0; margin: 0; background: transparent;
     }
     .place-dir-item .dir-grid {
       display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px;
@@ -492,6 +544,10 @@
       font-size: 11px; font-weight: 800; text-transform: uppercase;
       letter-spacing: .03em; padding: 3px 8px; border-radius: 999px;
       background: var(--accent-soft); color: var(--accent); margin-left: 6px;
+    }
+    .places-detail-empty {
+      color: var(--text-secondary); font-size: 15px; line-height: 1.45;
+      padding: 18px 6px;
     }
 
     /* ── Auto-save toggle (matches booking form) ── */
@@ -639,6 +695,8 @@
     plan: null,
     selectedDay: 0,
     placeFilter: 'all',
+    placeSearch: '',
+    selectedPlaceId: null,
     mainTab: localStorage.getItem('planner_main_tab') === 'places' ? 'places' : 'planner',
     liveBookings: false,
     supabasePlanTable: false,
@@ -2455,10 +2513,14 @@
     sel.value = '';
   }
   function removePlace(id) {
+    const wasSelected = state.selectedPlaceId === id;
     state.catalogue = state.catalogue.filter(p => p.id !== id);
     if (state.plan && state.plan.tourHotelPlaceId === id) {
       state.plan.tourHotelPlaceId = '';
       // Keep the name as free text so the trip summary is not blank
+    }
+    if (wasSelected) {
+      state.selectedPlaceId = state.catalogue.length ? state.catalogue[0].id : null;
     }
     scheduleAutoSave();
     render();
@@ -2506,14 +2568,36 @@
     }).join('');
   }
 
+  function filteredCatalogueList() {
+    const filter = state.placeFilter;
+    const q = String(state.placeSearch || '').trim().toLowerCase();
+    const list = state.catalogue.filter(p => {
+      if (filter !== 'all' && (p.type || 'other') !== filter) return false;
+      if (!q) return true;
+      const hay = [
+        p.name, p.address, p.notes, p.contactDetail, typeLabel(p.type), contactLabel(p.contactMethod)
+      ].map(x => String(x || '').toLowerCase()).join(' ');
+      return hay.includes(q);
+    });
+    list.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'en', { sensitivity: 'base' }));
+    return list;
+  }
+
+  function ensureSelectedPlaceId(list) {
+    if (state.selectedPlaceId && !state.catalogue.some(p => p.id === state.selectedPlaceId)) {
+      state.selectedPlaceId = null;
+    }
+    if (!state.selectedPlaceId && list && list.length) {
+      state.selectedPlaceId = list[0].id;
+    }
+  }
+
   function renderCatalogue(opts) {
     const options = (opts && typeof opts === 'object') ? opts : { compact: !!opts };
     const compact = !!options.compact;
-    // Add to this day only when explicitly requested (Planner no longer embeds the directory)
     const showAddToDay = !!options.showAddToDay && !compact;
-    const filter = state.placeFilter;
-    const list = state.catalogue.filter(p => filter === 'all' || p.type === filter);
-    const suggestedTime = suggestNextStopTime(currentDay && currentDay());
+    const list = filteredCatalogueList();
+    ensureSelectedPlaceId(list);
     const chips = PLACE_TYPES.map(t => `
       <button type="button" class="chip ${state.placeFilter === t.id ? 'on' : ''}" data-filter="${t.id}">${t.label}</button>
     `).join('');
@@ -2523,9 +2607,25 @@
         `<option value="${c.id}" ${selected === c.id ? 'selected' : ''}>${c.label}</option>`
       ).join('');
     };
-    const places = list.map(p => {
-      ensurePlace(p);
-      return `
+
+    const nameList = list.length
+      ? list.map(p => {
+          ensurePlace(p);
+          const sel = state.selectedPlaceId === p.id ? ' selected' : '';
+          return `
+        <button type="button" class="place-name-item${sel}" data-select-place="${p.id}" aria-pressed="${state.selectedPlaceId === p.id ? 'true' : 'false'}">
+          <span class="pname">${escapeHtml(p.name || 'Unnamed place')}</span>
+          <span class="ptype">${escapeHtml(typeLabel(p.type))}</span>
+        </button>`;
+        }).join('')
+      : `<p class="place-name-empty">No places match this search or filter.</p>`;
+
+    const selected = state.catalogue.find(p => p.id === state.selectedPlaceId) || null;
+    let detailHtml = '';
+    if (selected) {
+      ensurePlace(selected);
+      const p = selected;
+      detailHtml = `
       <div class="place-dir-item" data-place-id="${p.id}">
         <div class="row-between">
           <div>
@@ -2571,39 +2671,46 @@
           <button type="button" class="btn btn-primary btn-sm" data-add-place="${p.id}">Add to this day</button>
         </div>` : ''}
       </div>`;
-    }).join('') || `<p class="muted">No places in this filter yet.</p>`;
+    } else {
+      detailHtml = `<p class="places-detail-empty">Select a place from the list to edit its name, type, contact, address and notes. Or add a new place on the left — it will open here straight away.</p>`;
+    }
+
+    const addBox = compact ? '' : `
+      <div class="places-add-box">
+        <div class="field-label">Add a place</div>
+        <input type="text" id="newPlaceName" placeholder="Name (e.g. factory or café)" autocomplete="off">
+        <select id="newPlaceType" aria-label="Subcategory for new place">
+          <option value="hotel">Hotel</option>
+          <option value="factory">Factory</option>
+          <option value="shop">Shop</option>
+          <option value="restaurant">Restaurant</option>
+          <option value="experience">Experience</option>
+          <option value="museum">Museum</option>
+          <option value="school">School</option>
+          <option value="other" selected>Other</option>
+        </select>
+        <button type="button" class="btn btn-outline btn-sm" id="btnAddPlace">Save to Places</button>
+        <p class="muted" style="margin:0;">Only places you add appear here — nothing is invented. Contact and address can be filled in on the right after saving.</p>
+      </div>`;
 
     return `
-      <div class="filters">${chips}</div>
-      <div class="place-list">${places}</div>
-      ${compact ? '' : `
-        <div class="stack" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
-          <div class="field-label">Add a place to the directory</div>
-          <input type="text" id="newPlaceName" placeholder="Name (e.g. factory or café)">
-          <select id="newPlaceType">
-            <option value="hotel">Hotel</option>
-            <option value="factory">Factory</option>
-            <option value="shop">Shop</option>
-            <option value="restaurant">Restaurant</option>
-            <option value="experience">Experience</option>
-            <option value="museum">Museum</option>
-            <option value="school">School</option>
-            <option value="other">Other</option>
-          </select>
-          <select id="newPlaceContactMethod">
-            <option value="">Not set yet</option>
-            ${CONTACT_METHODS.map(c => `<option value="${c.id}">${c.label}</option>`).join('')}
-          </select>
-          <input type="text" id="newPlaceContactDetail" placeholder="Contact detail (number / email)">
-          <input type="text" id="newPlaceAddress" placeholder="Address">
-          <button type="button" class="btn btn-outline" id="btnAddPlace">Save to Places</button>
-          <p class="muted">This list feeds the day-schedule picker. Grouped by subcategory when you add a stop.</p>
+      <div class="places-md">
+        <div class="places-master">
+          <label class="field-label" for="placeSearch">Search places</label>
+          <input type="search" id="placeSearch" class="place-search" value="${escapeHtml(state.placeSearch || '')}" placeholder="Type to filter by name…" autocomplete="off" enterkeyhint="search">
+          <div class="filters">${chips}</div>
+          <div class="place-name-list" role="listbox" aria-label="Places">${nameList}</div>
+          ${addBox}
         </div>
-      `}
+        <div class="places-detail" aria-live="polite">
+          <div class="field-label" style="margin-bottom:8px;">${selected ? 'Edit place' : 'Place details'}</div>
+          ${detailHtml}
+        </div>
+      </div>
     `;
   }
 
-function renderTimeline(day, large) {
+  function renderTimeline(day, large) {
     if (!day) return '<p class="muted">No days yet.</p>';
     sortDayBlocks(day);
     const blocks = day.blocks || [];
@@ -2863,7 +2970,7 @@ function renderDayTabs() {
         };
       }
     }
-    const placeList = document.querySelector('.place-list');
+    const placeList = document.querySelector('.place-name-list') || document.querySelector('.place-list');
     return {
       windowY: window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0,
       placeListTop: placeList ? placeList.scrollTop : null,
@@ -2875,7 +2982,7 @@ function renderDayTabs() {
     if (!snap) return;
     const apply = () => {
       if (snap.placeListTop != null) {
-        const placeList = document.querySelector('.place-list');
+        const placeList = document.querySelector('.place-name-list') || document.querySelector('.place-list');
         if (placeList) placeList.scrollTop = snap.placeListTop;
       }
       try { window.scrollTo(0, snap.windowY || 0); } catch { /* ignore */ }
@@ -3026,7 +3133,7 @@ function renderDayTabs() {
           <h2>Places directory</h2>
           <button type="button" class="btn btn-outline btn-sm" id="btnBackPlanner">Back to Planner</button>
         </div>
-        <p class="muted" style="margin-bottom:8px;">Edit hotels, factories, shops, restaurants, experiences, museums and schools here — contact method, detail, address and notes. Hotels appear in the Planner “Staying at” list as the overnight base (day starting point from the day after arrival). These feed the compact picker on the Planner tab (also saved to Supabase).</p>
+        <p class="muted" style="margin-bottom:8px;">Search and pick a place on the left; edit name, type, contact, address and notes on the right. Hotels appear in the Planner “Staying at” list as the overnight base (day starting point from the day after arrival). This directory feeds the Planner picker and saves to Supabase.</p>
         ${renderCatalogue({ showAddToDay: false })}
       </div>
     `;
@@ -3298,6 +3405,19 @@ function renderDayTabs() {
 
   function bindCatalogue(root, opts = {}) {
     const refresh = () => { if (opts.onFilter) opts.onFilter(); else render(); };
+    const searchEl = root.querySelector('#placeSearch');
+    if (searchEl) {
+      searchEl.addEventListener('input', () => {
+        state.placeSearch = searchEl.value;
+        refresh();
+      });
+    }
+    root.querySelectorAll('[data-select-place]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.selectedPlaceId = btn.getAttribute('data-select-place');
+        refresh();
+      });
+    });
     root.querySelectorAll('[data-filter]').forEach(btn => {
       btn.addEventListener('click', () => { state.placeFilter = btn.getAttribute('data-filter'); refresh(); });
     });
@@ -3320,6 +3440,8 @@ function renderDayTabs() {
           if (state.plan && state.plan.tourHotelPlaceId === p.id) state.plan.tourHotelName = p.name;
           scheduleAutoSave();
           updatePlaceMapsLink(id);
+          const label = root.querySelector(`[data-select-place="${CSS.escape(id)}"] .pname`);
+          if (label) label.textContent = p.name || 'Unnamed place';
         }
       });
     });
@@ -3353,7 +3475,9 @@ function renderDayTabs() {
         if (!p) return;
         p.type = sel.value;
         scheduleAutoSave();
-        // Only rebuild when the active category filter would hide/move this card.
+        const badge = root.querySelector(`[data-select-place="${CSS.escape(p.id)}"] .ptype`);
+        if (badge) badge.textContent = typeLabel(p.type);
+        // Rebuild when the active category filter would hide this place from the list.
         if (state.placeFilter !== 'all' && state.placeFilter !== p.type) refresh();
       });
     });
@@ -3403,16 +3527,21 @@ function renderDayTabs() {
   function addCataloguePlace() {
     const name = document.getElementById('newPlaceName')?.value.trim();
     if (!name) { toast('Enter a place name'); return; }
+    const type = document.getElementById('newPlaceType')?.value || 'other';
     const place = ensurePlace({
       id: uid('c'),
       name,
-      type: document.getElementById('newPlaceType')?.value || 'other',
+      type,
       contactMethod: document.getElementById('newPlaceContactMethod')?.value || '',
       contactDetail: document.getElementById('newPlaceContactDetail')?.value.trim() || '',
       address: document.getElementById('newPlaceAddress')?.value.trim() || '',
       notes: '',
     });
     state.catalogue.push(place);
+    state.selectedPlaceId = place.id;
+    // Clear search so the new place is visible in the left list
+    state.placeSearch = '';
+    if (state.placeFilter !== 'all' && state.placeFilter !== type) state.placeFilter = 'all';
     scheduleAutoSave();
     toast('Saved to Places');
     render();
