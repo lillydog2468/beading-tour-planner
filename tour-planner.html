@@ -268,12 +268,16 @@
       background: var(--accent-soft);
       outline: none;
     }
-    input.day-glance-time-input[type="time"] {
-      width: 5.6em;
-      min-width: 5.6em;
-      max-width: 6.5em;
+    .time-wheel-wrap {
+      position: relative;
       flex-shrink: 0;
-      padding: 6px 4px;
+      display: flex;
+      align-items: center;
+    }
+    .time-wheel-btn {
+      min-width: 5.6em;
+      min-height: 36px;
+      padding: 6px 8px;
       font-variant-numeric: tabular-nums;
       font-weight: 800;
       font-size: 13px;
@@ -283,6 +287,129 @@
       border-radius: 8px;
       background: var(--input-bg);
       box-sizing: border-box;
+      cursor: pointer;
+      text-align: center;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+    .time-wheel-btn:hover, .time-wheel-btn:focus {
+      border-color: var(--accent, #2563eb);
+      outline: none;
+      box-shadow: 0 0 0 2px var(--accent-soft, rgba(37,99,235,.2));
+    }
+    .time-wheel-btn.is-blank {
+      color: var(--text-secondary);
+      font-weight: 700;
+    }
+    .time-wheel-btn.is-approx .tw-approx {
+      color: var(--text-secondary);
+      font-weight: 700;
+      margin-right: 1px;
+    }
+    .time-wheel-popover {
+      position: fixed;
+      z-index: 4000;
+      width: min(280px, calc(100vw - 24px));
+      background: var(--surface, #fff);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: 0 12px 40px rgba(0,0,0,.22);
+      padding: 10px;
+      display: none;
+    }
+    .time-wheel-popover.open { display: block; }
+    .time-wheel-popover-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .time-wheel-popover-title {
+      font-weight: 800;
+      font-size: 13px;
+    }
+    .time-wheel-cols {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      position: relative;
+    }
+    .time-wheel-cols::before {
+      content: '';
+      pointer-events: none;
+      position: absolute;
+      left: 4px; right: 4px;
+      top: 50%;
+      height: 44px;
+      margin-top: -22px;
+      border-radius: 10px;
+      background: var(--accent-soft, rgba(37,99,235,.12));
+      border: 1px solid var(--border);
+      z-index: 0;
+    }
+    .time-wheel-col {
+      position: relative;
+      z-index: 1;
+      height: 176px;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scroll-snap-type: y mandatory;
+      -webkit-overflow-scrolling: touch;
+      border-radius: 10px;
+      scrollbar-width: thin;
+    }
+    .time-wheel-col-pad {
+      height: 66px;
+      flex-shrink: 0;
+      pointer-events: none;
+    }
+    .time-wheel-opt {
+      height: 44px;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      scroll-snap-align: center;
+      font-variant-numeric: tabular-nums;
+      font-weight: 800;
+      font-size: 20px;
+      cursor: pointer;
+      user-select: none;
+      color: var(--text-secondary);
+    }
+    .time-wheel-opt.is-active {
+      color: var(--text);
+      font-size: 22px;
+    }
+    .time-wheel-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .time-wheel-actions button {
+      flex: 1;
+      min-height: 44px;
+      font-weight: 800;
+      font-size: 14px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--surface-alt, var(--input-bg));
+      color: var(--text);
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .time-wheel-actions .tw-done {
+      background: var(--accent, #2563eb);
+      color: #fff;
+      border-color: transparent;
+    }
+    .time-wheel-hint {
+      margin: 6px 0 0;
+      font-size: 11px;
+      color: var(--text-secondary);
+      text-align: center;
     }
     .day-glance-title {
       font-weight: 700;
@@ -301,7 +428,9 @@
     .view-phone .day-glance { padding: 12px 14px; margin-bottom: 14px; }
     .view-phone .day-glance-label { font-size: 12px; margin-bottom: 8px; }
     .view-phone .day-glance-row { min-height: 44px; padding: 8px 6px; }
-    .view-phone input.day-glance-time-input[type="time"] { font-size: 16px; min-height: 44px; width: 6.2em; min-width: 6.2em; max-width: 7em; padding: 8px 6px; }
+    .view-phone .time-wheel-btn { font-size: 16px; min-height: 44px; min-width: 6.2em; padding: 8px 8px; }
+    .view-phone .time-wheel-opt { font-size: 22px; }
+    .view-phone .time-wheel-opt.is-active { font-size: 24px; }
     .view-phone .day-glance-title { font-size: 16px; }
 
     .timeline { display: flex; flex-direction: column; gap: 0; }
@@ -899,25 +1028,8 @@
       border-style: dashed;
       border-color: var(--border);
     }
-    input.rough-stop-time-input[type="time"] {
-      width: 5.6em;
-      min-width: 5.6em;
-      max-width: 6.5em;
-      flex-shrink: 0;
-      padding: 6px 4px;
-      font-variant-numeric: tabular-nums;
-      font-weight: 800;
-      font-size: 13px;
-      font-family: inherit;
-      color: var(--text);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      background: var(--input-bg);
-      box-sizing: border-box;
-    }
-    .view-phone input.rough-stop-time-input[type="time"] {
-      font-size: 16px; min-height: 44px; width: 6.2em; min-width: 6.2em; max-width: 7em; padding: 8px 6px;
-    }
+    /* Rough stop times use shared .time-wheel-btn */
+
     .rough-stop-icon {
       font-size: 16px; text-align: center; line-height: 1;
       width: 1.5em; min-width: 1.5em; flex-shrink: 0;
@@ -1159,12 +1271,42 @@
     if (!day || !Array.isArray(day.blocks)) return;
     day.blocks.sort(compareStopTime);
   }
-  function suggestNextStopTime(day) {
-    const timed = (day && day.blocks || []).filter(b => timeToMinutes(b.time) != null);
-    if (!timed.length) return '10:00';
-    timed.sort(compareStopTime);
-    const last = timed[timed.length - 1];
-    return addMinutes(last.time, 60);
+  function isLunchLikePlace(placeOrStop) {
+    if (!placeOrStop) return false;
+    const type = String(placeOrStop.type || '').toLowerCase();
+    if (type === 'restaurant' || type === 'meal') return true;
+    const hay = [
+      placeOrStop.name,
+      placeOrStop.nickname,
+      placeOrStop.title,
+      placeOrStop.notes,
+    ].map(x => String(x || '').toLowerCase()).join(' ');
+    return /\b(lunch|snack|brunch|café|cafe|supper|supermarket\s*snack|food\s*stop)\b/.test(hay)
+      || /snack\s+at\s+supermarket/.test(hay);
+  }
+
+  /** Auto-spacing when Keith leaves time blank on add-to-day. */
+  function suggestAutoStopTime(day, place) {
+    const gapMins = isLunchLikePlace(place) ? 30 : 90; // lunch-like ~30m; else ~1h30
+    const timed = (day && day.blocks || [])
+      .filter(b => timeToMinutes(b.time) != null)
+      .slice()
+      .sort(compareStopTime);
+    if (timed.length) {
+      return addMinutes(timed[timed.length - 1].time, gapMins);
+    }
+    // No timed stops yet — Leave hotel / 09:00 if present, else 09:30
+    const hasLeaveHotel = (day && day.blocks || []).some(b => {
+      const title = String(b.title || '');
+      if (/leave\s+hotel/i.test(title)) return true;
+      if (b.type === 'pickup' && /hotel/i.test(title)) return true;
+      return false;
+    });
+    return hasLeaveHotel ? '09:00' : '09:30';
+  }
+
+  function suggestNextStopTime(day, place) {
+    return suggestAutoStopTime(day, place);
   }
   function normaliseStopTime(value, fallback) {
     // Keith often plans the week without times and fills them in later.
@@ -1692,7 +1834,7 @@
           <button type="button" class="btn btn-primary" data-place-picker-add="${selectId}">Add selected place</button>
           <button type="button" class="btn btn-outline" id="${blankId}">Add blank stop</button>
         </div>
-        <p class="muted" style="margin-top:6px;">Time is optional — leave blank and add times later. Untimed stops sort last. Grouped from your Places list.</p>
+        <p class="muted" style="margin-top:6px;">Time is optional — leave blank for an automatic approximate time (about 1 hour 30 minutes after the last timed stop, or about 30 minutes for lunch / snack / restaurant). You can clear or tweak it. Untimed stops sort last. Grouped from your Places list.</p>
       </div>
     `;
   }
@@ -2940,11 +3082,21 @@
       toast('That place is already on the week — remove it first to re-add');
       return;
     }
-    // Empty/blank time is allowed — untimed stops sort last and still cloud-save
-    const time = normaliseStopTime(chosenTime, '');
+    const rawChosen = String(chosenTime == null ? '' : chosenTime).trim();
+    let time = '';
+    let timeApprox = false;
+    if (rawChosen) {
+      // Keith set a time on the picker — use it as-is (not approximate)
+      time = normaliseStopTime(rawChosen, '');
+    } else {
+      // Blank on add → auto-schedule approximate spacing (he can clear or tweak)
+      time = suggestAutoStopTime(day, place);
+      timeApprox = !!time;
+    }
     day.blocks.push({
       id: uid('s'),
       time,
+      timeApprox: !!timeApprox,
       type: place.type || 'experience',
       title: place.name,
       notes: place.notes || '',
@@ -2960,7 +3112,13 @@
     const idx = day.blocks.findIndex(b => b.title === place.name && b.time === time);
     seedTravelMinutes(day, idx >= 0 ? idx : day.blocks.length - 1);
     scheduleAutoSave();
-    toast(time ? ('Added ' + place.name + ' at ' + time) : ('Added ' + place.name + ' (time later)'));
+    if (time && timeApprox) {
+      toast('Added ' + place.name + ' at about ' + time + ' (approximate — tweak if you like)');
+    } else if (time) {
+      toast('Added ' + place.name + ' at ' + time);
+    } else {
+      toast('Added ' + place.name + ' (time later)');
+    }
     closeSheet();
     render();
   }
@@ -3406,8 +3564,8 @@
         <input type="text" data-place-notes="${p.id}" value="${escapeHtml(p.notes || '')}" placeholder="Notes / description (editable)" style="margin-top:8px;">
         ${showAddToDay ? `<div class="add-to-day-row">
           <div class="time-field">
-            <label class="field-label" for="add_time_${p.id}">Time</label>
-            <input type="time" id="add_time_${p.id}" data-add-place-time="${p.id}" value="" aria-label="Time (optional)">
+            <label class="field-label" for="add_time_${p.id}">Time (optional)</label>
+            <input type="time" id="add_time_${p.id}" data-add-place-time="${p.id}" value="" aria-label="Time (optional — leave blank to auto-schedule)">
           </div>
           <button type="button" class="btn btn-primary btn-sm" data-add-place="${p.id}">Add to this day</button>
         </div>` : ''}
@@ -3530,6 +3688,255 @@
     return placeTypeIcon(place.type);
   }
 
+  function formatTimeWheelLabel(stop) {
+    const time = String(stop && stop.time || '').trim();
+    if (!time) return { text: '—', blank: true, approx: false };
+    const approx = !!(stop && stop.timeApprox);
+    return { text: time, blank: false, approx };
+  }
+
+  function renderTimeWheelControl(stop, timeSrc, ariaLabel) {
+    if (!stop || !stop.id) return '';
+    const meta = formatTimeWheelLabel(stop);
+    const time = String(stop.time || '').trim();
+    const approxCls = meta.approx ? ' is-approx' : '';
+    const blankCls = meta.blank ? ' is-blank' : '';
+    const approxMark = meta.approx ? '<span class="tw-approx" title="Approximate — tweak if you like">≈</span>' : '';
+    const title = meta.approx
+      ? 'Approximate time — tap to adjust or clear'
+      : (meta.blank ? 'Tap to set time' : 'Tap to change time');
+    return `<div class="time-wheel-wrap">
+      <button type="button" class="time-wheel-btn${approxCls}${blankCls}"
+        data-open-time-wheel="${escapeHtml(stop.id)}"
+        data-time-src="${escapeHtml(timeSrc)}"
+        aria-label="${escapeHtml(ariaLabel || ('Time for ' + (stop.title || 'stop')))}"
+        aria-haspopup="dialog"
+        title="${escapeHtml(title)}">${approxMark}<span class="tw-val">${escapeHtml(meta.text)}</span></button>
+      <input type="hidden" data-stop-time="${escapeHtml(stop.id)}" data-time-src="${escapeHtml(timeSrc)}" value="${escapeHtml(time)}" aria-hidden="true">
+    </div>`;
+  }
+
+  function ensureTimeWheelPopover() {
+    let el = document.getElementById('timeWheelPopover');
+    if (el) return el;
+    el = document.createElement('div');
+    el.id = 'timeWheelPopover';
+    el.className = 'time-wheel-popover';
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-label', 'Choose time');
+    const hours = Array.from({ length: 24 }, (_, h) => String(h).padStart(2, '0'));
+    const mins = ['00', '15', '30', '45'];
+    el.innerHTML = `
+      <div class="time-wheel-popover-head">
+        <div class="time-wheel-popover-title">Set time</div>
+        <button type="button" class="icon-btn" id="timeWheelClose" aria-label="Close">×</button>
+      </div>
+      <div class="time-wheel-cols">
+        <div class="time-wheel-col" id="timeWheelHours" data-tw-col="hour" tabindex="0" aria-label="Hour">
+          <div class="time-wheel-col-pad" aria-hidden="true"></div>
+          ${hours.map(h => `<div class="time-wheel-opt" data-tw-h="${h}">${h}</div>`).join('')}
+          <div class="time-wheel-col-pad" aria-hidden="true"></div>
+        </div>
+        <div class="time-wheel-col" id="timeWheelMins" data-tw-col="min" tabindex="0" aria-label="Minute">
+          <div class="time-wheel-col-pad" aria-hidden="true"></div>
+          ${mins.map(m => `<div class="time-wheel-opt" data-tw-m="${m}">${m}</div>`).join('')}
+          <div class="time-wheel-col-pad" aria-hidden="true"></div>
+        </div>
+      </div>
+      <p class="time-wheel-hint">Scroll or drag · 15-minute steps</p>
+      <div class="time-wheel-actions">
+        <button type="button" id="timeWheelClear" title="Leave time blank">Clear</button>
+        <button type="button" class="tw-done" id="timeWheelDone">Done</button>
+      </div>`;
+    document.body.appendChild(el);
+    return el;
+  }
+
+  let _twState = { stopId: null, timeSrc: null, hour: '09', min: '00', open: false };
+
+  function twSnapCol(colEl, attr) {
+    if (!colEl) return null;
+    const opts = Array.from(colEl.querySelectorAll('.time-wheel-opt'));
+    if (!opts.length) return null;
+    const mid = colEl.getBoundingClientRect().top + colEl.clientHeight / 2;
+    let best = opts[0], bestDist = Infinity;
+    opts.forEach(opt => {
+      const r = opt.getBoundingClientRect();
+      const c = r.top + r.height / 2;
+      const d = Math.abs(c - mid);
+      if (d < bestDist) { bestDist = d; best = opt; }
+    });
+    opts.forEach(o => o.classList.toggle('is-active', o === best));
+    return best.getAttribute(attr);
+  }
+
+  function twScrollToValue(colEl, attr, value) {
+    if (!colEl) return;
+    const opt = colEl.querySelector(`.time-wheel-opt[${attr}="${CSS.escape(String(value))}"]`);
+    if (!opt) return;
+    const pad = colEl.querySelector('.time-wheel-col-pad');
+    const padH = pad ? pad.offsetHeight : 66;
+    const idx = Array.from(colEl.querySelectorAll('.time-wheel-opt')).indexOf(opt);
+    colEl.scrollTop = Math.max(0, padH + idx * 44 - (colEl.clientHeight / 2 - 22));
+    colEl.querySelectorAll('.time-wheel-opt').forEach(o => o.classList.toggle('is-active', o === opt));
+  }
+
+  function closeTimeWheelPopover() {
+    const el = document.getElementById('timeWheelPopover');
+    if (el) el.classList.remove('open');
+    _twState.open = false;
+    _twState.stopId = null;
+  }
+
+  function commitTimeWheelValue(raw) {
+    const id = _twState.stopId;
+    const src = _twState.timeSrc;
+    if (!id) return;
+    const s = findStop(id);
+    if (!s) { closeTimeWheelPopover(); return; }
+    const next = String(raw || '').trim();
+    if (!next) {
+      s.time = '';
+      s.timeApprox = false;
+      s.period = periodForTime(s.time);
+    } else {
+      s.time = normaliseStopTime(next, '');
+      s.timeApprox = false; // Keith chose explicitly
+      s.period = periodForTime(s.time);
+    }
+    // Keep hidden input in sync for any listeners / focus restore
+    document.querySelectorAll(`[data-stop-time="${CSS.escape(id)}"]`).forEach(inp => {
+      if (inp.tagName === 'INPUT') inp.value = s.time || '';
+    });
+    const day = state.plan.days.find(d => (d.blocks || []).some(b => b.id === s.id));
+    if (day) sortDayBlocks(day);
+    scheduleAutoSave();
+    closeTimeWheelPopover();
+    render();
+  }
+
+  function openTimeWheelPopover(stopId, timeSrc, anchorBtn) {
+    const s = findStop(stopId);
+    if (!s) return;
+    const pop = ensureTimeWheelPopover();
+    const cur = String(s.time || '').trim();
+    let mins = timeToMinutes(cur);
+    if (mins == null) mins = timeToMinutes('09:30') || (9 * 60 + 30);
+    // Snap minutes to 15-min steps
+    let m = mins % 60;
+    m = Math.round(m / 15) * 15;
+    let h = Math.floor(mins / 60);
+    if (m === 60) { m = 0; h += 1; }
+    h = ((h % 24) + 24) % 24;
+    _twState = {
+      stopId,
+      timeSrc: timeSrc || '',
+      hour: String(h).padStart(2, '0'),
+      min: String(m).padStart(2, '0'),
+      open: true,
+    };
+    pop.classList.add('open');
+    // Position near button
+    const r = anchorBtn.getBoundingClientRect();
+    const pw = pop.offsetWidth || 280;
+    const ph = pop.offsetHeight || 320;
+    let left = r.left;
+    let top = r.bottom + 6;
+    if (left + pw > window.innerWidth - 8) left = Math.max(8, window.innerWidth - pw - 8);
+    if (top + ph > window.innerHeight - 8) top = Math.max(8, r.top - ph - 6);
+    pop.style.left = left + 'px';
+    pop.style.top = top + 'px';
+    const hoursCol = document.getElementById('timeWheelHours');
+    const minsCol = document.getElementById('timeWheelMins');
+    requestAnimationFrame(() => {
+      twScrollToValue(hoursCol, 'data-tw-h', _twState.hour);
+      twScrollToValue(minsCol, 'data-tw-m', _twState.min);
+    });
+  }
+
+  function bindTimeWheelPopoverOnce() {
+    if (window.__twPopoverBound) return;
+    window.__twPopoverBound = true;
+    const onScrollSnap = (colEl, attr, key) => {
+      let t = null;
+      colEl.addEventListener('scroll', () => {
+        if (t) cancelAnimationFrame(t);
+        t = requestAnimationFrame(() => {
+          const v = twSnapCol(colEl, attr);
+          if (v != null) _twState[key] = v;
+        });
+      }, { passive: true });
+      // Mouse wheel: keep native scroll; also allow hover-wheel without needing focus
+      colEl.addEventListener('wheel', (e) => {
+        // Native overflow handles it; prevent page scroll when over the col
+        if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) e.stopPropagation();
+      }, { passive: true });
+    };
+    document.addEventListener('click', (e) => {
+      const openBtn = e.target.closest && e.target.closest('[data-open-time-wheel]');
+      if (openBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const id = openBtn.getAttribute('data-open-time-wheel');
+        const src = openBtn.getAttribute('data-time-src') || '';
+        if (_twState.open && _twState.stopId === id) {
+          closeTimeWheelPopover();
+        } else {
+          openTimeWheelPopover(id, src, openBtn);
+        }
+        return;
+      }
+      const pop = document.getElementById('timeWheelPopover');
+      if (pop && pop.classList.contains('open') && !pop.contains(e.target)) {
+        // Click outside → Done with current wheel values
+        commitTimeWheelValue(_twState.hour + ':' + _twState.min);
+      }
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && _twState.open) {
+        e.preventDefault();
+        closeTimeWheelPopover();
+      }
+    });
+    // Deferred bind of popover buttons after ensure
+    const bindPop = () => {
+      const pop = ensureTimeWheelPopover();
+      const hoursCol = document.getElementById('timeWheelHours');
+      const minsCol = document.getElementById('timeWheelMins');
+      onScrollSnap(hoursCol, 'data-tw-h', 'hour');
+      onScrollSnap(minsCol, 'data-tw-m', 'min');
+      hoursCol.querySelectorAll('.time-wheel-opt').forEach(opt => {
+        opt.addEventListener('click', () => {
+          _twState.hour = opt.getAttribute('data-tw-h');
+          twScrollToValue(hoursCol, 'data-tw-h', _twState.hour);
+        });
+      });
+      minsCol.querySelectorAll('.time-wheel-opt').forEach(opt => {
+        opt.addEventListener('click', () => {
+          _twState.min = opt.getAttribute('data-tw-m');
+          twScrollToValue(minsCol, 'data-tw-m', _twState.min);
+        });
+      });
+      document.getElementById('timeWheelDone')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        // Re-snap in case mid-scroll
+        const h = twSnapCol(hoursCol, 'data-tw-h') || _twState.hour;
+        const m = twSnapCol(minsCol, 'data-tw-m') || _twState.min;
+        commitTimeWheelValue(h + ':' + m);
+      });
+      document.getElementById('timeWheelClear')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        commitTimeWheelValue('');
+      });
+      document.getElementById('timeWheelClose')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        closeTimeWheelPopover();
+      });
+    };
+    // Bind on first interaction or immediately
+    bindPop();
+  }
+
   function filteredRoughTrayPlaces() {
     const used = usedPlaceIdsInWeek();
     const filter = state.roughTrayFilter || 'all';
@@ -3558,7 +3965,7 @@
     const day = state.plan && state.plan.days ? state.plan.days[dayIndex] : null;
     if (!day) { toast('Day not found'); return; }
     state.roughSelectedPlaceId = null;
-    // Blank time by default — editable inline on the stop chip
+    // Blank time → auto-schedule approximate spacing (editable on the stop chip)
     addPlaceToDay(place, dayIndex, '');
   }
 
@@ -3629,7 +4036,7 @@
         ? ''
         : `<button type="button" class="rough-remove" data-rough-remove="${escapeHtml(s.id)}" title="Remove — returns to tray" aria-label="Remove ${escapeHtml(label)}">×</button>`;
       return `<li class="rough-stop${system ? ' system' : ''}" data-rough-stop-id="${escapeHtml(s.id)}" title="${escapeHtml(String(s.title || label))}">
-        <input type="time" class="rough-stop-time-input" data-stop-time="${escapeHtml(s.id)}" data-time-src="rough" value="${escapeHtml(time)}" aria-label="Time for ${escapeHtml(label)}">
+        ${renderTimeWheelControl(s, 'rough', 'Time for ' + label)}
         <span class="rough-stop-icon" aria-hidden="true">${icon}</span>
         <span class="rough-stop-nick">${escapeHtml(label)}</span>
         <div class="rough-stop-actions">
@@ -3681,7 +4088,7 @@
         <div class="row-between" style="align-items:flex-start;gap:10px;flex-wrap:wrap;">
           <div>
             <h2 style="margin:0;">Rough plan</h2>
-            <p class="muted" style="margin:6px 0 0;max-width:42em;">Sketch the week with Simi — drag places onto days or tap-to-add. Same plan as Planner (shared cloud save). Tap a stop’s time to set it (blank is fine when adding).</p>
+            <p class="muted" style="margin:6px 0 0;max-width:42em;">Sketch the week with Simi — drag places onto days or tap-to-add. Same plan as Planner (shared cloud save). Leave time blank when adding and we’ll suggest an approximate slot (about 1 hour 30 minutes after the last timed stop, or about 30 minutes for lunch-like places). Tap the time to scroll-adjust or clear.</p>
           </div>
           <button type="button" class="btn btn-outline btn-sm" id="btnRoughGotoPlanner">Open Planner</button>
         </div>
@@ -3801,7 +4208,7 @@
       const downDis = idx === stops.length - 1 ? ' disabled' : '';
       return `<li class="day-glance-item" draggable="true" data-glance-index="${idx}" data-glance-stop-id="${escapeHtml(s.id)}">
         <span class="day-glance-handle" title="Drag to reorder on desktop" aria-hidden="true">⠿</span>
-        <input type="time" class="day-glance-time-input" data-stop-time="${escapeHtml(s.id)}" data-time-src="glance" value="${escapeHtml(time)}" aria-label="Time for ${escapeHtml(label)}">
+        ${renderTimeWheelControl(s, 'glance', 'Time for ' + label)}
         <span class="day-glance-icon" aria-hidden="true">${icon}</span>
         <button type="button" class="day-glance-row" data-glance-stop="${escapeHtml(s.id)}" title="${escapeHtml(tip)}">
           <span class="day-glance-title"><span class="glance-nick">${escapeHtml(label)}</span></span>
@@ -3814,7 +4221,7 @@
     }).join('');
     return `<div class="day-glance" aria-label="Day at a glance">
       <div class="day-glance-label">Day at a glance</div>
-      <p class="day-glance-hint">Edit time · tap name to jump · ↑ ↓ to reorder (drag ⠿ on desktop)</p>
+      <p class="day-glance-hint">Scroll time wheel · tap name to jump · ↑ ↓ to reorder (drag ⠿ on desktop) · ≈ means approximate</p>
       <ul class="day-glance-list" id="dayGlanceList">${rows}</ul>
     </div>`;
   }
@@ -4502,6 +4909,8 @@ function renderDayTabs() {
           render(); // captureUiState restores focus on data-stop-time
         });
       };
+      // Hidden wheel inputs skip native events; timeline still uses type=time
+      if (inp.type === 'hidden') return;
       const commit = (evt) => {
         if (!inp.isConnected) return; // ignore events from nodes already replaced by render()
         const id = inp.getAttribute('data-stop-time');
@@ -4518,12 +4927,14 @@ function renderDayTabs() {
           // Never let a synthetic empty commit overwrite a non-empty time
           // (change+empty while connected is an intentional clear).
           s.time = '';
+          s.timeApprox = false;
           s.period = periodForTime(s.time);
           finalize(s);
           return;
         }
 
         s.time = normaliseStopTime(inp.value, '');
+        s.timeApprox = false; // explicit edit
         s.period = periodForTime(s.time);
 
         // input: update in-memory only (no sort/save/render — avoids re-entrancy wipe)
@@ -4536,6 +4947,7 @@ function renderDayTabs() {
       inp.addEventListener('change', commit);
       inp.addEventListener('blur', commit);
     });
+    bindTimeWheelPopoverOnce();
     document.querySelectorAll('[data-stop-title]').forEach(inp => {
       inp.addEventListener('input', () => {
         const s = findStop(inp.getAttribute('data-stop-title'));
