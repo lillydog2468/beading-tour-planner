@@ -1297,69 +1297,75 @@
       border-color: rgba(244, 63, 94, .28);
       color: #fda4af;
     }
-    /* Day columns tint by how packed they are (quiet → busy) — strong, obvious scale */
+    /* Day columns tint by non-lunch place load (quiet → packed) — soft green/yellow start; orange/red only when truly full */
     .rough-day.load-calm {
-      background: linear-gradient(165deg, #bbf7d0 0%, #dcfce7 45%, #f0fdf4 100%);
-      border-color: #16a34a;
+      background: linear-gradient(165deg, #f0fdf4 0%, #ecfdf5 50%, #fafafa 100%);
+      border-color: #bbf7d0;
       border-style: solid;
-      border-width: 2px;
-      box-shadow: inset 6px 0 0 #15803d;
+      border-width: 1px;
+      box-shadow: inset 4px 0 0 #86efac;
+    }
+    .rough-day.load-light {
+      background: linear-gradient(165deg, #fefce8 0%, #fef9c3 42%, #fffbeb 100%);
+      border-color: #fde68a;
+      border-style: solid;
+      border-width: 1px;
+      box-shadow: inset 4px 0 0 #facc15;
     }
     .rough-day.load-easy {
-      background: linear-gradient(165deg, #fde047 0%, #fef08a 40%, #fefce8 100%);
-      border-color: #ca8a04;
+      background: linear-gradient(165deg, #fffbeb 0%, #fef3c7 40%, #fff7ed 100%);
+      border-color: #fcd34d;
       border-style: solid;
-      border-width: 2px;
-      box-shadow: inset 6px 0 0 #eab308;
+      border-width: 1px;
+      box-shadow: inset 4px 0 0 #f59e0b;
     }
-    .rough-day.load-steady {
-      background: linear-gradient(165deg, #fb923c 0%, #fdba74 35%, #ffedd5 100%);
-      border-color: #ea580c;
+    .rough-day.load-full {
+      background: linear-gradient(165deg, #ffedd5 0%, #fed7aa 38%, #fff7ed 100%);
+      border-color: #fb923c;
       border-style: solid;
-      border-width: 2px;
-      box-shadow: inset 6px 0 0 #c2410c;
+      border-width: 1px;
+      box-shadow: inset 4px 0 0 #ea580c;
     }
     .rough-day.load-busy {
-      background: linear-gradient(165deg, #450a0a 0%, #7f1d1d 35%, #9f1239 70%, #be123c 100%);
-      border-color: #450a0a;
+      background: linear-gradient(165deg, #fca5a5 0%, #ef4444 42%, #fecaca 100%);
+      border-color: #dc2626;
       border-style: solid;
-      border-width: 2px;
-      box-shadow: inset 6px 0 0 #1c1917, 0 0 0 1px rgba(127, 29, 29, .45);
-      color: #fff;
+      border-width: 1px;
+      box-shadow: inset 4px 0 0 #991b1b;
     }
-    .rough-day.load-calm .rough-day-load-hint { color: #14532d; font-weight: 800; }
-    .rough-day.load-easy .rough-day-load-hint { color: #713f12; font-weight: 800; }
-    .rough-day.load-steady .rough-day-load-hint { color: #7c2d12; font-weight: 800; }
-    .rough-day.load-busy .rough-day-title,
-    .rough-day.load-busy .rough-day-date,
-    .rough-day.load-busy .rough-day-load-hint,
-    .rough-day.load-busy .rough-empty-day { color: #fff; }
-    .rough-day.load-busy .rough-day-date { color: #fecdd3; }
-    .rough-day.load-busy .rough-day-load-hint { color: #ffe4e6; font-weight: 800; }
+    .rough-day.load-calm .rough-day-load-hint { color: #166534; font-weight: 700; }
+    .rough-day.load-light .rough-day-load-hint { color: #854d0e; font-weight: 700; }
+    .rough-day.load-easy .rough-day-load-hint { color: #92400e; font-weight: 700; }
+    .rough-day.load-full .rough-day-load-hint { color: #9a3412; font-weight: 800; }
+    .rough-day.load-busy .rough-day-load-hint { color: #7f1d1d; font-weight: 800; }
     .rough-day.load-busy.drag-over {
-      background: linear-gradient(165deg, #7f1d1d 0%, #be123c 55%, #e11d48 100%);
-      border-color: #fecdd3;
+      background: linear-gradient(165deg, #fca5a5 0%, #ef4444 55%, #fecaca 100%);
+      border-color: #b91c1c;
     }
     [data-theme="dark"] .rough-day.load-calm {
-      background: linear-gradient(165deg, rgba(22, 163, 74, .55) 0%, rgba(34, 197, 94, .22) 100%);
-      border-color: #4ade80;
-      box-shadow: inset 6px 0 0 #22c55e;
+      background: linear-gradient(165deg, rgba(22, 163, 74, .22) 0%, rgba(34, 197, 94, .08) 100%);
+      border-color: rgba(74, 222, 128, .45);
+      box-shadow: inset 4px 0 0 #22c55e;
+    }
+    [data-theme="dark"] .rough-day.load-light {
+      background: linear-gradient(165deg, rgba(234, 179, 8, .22) 0%, rgba(250, 204, 21, .08) 100%);
+      border-color: rgba(250, 204, 21, .4);
+      box-shadow: inset 4px 0 0 #eab308;
     }
     [data-theme="dark"] .rough-day.load-easy {
-      background: linear-gradient(165deg, rgba(202, 138, 4, .55) 0%, rgba(234, 179, 8, .22) 100%);
-      border-color: #facc15;
-      box-shadow: inset 6px 0 0 #eab308;
+      background: linear-gradient(165deg, rgba(245, 158, 11, .28) 0%, rgba(251, 191, 36, .1) 100%);
+      border-color: rgba(251, 191, 36, .45);
+      box-shadow: inset 4px 0 0 #f59e0b;
     }
-    [data-theme="dark"] .rough-day.load-steady {
-      background: linear-gradient(165deg, rgba(234, 88, 12, .6) 0%, rgba(249, 115, 22, .28) 100%);
-      border-color: #fb923c;
-      box-shadow: inset 6px 0 0 #f97316;
+    [data-theme="dark"] .rough-day.load-full {
+      background: linear-gradient(165deg, rgba(234, 88, 12, .38) 0%, rgba(249, 115, 22, .14) 100%);
+      border-color: rgba(251, 146, 60, .55);
+      box-shadow: inset 4px 0 0 #f97316;
     }
     [data-theme="dark"] .rough-day.load-busy {
-      background: linear-gradient(165deg, #1c1917 0%, #450a0a 40%, #7f1d1d 100%);
-      border-color: #fb7185;
-      box-shadow: inset 6px 0 0 #9f1239;
-      color: #fff;
+      background: linear-gradient(165deg, rgba(185, 28, 28, .55) 0%, rgba(239, 68, 68, .22) 100%);
+      border-color: rgba(248, 113, 113, .65);
+      box-shadow: inset 4px 0 0 #ef4444;
     }
     .rough-day-load-hint {
       margin-top: 2px;
@@ -4167,15 +4173,23 @@
     };
   }
 
-  /** How packed a Rough day column is (place stops, not hotel pickup / travel). */
+  /** How packed a Rough day column is (non-lunch place stops only — not hotel pickup / travel / lunch). */
   function roughDayLoadLevel(day) {
     const n = (day && Array.isArray(day.blocks) ? day.blocks : [])
-      .filter(s => s && !isRoughSystemStop(s) && String(s.title || '').trim()).length;
+      .filter(s => {
+        if (!s || isRoughSystemStop(s) || !String(s.title || '').trim()) return false;
+        // Lunch / restaurant / snack always happen — do not push the colour scale
+        if (isLunchLikePlace(s)) return false;
+        const place = placeById(s.placeId || s.place_id);
+        if (place && isLunchLikePlace(place)) return false;
+        return true;
+      }).length;
+    // Soft scale: ≤2 very light; 3–4 normal; 5–6 busy orange; 7+ packed red
     if (n <= 0) return { key: 'calm', label: 'Quiet day', count: n };
-    if (n === 1) return { key: 'easy', label: 'Light day', count: n };
-    if (n === 2) return { key: 'steady', label: 'Steady day', count: n };
-    if (n === 3) return { key: 'busy', label: 'Busy day', count: n };
-    return { key: 'busy', label: 'Very busy day', count: n };
+    if (n <= 2) return { key: 'light', label: 'Light day', count: n };
+    if (n <= 4) return { key: 'easy', label: 'Steady day', count: n };
+    if (n <= 6) return { key: 'full', label: 'Busy day', count: n };
+    return { key: 'busy', label: 'Packed day', count: n };
   }
 
   function isRoughSystemStop(stop) {
