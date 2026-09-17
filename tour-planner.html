@@ -275,7 +275,7 @@
       align-items: center;
     }
     .time-wheel-btn {
-      min-width: 5.6em;
+      min-width: 6.4em;
       min-height: 36px;
       padding: 6px 8px;
       font-variant-numeric: tabular-nums;
@@ -291,6 +291,21 @@
       text-align: center;
       line-height: 1.2;
       white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+    .time-wheel-btn .tw-clock {
+      font-size: 12px;
+      line-height: 1;
+      opacity: .85;
+      flex-shrink: 0;
+    }
+    .time-wheel-btn.is-blank .tw-val {
+      font-size: 11px;
+      letter-spacing: 0;
+      font-weight: 700;
     }
     .time-wheel-btn:hover, .time-wheel-btn:focus {
       border-color: var(--accent, #2563eb);
@@ -428,7 +443,9 @@
     .view-phone .day-glance { padding: 12px 14px; margin-bottom: 14px; }
     .view-phone .day-glance-label { font-size: 12px; margin-bottom: 8px; }
     .view-phone .day-glance-row { min-height: 44px; padding: 8px 6px; }
-    .view-phone .time-wheel-btn { font-size: 16px; min-height: 44px; min-width: 6.2em; padding: 8px 8px; }
+    .view-phone .time-wheel-btn { font-size: 16px; min-height: 44px; min-width: 7.2em; padding: 8px 8px; }
+    .view-phone .time-wheel-btn .tw-clock { font-size: 14px; }
+    .view-phone .time-wheel-btn.is-blank .tw-val { font-size: 13px; }
     .view-phone .time-wheel-opt { font-size: 22px; }
     .view-phone .time-wheel-opt.is-active { font-size: 24px; }
     .view-phone .day-glance-title { font-size: 16px; }
@@ -2902,8 +2919,10 @@
             const localBlocks = countPlanBlocks(state.plan);
             const cloudScore = planRichnessScore(existingCloud);
             const localScore = planRichnessScore(state.plan);
-            if (cloudBlocks > localBlocks || cloudScore > localScore) {
-              console.warn('Refusing cloud overwrite: cloud has more detail (blocks', cloudBlocks, 'vs', localBlocks, ', score', cloudScore, 'vs', localScore, '). Use Force save to cloud to override.');
+            // Only refuse when cloud has strictly more stops — time/title tweaks must
+            // still upload (score alone used to block Rough plan wheel edits).
+            if (cloudBlocks > localBlocks) {
+              console.warn('Refusing cloud overwrite: cloud has more stops (', cloudBlocks, 'vs', localBlocks, ', score', cloudScore, 'vs', localScore, '). Use Force save to cloud to override.');
               setCloudStatus(false, 'Kept richer cloud');
               state.cloudSaveOk = false;
               state._lastCloudRefuse = { cloudBlocks, localBlocks, cloudScore, localScore };
@@ -3763,7 +3782,7 @@
 
   function formatTimeWheelLabel(stop) {
     const time = String(stop && stop.time || '').trim();
-    if (!time) return { text: '—', blank: true, approx: false };
+    if (!time) return { text: 'Set time', blank: true, approx: false };
     const approx = !!(stop && stop.timeApprox);
     return { text: time, blank: false, approx };
   }
@@ -3776,15 +3795,15 @@
     const blankCls = meta.blank ? ' is-blank' : '';
     const approxMark = meta.approx ? '<span class="tw-approx" title="Approximate — tweak if you like">≈</span>' : '';
     const title = meta.approx
-      ? 'Approximate time — tap to adjust or clear'
-      : (meta.blank ? 'Tap to set time' : 'Tap to change time');
+      ? 'Approximate time — tap for scroll wheel to adjust or clear'
+      : (meta.blank ? 'Tap for scroll wheel to set time' : 'Tap for scroll wheel to change time');
     return `<div class="time-wheel-wrap">
       <button type="button" class="time-wheel-btn${approxCls}${blankCls}"
         data-open-time-wheel="${escapeHtml(stop.id)}"
         data-time-src="${escapeHtml(timeSrc)}"
         aria-label="${escapeHtml(ariaLabel || ('Time for ' + (stop.title || 'stop')))}"
         aria-haspopup="dialog"
-        title="${escapeHtml(title)}">${approxMark}<span class="tw-val">${escapeHtml(meta.text)}</span></button>
+        title="${escapeHtml(title)}"><span class="tw-clock" aria-hidden="true">🕐</span>${approxMark}<span class="tw-val">${escapeHtml(meta.text)}</span></button>
       <input type="hidden" data-stop-time="${escapeHtml(stop.id)}" data-time-src="${escapeHtml(timeSrc)}" value="${escapeHtml(time)}" aria-hidden="true">
     </div>`;
   }
@@ -3861,12 +3880,14 @@
     _twState.stopId = null;
   }
 
-  function commitTimeWheelValue(raw) {
-    const id = _twState.stopId;
-    const src = _twState.timeSrc;
-    if (!id) return;
-    const s = findStop(id);
-    if (!s) { closeTimeWheelPopover(); return; }
+  /** Shared time commit for Rough wheel, Day at a glance wheel, and Detailed timeline. */
+  function commitStopTime(stopId, raw, opts) {
+    const options = opts || {};
+    const doRender = options.render !== false;
+    const sid = stopId != null ? String(stopId) : '';
+    if (!sid) return null;
+    const s = findStop(sid);
+    if (!s) return null;
     const next = String(raw || '').trim();
     if (!next) {
       s.time = '';
@@ -3877,15 +3898,33 @@
       s.timeApprox = false; // Keith chose explicitly
       s.period = periodForTime(s.time);
     }
-    // Keep hidden input in sync for any listeners / focus restore
-    document.querySelectorAll(`[data-stop-time="${CSS.escape(id)}"]`).forEach(inp => {
+    // Keep any visible/hidden time inputs in sync before re-render
+    document.querySelectorAll(`[data-stop-time="${CSS.escape(sid)}"]`).forEach(inp => {
       if (inp.tagName === 'INPUT') inp.value = s.time || '';
     });
-    const day = state.plan.days.find(d => (d.blocks || []).some(b => b.id === s.id));
-    if (day) sortDayBlocks(day);
+    const dayIndex = (state.plan && state.plan.days || []).findIndex(
+      d => (d.blocks || []).some(b => b && String(b.id) === sid)
+    );
+    if (dayIndex >= 0) {
+      sortDayBlocks(state.plan.days[dayIndex]);
+      // Keep Planner day tab aligned with the stop just edited on Rough
+      state.selectedDay = dayIndex;
+    }
+    // Same object in state.plans so cloud/local persist cannot revive a stale clone
+    if (state.plan && state.plan.bookingKey != null) {
+      state.plans = state.plans || {};
+      state.plans[state.plan.bookingKey] = state.plan;
+    }
     scheduleAutoSave();
+    if (doRender) render();
+    return s;
+  }
+
+  function commitTimeWheelValue(raw) {
+    const id = _twState.stopId;
+    if (!id) return;
     closeTimeWheelPopover();
-    render();
+    commitStopTime(id, raw, { render: true });
   }
 
   function openTimeWheelPopover(stopId, timeSrc, anchorBtn) {
@@ -3992,6 +4031,7 @@
       });
       document.getElementById('timeWheelDone')?.addEventListener('click', (e) => {
         e.preventDefault();
+        e.stopPropagation();
         // Re-snap in case mid-scroll
         const h = twSnapCol(hoursCol, 'data-tw-h') || _twState.hour;
         const m = twSnapCol(minsCol, 'data-tw-m') || _twState.min;
@@ -3999,11 +4039,16 @@
       });
       document.getElementById('timeWheelClear')?.addEventListener('click', (e) => {
         e.preventDefault();
+        e.stopPropagation();
         commitTimeWheelValue('');
       });
       document.getElementById('timeWheelClose')?.addEventListener('click', (e) => {
         e.preventDefault();
-        closeTimeWheelPopover();
+        e.stopPropagation();
+        // Treat × like Done so a scrolled time is not thrown away
+        const h = twSnapCol(hoursCol, 'data-tw-h') || _twState.hour;
+        const m = twSnapCol(minsCol, 'data-tw-m') || _twState.min;
+        commitTimeWheelValue(h + ':' + m);
       });
     };
     // Bind on first interaction or immediately
@@ -4161,7 +4206,7 @@
         <div class="row-between" style="align-items:flex-start;gap:10px;flex-wrap:wrap;">
           <div>
             <h2 style="margin:0;">Rough plan</h2>
-            <p class="muted" style="margin:6px 0 0;max-width:42em;">Sketch the week with Simi — drag places onto days or tap-to-add. Same plan as Planner (shared cloud save). Leave time blank when adding and we’ll suggest an approximate slot (about 1 hour 30 minutes after the last timed stop, or about 30 minutes for lunch-like places). Tap the time to scroll-adjust or clear.</p>
+            <p class="muted" style="margin:6px 0 0;max-width:42em;">Sketch the week with Simi — drag places onto days or tap-to-add. Same plan as Planner (shared cloud save). Leave time blank when adding and we’ll suggest an approximate slot (about 1 hour 30 minutes after the last timed stop, or about 30 minutes for lunch-like places). Tap the <strong>🕐 time chip</strong> on each stop to open the scroll wheel (hour + minute), then Done.</p>
           </div>
           <button type="button" class="btn btn-outline btn-sm" id="btnRoughGotoPlanner">Open Planner</button>
         </div>
@@ -4975,15 +5020,13 @@ function renderDayTabs() {
       // Safari / mobile: bind input+change+blur, but NEVER commit from a detached node
       // (render() destroys the input; its empty blur/input was wiping real times to cloud).
       let renderQueued = false;
-      const finalize = (s) => {
-        const day = state.plan.days.find(d => (d.blocks || []).some(b => b.id === s.id));
-        if (day) sortDayBlocks(day);
-        scheduleAutoSave();
+      const finalize = (id, raw) => {
         if (renderQueued) return;
         renderQueued = true;
         queueMicrotask(() => {
           renderQueued = false;
-          render(); // captureUiState restores focus on data-stop-time
+          // Shared path with Rough / glance time wheel
+          commitStopTime(id, raw, { render: true });
         });
       };
       // Hidden wheel inputs skip native events; timeline still uses type=time
@@ -5001,24 +5044,20 @@ function renderDayTabs() {
           // Do not clear on intermediate empty `input` (iOS picker) or on blur.
           // Only clear when change fires with empty while still connected.
           if (type !== 'change') return;
-          // Never let a synthetic empty commit overwrite a non-empty time
-          // (change+empty while connected is an intentional clear).
-          s.time = '';
-          s.timeApprox = false;
-          s.period = periodForTime(s.time);
-          finalize(s);
+          finalize(id, '');
           return;
         }
 
-        s.time = normaliseStopTime(inp.value, '');
-        s.timeApprox = false; // explicit edit
-        s.period = periodForTime(s.time);
-
         // input: update in-memory only (no sort/save/render — avoids re-entrancy wipe)
-        if (type === 'input') return;
+        if (type === 'input') {
+          s.time = normaliseStopTime(inp.value, '');
+          s.timeApprox = false;
+          s.period = periodForTime(s.time);
+          return;
+        }
 
         // change, or connected blur with non-empty: sort, save, render once
-        finalize(s);
+        finalize(id, inp.value);
       };
       inp.addEventListener('input', commit);
       inp.addEventListener('change', commit);
