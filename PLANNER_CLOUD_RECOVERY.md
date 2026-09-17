@@ -24,3 +24,9 @@ After the harden-save deploy:
 
 ## Netlify
 Do **not** use `keith-booking-form.netlify.app` for Angela week 2 until/unless it is rebuilt with the same harden-save. GitHub Pages is the source of truth going forward for this tour.
+
+## Blank times
+Stops may be added **without a time**. Untimed stops sort last and still save to cloud. Fill times later.
+
+## Do not clobber a richer cloud plan
+If Supabase already has a richer Angela plan (more stops), normal autosave will **refuse** to overwrite it with a thinner local skeleton (status **Kept richer cloud**). Use **Force save to cloud** only when the plan on screen is intentionally the one to keep.

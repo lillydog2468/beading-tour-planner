@@ -702,7 +702,8 @@
     return out;
   }
   function periodForTime(hhmm) {
-    const h = Number(String(hhmm || '09:00').split(':')[0]);
+    if (timeToMinutes(hhmm) == null) return 'Untimed';
+    const h = Number(String(hhmm).split(':')[0]);
     if (h < 12) return 'Morning';
     if (h < 17) return 'Afternoon';
     return 'Evening';
@@ -739,8 +740,28 @@
     return addMinutes(last.time, 60);
   }
   function normaliseStopTime(value, fallback) {
-    const mins = timeToMinutes(value);
-    if (mins == null) return fallback || '10:00';
+    // Keith often plans the week without times and fills them in later.
+    // Blank is a valid time: do not coerce to 10:00.
+    const raw = String(value == null ? '' : value).trim();
+    if (!raw) {
+      if (fallback === '') return '';
+      if (fallback == null || fallback === undefined) return '';
+      const fbMins = timeToMinutes(fallback);
+      if (fbMins == null) return '';
+      const fh = Math.floor(fbMins / 60);
+      const fm = fbMins % 60;
+      return String(fh).padStart(2, '0') + ':' + String(fm).padStart(2, '0');
+    }
+    const mins = timeToMinutes(raw);
+    if (mins == null) {
+      if (fallback === '') return '';
+      if (fallback == null || fallback === undefined) return '';
+      const fbMins = timeToMinutes(fallback);
+      if (fbMins == null) return '';
+      const fh = Math.floor(fbMins / 60);
+      const fm = fbMins % 60;
+      return String(fh).padStart(2, '0') + ':' + String(fm).padStart(2, '0');
+    }
     const h = Math.floor(mins / 60);
     const m = mins % 60;
     return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
@@ -1057,7 +1078,6 @@
       opts.push('</optgroup>');
     });
     if (!groups.length) opts.push('<option value="" disabled>No places in the list yet</option>');
-    const suggested = suggestNextStopTime(currentDay && currentDay());
     return `
       <div class="place-picker">
         <label class="field-label" for="${selectId}">Add from Places list</label>
@@ -1066,13 +1086,13 @@
         </select>
         <div class="picker-actions">
           <div class="time-field">
-            <label class="field-label" for="${selectId}_time">Time</label>
-            <input type="time" id="${selectId}_time" value="${escapeHtml(suggested)}" aria-label="Time for this stop">
+            <label class="field-label" for="${selectId}_time">Time (optional)</label>
+            <input type="time" id="${selectId}_time" value="" aria-label="Time for this stop (optional)">
           </div>
           <button type="button" class="btn btn-primary" data-place-picker-add="${selectId}">Add selected place</button>
           <button type="button" class="btn btn-outline" id="${blankId}">Add blank stop</button>
         </div>
-        <p class="muted" style="margin-top:6px;">Choose a time, then add. Grouped from your Places list (edit contacts and addresses on the Places tab).</p>
+        <p class="muted" style="margin-top:6px;">Time is optional — leave blank and add times later. Untimed stops sort last. Grouped from your Places list.</p>
       </div>
     `;
   }
@@ -2125,7 +2145,8 @@
   function addPlaceToDay(place, dayIndex, chosenTime) {
     const day = state.plan.days[dayIndex];
     if (!day) return;
-    const time = normaliseStopTime(chosenTime, suggestNextStopTime(day));
+    // Empty/blank time is allowed — untimed stops sort last and still cloud-save
+    const time = normaliseStopTime(chosenTime, '');
     day.blocks.push({
       id: uid('s'),
       time,
@@ -2143,7 +2164,7 @@
     const idx = day.blocks.findIndex(b => b.title === place.name && b.time === time);
     seedTravelMinutes(day, idx >= 0 ? idx : day.blocks.length - 1);
     scheduleAutoSave();
-    toast('Added ' + place.name + ' at ' + time);
+    toast(time ? ('Added ' + place.name + ' at ' + time) : ('Added ' + place.name + ' (time later)'));
     closeSheet();
     render();
   }
@@ -2151,7 +2172,7 @@
   function addBlankStop() {
     const day = currentDay();
     if (!day) return;
-    const time = suggestNextStopTime(day);
+    const time = '';
     day.blocks.push({
       id: uid('s'), time, type: 'other', title: 'New stop', notes: '', address: '', period: periodForTime(time),
       messageSent: false, booked: false, travelMinutes: null,
@@ -2322,9 +2343,9 @@
     const place = state.catalogue.find(p => p.id === sel.value);
     if (!place) { toast('That place was not found'); return; }
     const timeEl = document.getElementById(selectId + '_time');
-    const chosen = timeEl && timeEl.value ? timeEl.value : suggestNextStopTime(currentDay());
+    const chosen = timeEl ? timeEl.value : '';
     addPlaceToDay(place, state.selectedDay, chosen);
-    if (timeEl) timeEl.value = suggestNextStopTime(currentDay());
+    // Keep time field as Keith left it (often blank while planning the week)
     sel.value = '';
   }
   function removePlace(id) {
@@ -2439,7 +2460,7 @@
         ${showAddToDay ? `<div class="add-to-day-row">
           <div class="time-field">
             <label class="field-label" for="add_time_${p.id}">Time</label>
-            <input type="time" id="add_time_${p.id}" data-add-place-time="${p.id}" value="${escapeHtml(suggestedTime)}" aria-label="Time">
+            <input type="time" id="add_time_${p.id}" data-add-place-time="${p.id}" value="" aria-label="Time (optional)">
           </div>
           <button type="button" class="btn btn-primary btn-sm" data-add-place="${p.id}">Add to this day</button>
         </div>` : ''}
@@ -3090,7 +3111,8 @@ function renderDayTabs() {
       inp.addEventListener('change', () => {
         const s = findStop(inp.getAttribute('data-stop-time'));
         if (!s) return;
-        s.time = normaliseStopTime(inp.value, s.time || '10:00');
+        // Blank clears the time — valid for week planning before times are set
+        s.time = String(inp.value || '').trim() === '' ? '' : normaliseStopTime(inp.value, '');
         s.period = periodForTime(s.time);
         const day = state.plan.days.find(d => (d.blocks || []).some(b => b.id === s.id));
         if (day) sortDayBlocks(day);
@@ -3130,7 +3152,7 @@ function renderDayTabs() {
         const place = state.catalogue.find(p => p.id === id);
         if (!place) return;
         const timeEl = root.querySelector(`[data-add-place-time="${id}"]`);
-        const chosen = timeEl && timeEl.value ? timeEl.value : suggestNextStopTime(currentDay());
+        const chosen = timeEl ? timeEl.value : '';
         addPlaceToDay(place, state.selectedDay, chosen);
       });
     });
