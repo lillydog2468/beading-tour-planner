@@ -751,6 +751,190 @@
     }
     .main-tab.active .tab-sub { color: inherit; opacity: .85; }
 
+    /* Rough plan — Places tray + week day lanes */
+    .rough-layout {
+      display: grid;
+      grid-template-columns: minmax(200px, 260px) 1fr;
+      gap: 14px;
+      align-items: start;
+    }
+    @media (max-width: 820px) {
+      .rough-layout { grid-template-columns: 1fr; }
+    }
+    .rough-tray {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: 14px;
+      padding: 12px;
+      position: sticky;
+      top: 8px;
+      max-height: calc(100vh - 100px);
+      overflow: auto;
+    }
+    @media (max-width: 820px) {
+      .rough-tray { position: static; max-height: none; }
+    }
+    .rough-tray h3 {
+      margin: 0 0 6px; font-size: 15px; font-weight: 800;
+    }
+    .rough-tray-hint {
+      margin: 0 0 10px; font-size: 12px; color: var(--text-secondary); line-height: 1.35;
+    }
+    .rough-tray-search {
+      width: 100%; margin-bottom: 8px;
+    }
+    .rough-tray-chips {
+      display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px;
+    }
+    .rough-tray-list {
+      display: flex; flex-wrap: wrap; gap: 8px;
+    }
+    .rough-place-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 10px; min-height: 40px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--surface-alt);
+      color: var(--text);
+      font: inherit; font-weight: 700; font-size: 13px;
+      cursor: grab;
+      user-select: none;
+      max-width: 100%;
+    }
+    .rough-place-chip:active { cursor: grabbing; }
+    .rough-place-chip.selected {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+    .rough-place-chip.used {
+      opacity: .45;
+      cursor: not-allowed;
+      text-decoration: line-through;
+    }
+    .rough-place-chip .rp-icon { font-size: 15px; line-height: 1; }
+    .rough-place-chip .rp-nick {
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 9em;
+    }
+    .rough-week {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+    }
+    @media (max-width: 820px) {
+      .rough-week { grid-template-columns: 1fr; }
+    }
+    .rough-day {
+      border: 1px dashed var(--border);
+      background: var(--surface);
+      border-radius: 14px;
+      padding: 10px;
+      min-height: 140px;
+      transition: border-color .15s, background .15s, box-shadow .15s;
+    }
+    .rough-day.drag-over {
+      border-color: var(--accent);
+      border-style: solid;
+      background: var(--accent-soft);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+    .rough-day-head {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      gap: 8px; margin-bottom: 8px;
+    }
+    .rough-day-title { font-weight: 800; font-size: 14px; }
+    .rough-day-date { font-size: 12px; color: var(--text-secondary); font-weight: 600; }
+    .rough-day-add {
+      flex-shrink: 0;
+      font-size: 12px; font-weight: 700;
+      padding: 6px 8px; min-height: 36px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface-alt);
+      color: var(--text);
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .rough-day-add:disabled {
+      opacity: .4; cursor: not-allowed;
+    }
+    .rough-day-add.ready {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+    .rough-day-list {
+      list-style: none; margin: 0; padding: 0;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .rough-stop {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 6px;
+      align-items: center;
+      padding: 6px 8px;
+      border-radius: 10px;
+      background: var(--surface-alt);
+      border: 1px solid transparent;
+    }
+    .rough-stop.system {
+      opacity: .7;
+      background: transparent;
+      border-style: dashed;
+      border-color: var(--border);
+    }
+    .rough-stop-main {
+      display: grid;
+      grid-template-columns: 3.2em 1.4em 1fr;
+      gap: 6px;
+      align-items: baseline;
+      min-width: 0;
+    }
+    .rough-stop-time {
+      font-variant-numeric: tabular-nums;
+      font-weight: 800; font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .rough-stop-icon { font-size: 14px; text-align: center; }
+    .rough-stop-nick {
+      font-weight: 800; font-size: 13px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .rough-stop-actions {
+      display: flex; gap: 2px; align-items: center;
+    }
+    .rough-stop-actions button {
+      min-width: 32px; min-height: 32px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--text);
+      font-weight: 800;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .rough-stop-actions button:disabled { opacity: .35; cursor: not-allowed; }
+    .rough-stop-actions .rough-remove { color: #b42318; }
+    .rough-empty-day {
+      margin: 4px 0 0; font-size: 12px; color: var(--text-secondary);
+    }
+    .rough-selected-banner {
+      margin: 0 0 12px; padding: 10px 12px;
+      border-radius: 10px;
+      background: var(--accent-soft);
+      border: 1px solid var(--accent);
+      font-size: 13px; font-weight: 700;
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+      justify-content: space-between;
+    }
+    .rough-selected-banner .btn-clear-sel {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font: inherit; font-weight: 700; cursor: pointer;
+    }
+
   </style>
 </head>
 <body>
@@ -840,7 +1024,13 @@
     placeFilter: 'all',
     placeSearch: '',
     selectedPlaceId: null,
-    mainTab: localStorage.getItem('planner_main_tab') === 'places' ? 'places' : 'planner',
+    mainTab: (function () {
+      const t = localStorage.getItem('planner_main_tab');
+      return (t === 'places' || t === 'rough') ? t : 'planner';
+    })(),
+    roughTrayFilter: 'all',
+    roughTraySearch: '',
+    roughSelectedPlaceId: null,
     liveBookings: false,
     supabasePlanTable: false,
     supabasePlacesTable: false,
@@ -2709,7 +2899,11 @@
   }
   function addPlaceToDay(place, dayIndex, chosenTime) {
     const day = state.plan.days[dayIndex];
-    if (!day) return;
+    if (!day || !place) return;
+    if (place.id && placeUsedInWeek(place.id)) {
+      toast('That place is already on the week — remove it first to re-add');
+      return;
+    }
     // Empty/blank time is allowed — untimed stops sort last and still cloud-save
     const time = normaliseStopTime(chosenTime, '');
     day.blocks.push({
@@ -2749,9 +2943,15 @@
     render();
   }
   function removeStop(id) {
-    const day = currentDay();
-    if (!day) return;
-    day.blocks = day.blocks.filter(s => s.id !== id);
+    if (!state.plan || !id) return;
+    let found = false;
+    (state.plan.days || []).forEach(day => {
+      if (!day || !Array.isArray(day.blocks)) return;
+      const before = day.blocks.length;
+      day.blocks = day.blocks.filter(s => s.id !== id);
+      if (day.blocks.length !== before) found = true;
+    });
+    if (!found) return;
     scheduleAutoSave();
     render();
   }
@@ -3250,6 +3450,304 @@
     return abbreviateTitle(stop.title || '');
   }
 
+
+  /** Place ids already used as stops somewhere in the current week plan. */
+  function usedPlaceIdsInWeek() {
+    const ids = new Set();
+    if (!state.plan) return ids;
+    (state.plan.days || []).forEach(day => {
+      (day.blocks || []).forEach(s => {
+        const pid = s && (s.placeId || s.place_id);
+        if (pid) ids.add(pid);
+      });
+    });
+    return ids;
+  }
+
+  function placeUsedInWeek(placeId) {
+    if (!placeId) return false;
+    return usedPlaceIdsInWeek().has(placeId);
+  }
+
+  function isRoughSystemStop(stop) {
+    if (!stop) return true;
+    const t = String(stop.type || '');
+    if (t === 'pickup' || t === 'travel') return true;
+    // Hotel-leave / breakfast skeleton titles without a Places link
+    if (!(stop.placeId || stop.place_id) && isSkeletonStop(stop)) return true;
+    return false;
+  }
+
+  function placeChipLabel(place) {
+    if (!place) return '';
+    ensurePlace(place);
+    const nick = String(place.nickname || '').trim();
+    if (nick) return nick;
+    return abbreviateTitle(place.name || '') || 'Place';
+  }
+
+  function placeChipIcon(place) {
+    if (!place) return placeTypeIcon('other');
+    ensurePlace(place);
+    const custom = String(place.icon || '').trim();
+    if (custom) return custom;
+    return placeTypeIcon(place.type);
+  }
+
+  function filteredRoughTrayPlaces() {
+    const used = usedPlaceIdsInWeek();
+    const filter = state.roughTrayFilter || 'all';
+    const q = String(state.roughTraySearch || '').trim().toLowerCase();
+    const list = (state.catalogue || []).filter(p => {
+      if (!p || !p.id) return false;
+      // Once used anywhere this week, leave the tray (returns when removed from a day)
+      if (used.has(p.id)) return false;
+      if (filter !== 'all' && (p.type || 'other') !== filter) return false;
+      if (!q) return true;
+      const hay = [p.name, p.nickname, p.icon, typeLabel(p.type)]
+        .map(x => String(x || '').toLowerCase()).join(' ');
+      return hay.includes(q);
+    });
+    list.sort((a, b) => placeChipLabel(a).localeCompare(placeChipLabel(b), 'en', { sensitivity: 'base' }));
+    return { list, used };
+  }
+
+  function addPlaceToRoughDay(placeId, dayIndex) {
+    const place = placeById(placeId);
+    if (!place) { toast('Place not found'); return; }
+    if (placeUsedInWeek(place.id)) {
+      toast('Already used this week — remove it from a day to free it');
+      return;
+    }
+    const day = state.plan && state.plan.days ? state.plan.days[dayIndex] : null;
+    if (!day) { toast('Day not found'); return; }
+    state.roughSelectedPlaceId = null;
+    // Blank time — Keith / Simi add times later in Planner
+    addPlaceToDay(place, dayIndex, '');
+  }
+
+  function removeRoughStop(stopId) {
+    removeStop(stopId);
+  }
+
+  function moveRoughStop(dayIndex, stopId, dir) {
+    const day = state.plan && state.plan.days ? state.plan.days[dayIndex] : null;
+    if (!day) return;
+    const i = day.blocks.findIndex(s => s.id === stopId);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= day.blocks.length) return;
+    if (!reorderDayBlocks(day, i, j)) return;
+    scheduleAutoSave();
+    render();
+  }
+
+  function renderRoughTray() {
+    const { list, used } = filteredRoughTrayPlaces();
+    const chips = PLACE_TYPES.map(t => `
+      <button type="button" class="chip ${state.roughTrayFilter === t.id ? 'on' : ''}" data-rough-filter="${t.id}">${t.label}</button>
+    `).join('');
+    const placeChips = list.length
+      ? list.map(p => {
+          const sel = state.roughSelectedPlaceId === p.id ? ' selected' : '';
+          const icon = placeChipIcon(p);
+          const nick = placeChipLabel(p);
+          const tip = escapeHtml(p.name || nick) + ' — drag to a day, or tap then tap a day';
+          return `<button type="button" class="rough-place-chip${sel}"
+            draggable="true"
+            data-rough-place="${escapeHtml(p.id)}"
+            title="${tip}">
+            <span class="rp-icon" aria-hidden="true">${icon}</span>
+            <span class="rp-nick">${escapeHtml(nick)}</span>
+          </button>`;
+        }).join('')
+      : '<p class="muted" style="margin:0;font-size:13px;">No places left in the tray for this filter — remove a stop from a day to free it, or clear the search.</p>';
+    const totalCatalogue = (state.catalogue || []).length;
+    const usedCount = used.size;
+    return `
+      <aside class="rough-tray" aria-label="Places tray">
+        <h3>Places tray</h3>
+        <p class="rough-tray-hint">Drag a chip onto a day, or tap a place then tap <strong>Add to Day</strong>. Once used, it leaves the tray until you remove it from the week. ${list.length} available · ${usedCount} used of ${totalCatalogue}.</p>
+        <label class="field-label" for="roughTraySearch">Search</label>
+        <input type="search" id="roughTraySearch" class="rough-tray-search" value="${escapeHtml(state.roughTraySearch || '')}" placeholder="Filter by nickname or name…" autocomplete="off">
+        <div class="rough-tray-chips" role="group" aria-label="Filter by type">${chips}</div>
+        <div class="rough-tray-list" id="roughTrayList">${placeChips}</div>
+      </aside>
+    `;
+  }
+
+  function renderRoughDayLane(day, dayIndex) {
+    if (!day) return '';
+    sortDayBlocks(day);
+    const today = todayISO();
+    const isToday = day.date && day.date === today;
+    const stops = (day.blocks || []).filter(s => s && String(s.title || '').trim());
+    const placeStops = stops.filter(s => !isRoughSystemStop(s));
+    const rows = stops.map((s, idx) => {
+      const system = isRoughSystemStop(s);
+      const time = String(s.time || '').trim();
+      const timeLabel = time || '—';
+      const label = glanceLabelForStop(s);
+      const icon = placeIconForStop(s);
+      const upDis = idx === 0 ? ' disabled' : '';
+      const downDis = idx === stops.length - 1 ? ' disabled' : '';
+      const removeBtn = system
+        ? ''
+        : `<button type="button" class="rough-remove" data-rough-remove="${escapeHtml(s.id)}" title="Remove — returns to tray" aria-label="Remove ${escapeHtml(label)}">×</button>`;
+      return `<li class="rough-stop${system ? ' system' : ''}" data-rough-stop-id="${escapeHtml(s.id)}">
+        <div class="rough-stop-main" title="${escapeHtml(String(s.title || label))}">
+          <span class="rough-stop-time">${escapeHtml(timeLabel)}</span>
+          <span class="rough-stop-icon" aria-hidden="true">${icon}</span>
+          <span class="rough-stop-nick">${escapeHtml(label)}</span>
+        </div>
+        <div class="rough-stop-actions">
+          <button type="button" data-rough-move="${escapeHtml(s.id)}" data-rough-day="${dayIndex}" data-dir="-1" aria-label="Move up"${upDis}>↑</button>
+          <button type="button" data-rough-move="${escapeHtml(s.id)}" data-rough-day="${dayIndex}" data-dir="1" aria-label="Move down"${downDis}>↓</button>
+          ${removeBtn}
+        </div>
+      </li>`;
+    }).join('');
+    const empty = placeStops.length
+      ? ''
+      : '<p class="rough-empty-day">Drop a place here (or tap Add to Day).</p>';
+    const selReady = !!state.roughSelectedPlaceId && !placeUsedInWeek(state.roughSelectedPlaceId);
+    return `
+      <section class="rough-day" data-rough-day-drop="${dayIndex}" aria-label="Day ${dayIndex + 1}">
+        <div class="rough-day-head">
+          <div>
+            <div class="rough-day-title">${isToday ? 'Today · ' : ''}Day ${dayIndex + 1}</div>
+            <div class="rough-day-date">${day.date ? `${weekdayName(day.date)} ${formatDateDMY(day.date)}` : 'Date not set'}</div>
+          </div>
+          <button type="button" class="rough-day-add${selReady ? ' ready' : ''}" data-rough-add-day="${dayIndex}" ${selReady ? '' : 'disabled'} title="Tap a place in the tray first, then tap here">
+            Add to Day ${dayIndex + 1}
+          </button>
+        </div>
+        <ul class="rough-day-list">${rows}</ul>
+        ${empty}
+      </section>
+    `;
+  }
+
+  function renderRoughPlanPanel() {
+    const days = (state.plan && state.plan.days) || [];
+    let selectedBanner = '';
+    if (state.roughSelectedPlaceId) {
+      const p = placeById(state.roughSelectedPlaceId);
+      if (p && !placeUsedInWeek(p.id)) {
+        selectedBanner = `
+          <div class="rough-selected-banner" role="status">
+            <span>Selected: ${placeChipIcon(p)} <strong>${escapeHtml(placeChipLabel(p))}</strong> — tap <em>Add to Day N</em> on a day column</span>
+            <button type="button" class="btn-clear-sel" id="btnRoughClearSel">Clear</button>
+          </div>`;
+      }
+    }
+    const lanes = days.length
+      ? days.map((d, i) => renderRoughDayLane(d, i)).join('')
+      : '<p class="muted">No days yet — set tour dates on the Planner tab (or Add day).</p>';
+    return `
+      <div class="card">
+        <div class="row-between" style="align-items:flex-start;gap:10px;flex-wrap:wrap;">
+          <div>
+            <h2 style="margin:0;">Rough plan</h2>
+            <p class="muted" style="margin:6px 0 0;max-width:42em;">Sketch the week with Simi — drag places onto days or tap-to-add. Same plan as Planner (shared cloud save). Times stay blank until you fill them in Planner.</p>
+          </div>
+          <button type="button" class="btn btn-outline btn-sm" id="btnRoughGotoPlanner">Open Planner</button>
+        </div>
+        ${selectedBanner}
+        <div class="rough-layout" style="margin-top:12px;">
+          ${renderRoughTray()}
+          <div class="rough-week" id="roughWeek">${lanes}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  function bindRoughPlan() {
+    const searchEl = document.getElementById('roughTraySearch');
+    if (searchEl) {
+      searchEl.addEventListener('input', () => {
+        state.roughTraySearch = searchEl.value;
+        render();
+      });
+    }
+    document.querySelectorAll('[data-rough-filter]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.roughTrayFilter = btn.getAttribute('data-rough-filter');
+        render();
+      });
+    });
+    document.getElementById('btnRoughClearSel')?.addEventListener('click', () => {
+      state.roughSelectedPlaceId = null;
+      render();
+    });
+    document.getElementById('btnRoughGotoPlanner')?.addEventListener('click', () => setMainTab('planner'));
+
+    document.querySelectorAll('[data-rough-place]').forEach(chip => {
+      const placeId = chip.getAttribute('data-rough-place');
+      chip.addEventListener('click', () => {
+        if (placeUsedInWeek(placeId)) return;
+        state.roughSelectedPlaceId = state.roughSelectedPlaceId === placeId ? null : placeId;
+        render();
+      });
+      chip.addEventListener('dragstart', e => {
+        if (placeUsedInWeek(placeId)) {
+          e.preventDefault();
+          return;
+        }
+        e.dataTransfer.setData('text/plain', placeId);
+        e.dataTransfer.setData('application/x-rough-place', placeId);
+        e.dataTransfer.effectAllowed = 'copy';
+        chip.classList.add('dragging');
+      });
+      chip.addEventListener('dragend', () => chip.classList.remove('dragging'));
+    });
+
+    document.querySelectorAll('[data-rough-day-drop]').forEach(lane => {
+      const dayIndex = Number(lane.getAttribute('data-rough-day-drop'));
+      lane.addEventListener('dragover', e => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        lane.classList.add('drag-over');
+      });
+      lane.addEventListener('dragleave', e => {
+        if (!lane.contains(e.relatedTarget)) lane.classList.remove('drag-over');
+      });
+      lane.addEventListener('drop', e => {
+        e.preventDefault();
+        lane.classList.remove('drag-over');
+        const placeId = e.dataTransfer.getData('application/x-rough-place') || e.dataTransfer.getData('text/plain');
+        if (placeId) addPlaceToRoughDay(placeId, dayIndex);
+      });
+      // Tap day body (not buttons) when a place is selected → add
+      lane.addEventListener('click', e => {
+        if (e.target.closest('button')) return;
+        if (!state.roughSelectedPlaceId) return;
+        addPlaceToRoughDay(state.roughSelectedPlaceId, dayIndex);
+      });
+    });
+
+    document.querySelectorAll('[data-rough-add-day]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const dayIndex = Number(btn.getAttribute('data-rough-add-day'));
+        if (!state.roughSelectedPlaceId) {
+          toast('Tap a place in the tray first');
+          return;
+        }
+        addPlaceToRoughDay(state.roughSelectedPlaceId, dayIndex);
+      });
+    });
+
+    document.querySelectorAll('[data-rough-remove]').forEach(btn => {
+      btn.addEventListener('click', () => removeRoughStop(btn.getAttribute('data-rough-remove')));
+    });
+    document.querySelectorAll('[data-rough-move]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const dayIndex = Number(btn.getAttribute('data-rough-day'));
+        moveRoughStop(dayIndex, btn.getAttribute('data-rough-move'), Number(btn.getAttribute('data-dir')));
+      });
+    });
+  }
+
+
   function renderDayGlance(day) {
     if (!day) return '';
     sortDayBlocks(day);
@@ -3719,6 +4217,10 @@ function renderDayTabs() {
           Planner
           <span class="tab-sub">Day plan, times, stops</span>
         </button>
+        <button type="button" class="main-tab ${state.mainTab === 'rough' ? 'active' : ''}" data-main-tab="rough" role="tab" aria-selected="${state.mainTab === 'rough'}">
+          Rough plan
+          <span class="tab-sub">Sketch the week with places</span>
+        </button>
         <button type="button" class="main-tab ${state.mainTab === 'places' ? 'active' : ''}" data-main-tab="places" role="tab" aria-selected="${state.mainTab === 'places'}">
           Places
           <span class="tab-sub">Hotels, factories, shops, contacts</span>
@@ -3779,15 +4281,24 @@ function renderDayTabs() {
       ${placesPanel}
     `;
 
+    const roughView = `
+      <div class="status-row">${live}${auth}${resetDemo}</div>
+      ${mainTabs}
+      ${renderRoughPlanPanel()}
+    `;
+
     const app = document.getElementById('app');
     if (state.mainTab === 'places') {
       app.innerHTML = placesView;
+    } else if (state.mainTab === 'rough') {
+      app.innerHTML = roughView;
     } else if (view === 'phone') {
       app.innerHTML = plannerPhone;
     } else {
       app.innerHTML = plannerDesktop;
     }
     bindDynamic();
+    if (state.mainTab === 'rough') bindRoughPlan();
     if (resetScroll) {
       try { window.scrollTo({ top: 0, behavior: 'smooth' }); }
       catch { window.scrollTo(0, 0); }
@@ -3797,7 +4308,9 @@ function renderDayTabs() {
   }
 
   function setMainTab(tab) {
-    state.mainTab = tab === 'places' ? 'places' : 'planner';
+    if (tab === 'places') state.mainTab = 'places';
+    else if (tab === 'rough') state.mainTab = 'rough';
+    else state.mainTab = 'planner';
     localStorage.setItem('planner_main_tab', state.mainTab);
     render({ resetScroll: true });
   }
