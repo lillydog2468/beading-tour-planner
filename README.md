@@ -1,0 +1,1 @@
+WIP preview of Keith’s beading tour day planner. Sample works without login.
