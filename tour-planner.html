@@ -519,6 +519,8 @@
     .autosave-status { font-size: 11px; color: var(--text-secondary); min-width: 50px; }
     .autosave-status.saving { color: var(--warning); }
     .autosave-status.saved { color: var(--success); }
+    .autosave-status.failed { color: #c0392b; font-weight: 700; }
+    #btnForceCloudSave, #btnExportPlan { white-space: nowrap; }
 
     @media (max-width: 600px) {
       .autosave-toggle { font-size: 0; gap: 4px; }
@@ -575,6 +577,8 @@
           Auto-save
         </label>
         <span class="autosave-status" id="autosaveStatus"></span>
+        <button type="button" class="btn btn-outline btn-sm" id="btnForceCloudSave" title="Upload the plan open on this device to Supabase now">Force save to cloud</button>
+        <button type="button" class="btn btn-outline btn-sm" id="btnExportPlan" title="Download current plan as JSON backup">Export JSON</button>
         <select id="groupSelect" class="group-select" aria-label="Tour group"></select>
         <div class="view-nav" role="group" aria-label="Planner view">
           <button type="button" id="btnPhoneView">Phone</button>
@@ -1542,6 +1546,57 @@
     return plan;
   }
 
+  function planRichnessScore(plan) {
+    if (!plan || typeof plan !== 'object') return 0;
+    let score = 0;
+    const days = Array.isArray(plan.days) ? plan.days : [];
+    score += days.length * 10;
+    const genericTitle = /^(breakfast|leave for tours|pick-up from prague hotel\s*\/?\s*airport)$/i;
+    const genericNotes = /hotel unless noted|van ready at the hotel|confirm the meeting point the night before/i;
+    days.forEach(d => {
+      (d.blocks || []).forEach(b => {
+        if (!b) return;
+        score += 5;
+        const title = String(b.title || '').trim();
+        if (title && !genericTitle.test(title)) score += 25;
+        const addr = String(b.address || '').trim();
+        if (addr && addr.toLowerCase() !== 'axa' && addr.length > 2) score += 8;
+        const notes = String(b.notes || '').trim();
+        if (notes && !genericNotes.test(notes)) score += 10;
+        if (b.placeId || b.place_id) score += 4;
+        if (b.booked) score += 2;
+        if (b.messageSent) score += 1;
+      });
+    });
+    if (plan.pragueHotel && String(plan.pragueHotel.name || '').trim()) score += 20;
+    if (plan.pragueHotel && String(plan.pragueHotel.address || '').trim()) score += 10;
+    if (plan.tourHotelName && String(plan.tourHotelName).trim()) score += 3;
+    try { score += Math.min(80, Math.floor(JSON.stringify(plan).length / 80)); } catch (_) {}
+    return score;
+  }
+
+  function preferRicherPlan(localPlan, cloudPlan) {
+    if (!cloudPlan) return localPlan || null;
+    if (!localPlan) return cloudPlan;
+    const localScore = planRichnessScore(localPlan);
+    const cloudScore = planRichnessScore(cloudPlan);
+    if (localScore > cloudScore) {
+      console.info('Keeping richer local plan (score', localScore, '> cloud', cloudScore, ')');
+      return localPlan;
+    }
+    if (cloudScore > localScore) {
+      console.info('Using richer cloud plan (score', cloudScore, '> local', localScore, ')');
+      return cloudPlan;
+    }
+    // Tie: keep local so we never wipe Keith's in-progress edits with a same-thin skeleton
+    return localPlan;
+  }
+
+  function countPlanBlocks(plan) {
+    if (!plan || !Array.isArray(plan.days)) return 0;
+    return plan.days.reduce((n, d) => n + ((d && d.blocks) ? d.blocks.length : 0), 0);
+  }
+
   function loadStore() {
     try {
       return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') || {};
@@ -1559,7 +1614,12 @@
     if (state.plan) store.plans[state.plan.bookingKey] = state.plan;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
     state.plans = store.plans;
-    maybeSaveSupabase();
+    // Always attempt cloud upsert of the current plan (autosave toggle only controls timing of edits)
+    // Pass { force: true } from Force save to cloud to allow overwriting a richer cloud row
+    const force = !!(arguments[0] && arguments[0].force);
+    state._lastCloudRefuse = null;
+    state._cloudSavePromise = maybeSaveSupabase({ force });
+    return state._cloudSavePromise;
   }
 
   let saveTimer = null;
@@ -1604,34 +1664,73 @@
         status.textContent = 'Saving…';
         status.className = 'autosave-status saving';
       }
-      persist();
-      // persist kicks off cloud save; wait briefly then show result
-      await waitForCloudSaveHint();
+      const ok = await persist();
       if (status) {
-        status.textContent = state.cloudSaveOk ? 'Cloud saved' : 'Saved locally';
-        status.className = 'autosave-status saved';
+        if (ok) {
+          status.textContent = 'Cloud saved';
+          status.className = 'autosave-status saved';
+        } else {
+          status.textContent = 'Cloud save failed';
+          status.className = 'autosave-status failed';
+        }
         setTimeout(() => {
           const el = document.getElementById('autosaveStatus');
-          if (el && (el.textContent === 'Cloud saved' || el.textContent === 'Saved locally')) {
+          if (!el) return;
+          if (el.textContent === 'Cloud saved' || el.textContent === 'Cloud save failed') {
             el.textContent = autoSaveEnabled ? 'On' : '';
+            el.className = 'autosave-status' + (autoSaveEnabled ? ' saved' : '');
           }
-        }, 2500);
+        }, 2800);
       }
     }, AUTOSAVE_DELAY);
-  }
-
-  function waitForCloudSaveHint() {
-    return new Promise(resolve => setTimeout(resolve, 600));
   }
 
   function setCloudStatus(ok, detail) {
     state.cloudSaveOk = !!ok;
     const status = document.getElementById('autosaveStatus');
-    if (!status || autoSaveEnabled) return;
+    if (!status) return;
     if (ok) {
       status.textContent = detail || 'Cloud saved';
       status.className = 'autosave-status saved';
+    } else if (detail) {
+      status.textContent = detail;
+      status.className = 'autosave-status failed';
     }
+  }
+
+  async function forceSaveToCloud() {
+    const status = document.getElementById('autosaveStatus');
+    if (status) {
+      status.textContent = 'Saving…';
+      status.className = 'autosave-status saving';
+    }
+    // Force flag allows overwriting a richer cloud plan deliberately
+    const ok = await persist({ force: true });
+    if (ok) {
+      setCloudStatus(true, 'Cloud saved');
+      toast('Plan uploaded to cloud');
+    } else {
+      setCloudStatus(false, 'Cloud save failed');
+      toast('Cloud save failed — plan is still on this device');
+    }
+    return ok;
+  }
+
+  function exportPlanJson() {
+    if (!state.plan) {
+      toast('Nothing to export yet');
+      return;
+    }
+    const key = String(state.plan.bookingKey || 'plan');
+    const blob = new Blob([JSON.stringify(state.plan, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'tour-plan-booking-' + key + '.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    toast('Plan JSON downloaded');
   }
 
   function placeToRow(p, index) {
@@ -1756,7 +1855,8 @@
     }
   }
 
-  async function maybeSaveSupabase() {
+  async function maybeSaveSupabase(opts) {
+    const force = !!(opts && opts.force);
     let placesOk = false;
     let planOk = false;
     try {
@@ -1768,6 +1868,23 @@
       try {
         const key = String(state.plan.bookingKey || DEMO_ID);
         const isBooking = /^[0-9]+$/.test(key);
+        // Anti-clobber: never overwrite a richer cloud plan with a thinner local one unless Force save
+        if (!force) {
+          const existingCloud = await loadPlanFromSupabase(key);
+          if (existingCloud) {
+            const cloudBlocks = countPlanBlocks(existingCloud);
+            const localBlocks = countPlanBlocks(state.plan);
+            const cloudScore = planRichnessScore(existingCloud);
+            const localScore = planRichnessScore(state.plan);
+            if (cloudBlocks > localBlocks || cloudScore > localScore) {
+              console.warn('Refusing cloud overwrite: cloud has more detail (blocks', cloudBlocks, 'vs', localBlocks, ', score', cloudScore, 'vs', localScore, '). Use Force save to cloud to override.');
+              setCloudStatus(false, 'Kept richer cloud');
+              state.cloudSaveOk = false;
+              state._lastCloudRefuse = { cloudBlocks, localBlocks, cloudScore, localScore };
+              return false;
+            }
+          }
+        }
         const row = {
           payload: state.plan,
           updated_at: new Date().toISOString(),
@@ -1783,8 +1900,14 @@
         console.warn('Could not save plan to Supabase:', err);
       }
     }
+    // Plan upsert is what matters for Keith's schedules; places-only success is not "Cloud saved"
+    if (state.supabasePlanTable && state.plan) {
+      if (planOk) setCloudStatus(true, 'Cloud saved');
+      else if (!(state._lastCloudRefuse && !force)) setCloudStatus(false, 'Cloud save failed');
+      return planOk;
+    }
     const ok = placesOk || planOk;
-    setCloudStatus(ok, ok ? 'Cloud saved' : '');
+    setCloudStatus(ok, ok ? 'Cloud saved' : (state.supabasePlanTable ? 'Cloud save failed' : 'No cloud table'));
     return ok;
   }
 
@@ -1935,9 +2058,14 @@
 
   async function selectPlan(key) {
     state.bookingKey = key;
+    const localPlan = state.plans[key] || null;
     const cloudPlan = await loadPlanFromSupabase(key);
-    if (cloudPlan) {
-      state.plans[key] = cloudPlan;
+    const chosen = preferRicherPlan(localPlan, cloudPlan);
+    if (chosen) {
+      state.plans[key] = chosen;
+      if (localPlan && cloudPlan && chosen === localPlan && planRichnessScore(localPlan) > planRichnessScore(cloudPlan)) {
+        toast('Kept richer plan from this device (cloud had a thinner skeleton)');
+      }
     }
     if (key === DEMO_ID) {
       state.plan = state.plans[DEMO_ID] || buildDemoPlan();
@@ -3215,11 +3343,13 @@ function renderDayTabs() {
   fixExternalNavLinks();
 
   async function init() {
-    const savedAutoSave = localStorage.getItem('planner_autosave_enabled') === 'true';
+    // Default Auto-save ON for new users; only honour an explicit prior "false"
+    const savedAutoRaw = localStorage.getItem('planner_autosave_enabled');
+    const savedAutoSave = savedAutoRaw === null ? true : savedAutoRaw === 'true';
     const toggle = document.getElementById('autosaveToggle');
-    if (savedAutoSave && toggle) {
-      toggle.checked = true;
-      toggleAutoSave(true);
+    if (toggle) {
+      toggle.checked = savedAutoSave;
+      toggleAutoSave(savedAutoSave);
     }
 
     const store = loadStore();
@@ -3259,7 +3389,9 @@ function renderDayTabs() {
       ? String(requested)
       : DEMO_ID;
     const prefetch = await loadPlanFromSupabase(localKey);
-    if (prefetch) state.plans[localKey] = prefetch;
+    if (prefetch) {
+      state.plans[localKey] = preferRicherPlan(state.plans[localKey], prefetch);
+    }
 
     if (localKey !== DEMO_ID && state.plans[localKey]) {
       await selectPlan(localKey);
@@ -3288,6 +3420,8 @@ function renderDayTabs() {
   }
 
   document.getElementById('groupSelect').addEventListener('change', e => selectPlan(e.target.value));
+  document.getElementById('btnForceCloudSave').addEventListener('click', () => forceSaveToCloud());
+  document.getElementById('btnExportPlan').addEventListener('click', () => exportPlanJson());
   document.getElementById('btnPhoneView').addEventListener('click', () => setViewPref('phone'));
   document.getElementById('btnDetailedView').addEventListener('click', () => setViewPref('detailed'));
   document.getElementById('btnTheme').addEventListener('click', () => {
