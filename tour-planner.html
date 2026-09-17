@@ -1083,6 +1083,113 @@
     .rough-empty-day {
       margin: 4px 0 0; font-size: 12px; color: var(--text-secondary);
     }
+    .rough-tray-counts {
+      margin: 0 0 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+    .rough-tray-chips .chip .rough-chip-stat {
+      display: inline-block;
+      margin-left: 5px;
+      padding: 1px 6px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      background: var(--surface-alt);
+      color: var(--text-secondary);
+      vertical-align: middle;
+    }
+    .rough-tray-chips .chip.on .rough-chip-stat {
+      background: rgba(255,255,255,.22);
+      color: inherit;
+    }
+    .rough-week-pace {
+      margin: 10px 0 0;
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.4;
+      border: 1px solid var(--border);
+      background: var(--surface-alt);
+      color: var(--text-secondary);
+    }
+    .rough-week-pace.pace-empty { background: var(--surface-alt); }
+    .rough-week-pace.pace-relax {
+      background: rgba(22, 163, 74, .08);
+      border-color: rgba(22, 163, 74, .22);
+      color: #166534;
+    }
+    .rough-week-pace.pace-steady {
+      background: rgba(217, 119, 6, .08);
+      border-color: rgba(217, 119, 6, .22);
+      color: #92400e;
+    }
+    .rough-week-pace.pace-busy {
+      background: rgba(220, 38, 38, .07);
+      border-color: rgba(220, 38, 38, .2);
+      color: #9f1239;
+    }
+    [data-theme="dark"] .rough-week-pace.pace-relax {
+      background: rgba(34, 197, 94, .12);
+      border-color: rgba(34, 197, 94, .28);
+      color: #86efac;
+    }
+    [data-theme="dark"] .rough-week-pace.pace-steady {
+      background: rgba(251, 191, 36, .12);
+      border-color: rgba(251, 191, 36, .28);
+      color: #fcd34d;
+    }
+    [data-theme="dark"] .rough-week-pace.pace-busy {
+      background: rgba(244, 63, 94, .12);
+      border-color: rgba(244, 63, 94, .28);
+      color: #fda4af;
+    }
+    /* Day columns tint by how packed they are (calm → busy) — warm & subtle */
+    .rough-day.load-calm {
+      background: #f3faf6;
+      border-color: #cfe8d8;
+      border-style: solid;
+    }
+    .rough-day.load-easy {
+      background: #fffbeb;
+      border-color: #f5e6b8;
+      border-style: solid;
+    }
+    .rough-day.load-steady {
+      background: #fff7ed;
+      border-color: #f5d0a9;
+      border-style: solid;
+    }
+    .rough-day.load-busy {
+      background: #fff1f2;
+      border-color: #f5c2c7;
+      border-style: solid;
+    }
+    [data-theme="dark"] .rough-day.load-calm {
+      background: rgba(34, 197, 94, .08);
+      border-color: rgba(34, 197, 94, .28);
+    }
+    [data-theme="dark"] .rough-day.load-easy {
+      background: rgba(251, 191, 36, .08);
+      border-color: rgba(251, 191, 36, .28);
+    }
+    [data-theme="dark"] .rough-day.load-steady {
+      background: rgba(249, 115, 22, .1);
+      border-color: rgba(249, 115, 22, .3);
+    }
+    [data-theme="dark"] .rough-day.load-busy {
+      background: rgba(244, 63, 94, .1);
+      border-color: rgba(244, 63, 94, .3);
+    }
+    .rough-day-load-hint {
+      margin-top: 2px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
     .rough-selected-banner {
       margin: 0 0 12px; padding: 10px 12px;
       border-radius: 10px;
@@ -3755,6 +3862,100 @@
     return usedPlaceIdsInWeek().has(placeId);
   }
 
+  /** Counts for Rough tray filters: visited = already on any day this week. */
+  function roughTrayTypeCounts(typeId) {
+    const used = usedPlaceIdsInWeek();
+    const type = typeId || 'all';
+    const ofType = (state.catalogue || []).filter(p => {
+      if (!p || !p.id) return false;
+      if (type === 'all') return true;
+      return (p.type || 'other') === type;
+    });
+    let visited = 0;
+    ofType.forEach(p => { if (used.has(p.id)) visited += 1; });
+    const total = ofType.length;
+    return { total, visited, free: Math.max(0, total - visited) };
+  }
+
+  function roughTrayNoun(typeId, n) {
+    const map = {
+      all: ['place', 'places'],
+      hotel: ['hotel', 'hotels'],
+      factory: ['factory', 'factories'],
+      shop: ['shop', 'shops'],
+      restaurant: ['restaurant', 'restaurants'],
+      experience: ['experience', 'experiences'],
+      museum: ['museum', 'museums'],
+      school: ['school', 'schools'],
+      other: ['other place', 'other places'],
+    };
+    const pair = map[typeId] || ['place', 'places'];
+    return n === 1 ? pair[0] : pair[1];
+  }
+
+  /** British English, visited-first — e.g. "4 factories visited this week · 5 still free". */
+  function roughTrayCountSentence(typeId) {
+    const id = typeId || 'all';
+    const { visited, free } = roughTrayTypeCounts(id);
+    const noun = roughTrayNoun(id, visited);
+    let s = visited + ' ' + noun + ' visited this week';
+    if (free === 1) s += ' · 1 still free';
+    else s += ' · ' + free + ' still free';
+    return s;
+  }
+
+  function roughTrayFilterLabel(typeId) {
+    if (typeId === 'all') return 'Everything';
+    const hit = PLACE_TYPES.find(p => p.id === typeId);
+    return hit ? hit.label : typeId;
+  }
+
+  /** Unique places + place-stops → warm week pace line for Rough plan. */
+  function roughWeekPaceSummary() {
+    const days = (state.plan && state.plan.days) || [];
+    const unique = usedPlaceIdsInWeek().size;
+    let placeStops = 0;
+    days.forEach(day => {
+      (day.blocks || []).forEach(s => {
+        if (s && !isRoughSystemStop(s) && String(s.title || '').trim()) placeStops += 1;
+      });
+    });
+    if (unique === 0 && placeStops === 0) {
+      return {
+        key: 'empty',
+        text: 'Quiet week so far — nothing placed on the days yet.',
+      };
+    }
+    const dayCount = Math.max(days.length, 1);
+    const perDay = unique / dayCount;
+    if (unique <= 3 || perDay < 0.75) {
+      return {
+        key: 'relax',
+        text: 'This looks like a more relaxing week (' + unique + ' unique ' + (unique === 1 ? 'place' : 'places') + ').',
+      };
+    }
+    if (unique <= 7 || perDay < 1.5) {
+      return {
+        key: 'steady',
+        text: 'This looks like a steady, balanced week (' + unique + ' unique places).',
+      };
+    }
+    return {
+      key: 'busy',
+      text: 'This looks like a busy week (' + unique + ' unique places).',
+    };
+  }
+
+  /** How packed a Rough day column is (place stops, not hotel pickup / travel). */
+  function roughDayLoadLevel(day) {
+    const n = (day && Array.isArray(day.blocks) ? day.blocks : [])
+      .filter(s => s && !isRoughSystemStop(s) && String(s.title || '').trim()).length;
+    if (n <= 0) return { key: 'calm', label: 'Quiet day', count: n };
+    if (n === 1) return { key: 'easy', label: 'Light day', count: n };
+    if (n === 2) return { key: 'steady', label: 'Steady day', count: n };
+    return { key: 'busy', label: 'Busy day', count: n };
+  }
+
   function isRoughSystemStop(stop) {
     if (!stop) return true;
     const t = String(stop.type || '');
@@ -4103,10 +4304,17 @@
   }
 
   function renderRoughTray() {
-    const { list, used } = filteredRoughTrayPlaces();
-    const chips = PLACE_TYPES.map(t => `
-      <button type="button" class="chip ${state.roughTrayFilter === t.id ? 'on' : ''}" data-rough-filter="${t.id}">${t.label}</button>
-    `).join('');
+    const { list } = filteredRoughTrayPlaces();
+    const activeFilter = state.roughTrayFilter || 'all';
+    const chips = PLACE_TYPES.map(t => {
+      const label = roughTrayFilterLabel(t.id);
+      const c = roughTrayTypeCounts(t.id);
+      const tip = escapeHtml(roughTrayCountSentence(t.id));
+      const stat = c.total
+        ? `<span class="rough-chip-stat" title="${tip}">${c.visited}</span>`
+        : '';
+      return `<button type="button" class="chip ${activeFilter === t.id ? 'on' : ''}" data-rough-filter="${t.id}" title="${tip}">${escapeHtml(label)}${stat}</button>`;
+    }).join('');
     const placeChips = list.length
       ? list.map(p => {
           const sel = state.roughSelectedPlaceId === p.id ? ' selected' : '';
@@ -4122,15 +4330,15 @@
           </button>`;
         }).join('')
       : '<p class="muted" style="margin:0;font-size:13px;">No places left in the tray for this filter — remove a stop from a day to free it, or clear the search.</p>';
-    const totalCatalogue = (state.catalogue || []).length;
-    const usedCount = used.size;
+    const countSentence = roughTrayCountSentence(activeFilter);
     return `
       <aside class="rough-tray" aria-label="Places tray">
         <h3>Places tray</h3>
-        <p class="rough-tray-hint">Drag a chip onto a day, or tap a place then tap <strong>Add to Day</strong>. Once used, it leaves the tray until you remove it from the week. ${list.length} available · ${usedCount} used of ${totalCatalogue}.</p>
+        <p class="rough-tray-hint">Drag a chip onto a day, or tap a place then tap <strong>Add to Day</strong>. Once placed on any day this week, it leaves the tray until you remove it.</p>
         <label class="field-label" for="roughTraySearch">Search</label>
         <input type="search" id="roughTraySearch" class="rough-tray-search" value="${escapeHtml(state.roughTraySearch || '')}" placeholder="Filter by nickname or name…" autocomplete="off">
         <div class="rough-tray-chips" role="group" aria-label="Filter by type">${chips}</div>
+        <p class="rough-tray-counts" id="roughTrayCounts" aria-live="polite">${escapeHtml(countSentence)}</p>
         <div class="rough-tray-list" id="roughTrayList">${placeChips}</div>
       </aside>
     `;
@@ -4168,12 +4376,15 @@
       ? ''
       : '<p class="rough-empty-day">Drop a place here (or tap Add to Day).</p>';
     const selReady = !!state.roughSelectedPlaceId && !placeUsedInWeek(state.roughSelectedPlaceId);
+    const load = roughDayLoadLevel(day);
+    const loadStops = load.count === 1 ? '1 place stop' : (load.count + ' place stops');
     return `
-      <section class="rough-day" data-rough-day-drop="${dayIndex}" aria-label="Day ${dayIndex + 1}">
+      <section class="rough-day load-${load.key}" data-rough-day-drop="${dayIndex}" aria-label="Day ${dayIndex + 1} — ${escapeHtml(load.label)}">
         <div class="rough-day-head">
           <div>
             <div class="rough-day-title">${isToday ? 'Today · ' : ''}Day ${dayIndex + 1}</div>
             <div class="rough-day-date">${day.date ? `${weekdayName(day.date)} ${formatDateDMY(day.date)}` : 'Date not set'}</div>
+            <div class="rough-day-load-hint">${escapeHtml(load.label)} · ${escapeHtml(loadStops)}</div>
           </div>
           <button type="button" class="rough-day-add${selReady ? ' ready' : ''}" data-rough-add-day="${dayIndex}" ${selReady ? '' : 'disabled'} title="Tap a place in the tray first, then tap here">
             Add to Day ${dayIndex + 1}
@@ -4201,12 +4412,14 @@
     const lanes = days.length
       ? days.map((d, i) => renderRoughDayLane(d, i)).join('')
       : '<p class="muted">No days yet — set tour dates on the Planner tab (or Add day).</p>';
+    const pace = roughWeekPaceSummary();
     return `
       <div class="card">
         <div class="row-between" style="align-items:flex-start;gap:10px;flex-wrap:wrap;">
           <div>
             <h2 style="margin:0;">Rough plan</h2>
             <p class="muted" style="margin:6px 0 0;max-width:42em;">Sketch the week with Simi — drag places onto days or tap-to-add. Same plan as Planner (shared cloud save). Leave time blank when adding and we’ll suggest an approximate slot (about 1 hour 30 minutes after the last timed stop, or about 30 minutes for lunch-like places). Tap the <strong>🕐 time chip</strong> on each stop to open the scroll wheel (hour + minute), then Done.</p>
+            <p class="rough-week-pace pace-${pace.key}" id="roughWeekPace" aria-live="polite">${escapeHtml(pace.text)}</p>
           </div>
           <button type="button" class="btn btn-outline btn-sm" id="btnRoughGotoPlanner">Open Planner</button>
         </div>
