@@ -211,6 +211,9 @@
     .day-origin .name { font-weight: 800; font-size: 15px; margin-top: 2px; }
     .day-origin .meta { color: var(--text-secondary); font-size: 13px; margin-top: 4px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     .day-origin.warn { background: transparent; border-style: solid; }
+    .day-origin.journey { border-style: solid; border-color: var(--pickup); background: var(--accent-soft); }
+    .day-origin .origin-kind { font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--text-secondary); }
+    .day-origin .origin-note { margin-top: 6px; font-size: 12px; color: var(--text-secondary); }
     .maps-btn {
       display: inline-flex; align-items: center; gap: 8px;
       background: var(--accent); color: #fff; text-decoration: none;
@@ -589,6 +592,8 @@
   const TRAVEL_BETWEEN = 'About 15–25 minutes by van between most stops.';
   const TRAVEL_HOOK = 'Exact travel time later — Maps API not wired in this prototype.';
   const PRAGUE_DRIVE = 'About 1 hour 25 minutes to the beading area (Jablonec nad Nisou).';
+  const PRAGUE_AIRPORT_NAME = 'Václav Havel Airport Prague (PRG)';
+  const PRAGUE_AIRPORT_ADDRESS = 'Aviatická, 161 00 Prague 6, Czech Republic';
 
   const PLACE_TYPES = [
     { id: 'all', label: 'All' },
@@ -811,6 +816,27 @@
     if (!plan) return plan;
     if (plan.tourHotelPlaceId == null) plan.tourHotelPlaceId = '';
     if (plan.tourHotelName == null) plan.tourHotelName = '';
+    if (!plan.pragueHotel || typeof plan.pragueHotel !== 'object') {
+      plan.pragueHotel = { name: '', address: '', pickupTime: '08:00' };
+    } else {
+      if (plan.pragueHotel.name == null) plan.pragueHotel.name = '';
+      if (plan.pragueHotel.address == null) plan.pragueHotel.address = '';
+      if (!plan.pragueHotel.pickupTime) plan.pragueHotel.pickupTime = '08:00';
+    }
+    if (!plan.airportArrival || typeof plan.airportArrival !== 'object') {
+      plan.airportArrival = { hasTimes: false, times: [], summary: '', pickupTime: '' };
+    } else {
+      plan.airportArrival.hasTimes = !!plan.airportArrival.hasTimes;
+      plan.airportArrival.times = Array.isArray(plan.airportArrival.times) ? plan.airportArrival.times : [];
+      plan.airportArrival.summary = plan.airportArrival.summary || '';
+      plan.airportArrival.pickupTime = plan.airportArrival.pickupTime || '';
+    }
+    if (plan.day1OriginType !== 'airport' && plan.day1OriginType !== 'prague') {
+      plan.day1OriginType = plan.airportArrival.hasTimes ? 'airport' : 'prague';
+    }
+    if (plan.day1OriginType === 'airport' && !plan.airportArrival.hasTimes) {
+      plan.day1OriginType = 'prague';
+    }
     plan.guests = (plan.guests || []).map(g => ensureGuestDebt(g));
     (plan.days || []).forEach(d => { (d.blocks || []).forEach(ensureStopTicks); });
     // Resolve hotel place id from catalogue when possible (keeps Staying at in sync)
@@ -866,8 +892,9 @@
     const cur = ensureStopTicks(day.blocks[blockIndex]);
     if (cur.travelMinutes != null) return;
     if (blockIndex === 0) {
-      const hotelAddr = tourHotelAddress();
-      cur.travelMinutes = roughTravelMinutes(hotelAddr, cur.address || '');
+      const dayIndex = (state.plan?.days || []).indexOf(day);
+      const fromAddr = isArrivalDayIndex(dayIndex) ? day1OriginAddress() : tourHotelAddress();
+      cur.travelMinutes = roughTravelMinutes(fromAddr, cur.address || '');
       return;
     }
     const prev = day.blocks[blockIndex - 1];
@@ -1026,9 +1053,53 @@
 
   function tourHotelAddress() {
     const place = getTourHotelPlace();
-    if (place && (place.address || '').trim()) return place.address.trim();
+    if (place && place.address) return place.address;
     const name = (place && place.name) || state.plan?.tourHotelName || '';
     return name ? (name + ', Czech Republic') : '';
+  }
+
+  function isArrivalDayIndex(dayIndex) {
+    if (dayIndex == null || dayIndex < 0 || !state.plan) return false;
+    if (dayIndex === 0) return true;
+    const day = state.plan.days?.[dayIndex];
+    if (day?.date && state.plan.arrivalDate && day.date === state.plan.arrivalDate) return true;
+    return false;
+  }
+
+  function hasAirportArrivalOption(plan) {
+    const p = plan || state.plan;
+    return !!(p && p.airportArrival && p.airportArrival.hasTimes);
+  }
+
+  function effectiveDay1OriginType(plan) {
+    const p = plan || state.plan;
+    if (!p) return 'prague';
+    if (p.day1OriginType === 'airport' && hasAirportArrivalOption(p)) return 'airport';
+    return 'prague';
+  }
+
+  function day1OriginAddress(plan) {
+    const p = plan || state.plan;
+    if (effectiveDay1OriginType(p) === 'airport') return PRAGUE_AIRPORT_ADDRESS;
+    const h = p?.pragueHotel || {};
+    if (h.address) return h.address;
+    if (h.name) return h.name + ', Prague, Czech Republic';
+    return 'Prague, Czech Republic';
+  }
+
+  function day1PickupTime(plan) {
+    const p = plan || state.plan;
+    if (effectiveDay1OriginType(p) === 'airport') {
+      return (p.airportArrival && p.airportArrival.pickupTime) || (p.pragueHotel && p.pragueHotel.pickupTime) || '08:00';
+    }
+    return (p?.pragueHotel && p.pragueHotel.pickupTime) || '08:00';
+  }
+
+  function day1OriginLabel(plan) {
+    const p = plan || state.plan;
+    if (effectiveDay1OriginType(p) === 'airport') return PRAGUE_AIRPORT_NAME;
+    const name = (p?.pragueHotel && p.pragueHotel.name) || '';
+    return name || 'Prague hotel pick-up';
   }
 
   function mergeCatalogueSeed(existing) {
@@ -1041,18 +1112,25 @@
 
   function defaultBlocks(dayIndex, ctx) {
     const hotel = ctx.tourHotelName || 'the group hotel';
-    const prague = ctx.pragueHotelName || 'Prague hotel / airport';
+    const useAirport = ctx.day1OriginType === 'airport' && ctx.hasAirport;
+    const prague = ctx.pragueHotelName || 'Prague hotel';
     const pickup = ctx.pickupTime || '08:00';
     if (dayIndex === 0) {
-      // One morning Hotel pickup, then the drive — no separate arrive/leave pair.
+      // Arrival day starts in Prague (hotel or airport) — not at the beading-area tour hotel.
+      if (useAirport) {
+        return [
+          { id: uid('s'), time: pickup, type: 'pickup', title: 'Airport pick-up — ' + PRAGUE_AIRPORT_NAME, notes: 'Meet the group at arrivals, then drive to the beading area. Confirm the meeting point from the booking flight times.', address: PRAGUE_AIRPORT_ADDRESS, period: 'Morning', messageSent: false, booked: false, travelMinutes: null },
+          { id: uid('s'), time: addMinutes(pickup, 30), type: 'travel', title: 'Drive to the beading area (Jablonec nad Nisou)', notes: PRAGUE_DRIVE, address: 'Jablonec nad Nisou, Czech Republic', period: 'Morning', messageSent: false, booked: false, travelMinutes: 85 },
+        ];
+      }
       return [
-        { id: uid('s'), time: pickup, type: 'pickup', title: 'Hotel pickup — ' + prague, notes: 'Collect the group and leave for the beading area. Confirm the meeting point the night before.', address: ctx.pragueAddress || '', period: 'Morning', messageSent: false, booked: false, travelMinutes: null },
+        { id: uid('s'), time: pickup, type: 'pickup', title: 'Hotel pick-up — ' + prague, notes: 'Collect the group at their Prague hotel and leave for the beading area. Confirm the meeting point the night before.', address: ctx.pragueAddress || '', period: 'Morning', messageSent: false, booked: false, travelMinutes: null },
         { id: uid('s'), time: addMinutes(pickup, 15), type: 'travel', title: 'Drive to the beading area (Jablonec nad Nisou)', notes: PRAGUE_DRIVE, address: 'Jablonec nad Nisou, Czech Republic', period: 'Morning', messageSent: false, booked: false, travelMinutes: 85 },
       ];
     }
     return [
       { id: uid('s'), time: '08:00', type: 'meal', title: 'Breakfast', notes: 'At ' + hotel + ' unless noted otherwise.', address: '', period: 'Morning', messageSent: false, booked: false, travelMinutes: null },
-      { id: uid('s'), time: '09:00', type: 'pickup', title: 'Hotel pickup', notes: 'Collect the group at the hotel and leave for today’s stops.', address: '', period: 'Morning', messageSent: false, booked: false, travelMinutes: 5 },
+      { id: uid('s'), time: '09:00', type: 'pickup', title: 'Hotel pick-up', notes: 'Collect the group at the tour hotel and leave for today’s stops.', address: '', period: 'Morning', messageSent: false, booked: false, travelMinutes: 5 },
     ];
   }
 
@@ -1060,11 +1138,17 @@
     const arrival = partial.arrivalDate || '';
     const departure = partial.departureDate || '';
     const dates = enumerateDates(arrival, departure);
+    const airportArrival = partial.airportArrival || { hasTimes: false, times: [], summary: '', pickupTime: '' };
+    const day1OriginType = (partial.day1OriginType === 'airport' && airportArrival.hasTimes) ? 'airport' : 'prague';
     const ctx = {
       tourHotelName: partial.tourHotelName || '',
       pragueHotelName: partial.pragueHotel?.name || '',
       pragueAddress: partial.pragueHotel?.address || '',
-      pickupTime: partial.pragueHotel?.pickupTime || '08:00',
+      pickupTime: day1OriginType === 'airport'
+        ? (airportArrival.pickupTime || partial.pragueHotel?.pickupTime || '08:00')
+        : (partial.pragueHotel?.pickupTime || '08:00'),
+      day1OriginType,
+      hasAirport: !!airportArrival.hasTimes,
     };
     const dayCount = dates.length || Math.max(1, Number(partial.manualDays) || 3);
     const days = [];
@@ -1088,6 +1172,13 @@
         address: partial.pragueHotel?.address || '',
         pickupTime: partial.pragueHotel?.pickupTime || '08:00',
       },
+      airportArrival: {
+        hasTimes: !!airportArrival.hasTimes,
+        times: Array.isArray(airportArrival.times) ? airportArrival.times : [],
+        summary: airportArrival.summary || '',
+        pickupTime: airportArrival.pickupTime || '',
+      },
+      day1OriginType,
       days,
       source: partial.source || 'manual',
     };
@@ -1415,11 +1506,37 @@
     return { name, address: '', pickupTime: '08:00' };
   }
 
+  function formatFlightTime(t) {
+    if (!t) return '';
+    const s = String(t);
+    // Supabase TIME may arrive as HH:MM:SS
+    return s.length >= 5 ? s.slice(0, 5) : s;
+  }
+
+  function airportFromBooking(b) {
+    const flights = b._flights || [];
+    const withArr = flights.filter(f => f && f.arrival_time);
+    const lines = withArr.map(f => {
+      const bits = [];
+      if (f.flight_number) bits.push(f.flight_number);
+      if (f.arrival_date) bits.push(formatDateDMY(f.arrival_date));
+      bits.push(formatFlightTime(f.arrival_time));
+      return bits.join(' · ');
+    });
+    return {
+      hasTimes: withArr.length > 0,
+      times: withArr.map(f => formatFlightTime(f.arrival_time)).filter(Boolean),
+      summary: lines.join(' · '),
+      pickupTime: withArr.length ? formatFlightTime(withArr[0].arrival_time) : '',
+    };
+  }
+
   function planFromBooking(b) {
     const key = String(b.id);
     const existing = state.plans[key];
     const guests = guestNamesFromMembers(b._members);
     const prague = pragueFromBooking(b);
+    const airport = airportFromBooking(b);
     const bookingHotelText = b.hotel_name || b.hotels?.name || '';
     const matchedHotel = matchHotelPlaceFromText(bookingHotelText);
     const base = emptyPlan({
@@ -1431,6 +1548,8 @@
       tourHotelPlaceId: matchedHotel ? matchedHotel.id : '',
       tourHotelName: matchedHotel ? matchedHotel.name : bookingHotelText,
       pragueHotel: prague,
+      airportArrival: airport,
+      day1OriginType: airport.hasTimes ? 'airport' : 'prague',
       source: 'booking',
     });
     if (!existing) return base;
@@ -1439,6 +1558,19 @@
     if (!existing.guests?.length || !named) existing.guests = base.guests;
     else existing.guests = existing.guests.map(g => ensureGuestDebt(g));
     if (!existing.pragueHotel?.name && base.pragueHotel.name) existing.pragueHotel = base.pragueHotel;
+    // Keep airport arrival times in sync from the booking when present
+    if (base.airportArrival?.hasTimes) {
+      existing.airportArrival = base.airportArrival;
+      if (!existing.day1OriginType) existing.day1OriginType = 'airport';
+    } else if (!existing.airportArrival) {
+      existing.airportArrival = base.airportArrival;
+    }
+    if (!existing.day1OriginType) {
+      existing.day1OriginType = base.day1OriginType;
+    }
+    if (existing.day1OriginType === 'airport' && !hasAirportArrivalOption(existing)) {
+      existing.day1OriginType = 'prague';
+    }
     if (!existing.tourHotelPlaceId && base.tourHotelPlaceId) {
       existing.tourHotelPlaceId = base.tourHotelPlaceId;
       existing.tourHotelName = base.tourHotelName;
@@ -1472,14 +1604,17 @@
   async function enrichBooking(b) {
     if (!b || b._enriched) return b;
     try {
-      const [members, stays] = await withTimeout(Promise.all([
+      const [members, stays, flights] = await withTimeout(Promise.all([
         sb.from('members').select('*').eq('booking_id', b.id).order('id'),
         sb.from('booking_hotels').select('*, hotels(name)').eq('booking_id', b.id),
+        sb.from('flights').select('*').eq('booking_id', b.id).order('id'),
       ]), 4000, 'Booking details timed out');
       b._members = members.data || [];
       b._hotel_stays = stays.data || [];
+      b._flights = flights.data || [];
     } catch (err) {
-      console.warn('Could not load members/hotels for booking', b.id, err);
+      console.warn('Could not load members/hotels/flights for booking', b.id, err);
+      b._flights = b._flights || [];
     }
     b._enriched = true;
     return b;
@@ -1617,7 +1752,9 @@
         tourHotelName: state.plan.tourHotelName,
         pragueHotelName: state.plan.pragueHotel?.name,
         pragueAddress: state.plan.pragueHotel?.address,
-        pickupTime: state.plan.pragueHotel?.pickupTime,
+        pickupTime: day1PickupTime(state.plan),
+        day1OriginType: effectiveDay1OriginType(state.plan),
+        hasAirport: hasAirportArrivalOption(state.plan),
       }),
     });
     if (nextDate) state.plan.departureDate = nextDate;
@@ -1632,7 +1769,9 @@
       tourHotelName: state.plan.tourHotelName,
       pragueHotelName: state.plan.pragueHotel?.name,
       pragueAddress: state.plan.pragueHotel?.address,
-      pickupTime: state.plan.pragueHotel?.pickupTime,
+      pickupTime: day1PickupTime(state.plan),
+      day1OriginType: effectiveDay1OriginType(state.plan),
+      hasAirport: hasAirportArrivalOption(state.plan),
     };
     const byDate = {};
     state.plan.days.forEach(d => { if (d.date) byDate[d.date] = d; });
@@ -1968,15 +2107,48 @@ function renderDayTabs() {
     const maps = place ? mapsButtonHtml(place.name, place.address, 'Open in Apple Maps') : '';
     return `
       <label class="field-label" for="tourHotel">Staying at</label>
-      <select id="tourHotel" aria-label="Tour hotel — daily starting point">
+      <select id="tourHotel" aria-label="Tour hotel — overnight base in the beading area">
         ${opts.join('')}
       </select>
-      <p class="muted" style="margin-top:6px;">Tour hotel for this group — the starting point every day. Add or edit hotels on the Places tab (Hotels category).${maps ? ' ' + maps : ''}</p>
+      <p class="muted" style="margin-top:6px;">Beading-area tour hotel (overnight base). Used as the <strong>day starting point from the day after arrival</strong> — not on day 1 before the Prague pick-up. Add or edit hotels on the Places tab (Hotels category).${maps ? ' ' + maps : ''}</p>
     `;
   }
 
   function renderDayOrigin() {
     syncTourHotelFromPlace();
+    const dayIndex = state.selectedDay;
+    if (isArrivalDayIndex(dayIndex)) {
+      const type = effectiveDay1OriginType();
+      if (type === 'airport') {
+        const a = state.plan.airportArrival || {};
+        return `
+          <div class="day-origin journey">
+            <div class="origin-kind">Day 1 journey start</div>
+            <div class="name">✈ ${escapeHtml(PRAGUE_AIRPORT_NAME)}</div>
+            <div class="meta">
+              <span>${escapeHtml(a.summary || 'Airport arrival time(s) from the booking')}</span>
+              ${mapsButtonHtml(PRAGUE_AIRPORT_NAME, PRAGUE_AIRPORT_ADDRESS, 'Open in Apple Maps')}
+            </div>
+            <div class="origin-note">Collect at the airport, then drive to the beading area. The tour hotel (<strong>Staying at</strong>) is the overnight base from tomorrow — not today’s starting point.</div>
+          </div>
+        `;
+      }
+      const h = state.plan.pragueHotel || {};
+      const name = h.name || 'Prague hotel pick-up';
+      const time = h.pickupTime || '08:00';
+      return `
+        <div class="day-origin journey">
+          <div class="origin-kind">Day 1 journey start</div>
+          <div class="name">🏙 ${escapeHtml(name)}</div>
+          <div class="meta">
+            <span>Pick-up ${escapeHtml(time)}${h.address ? ' · ' + escapeHtml(h.address) : ''}</span>
+            ${mapsButtonHtml(h.name || 'Prague', h.address || '', 'Open in Apple Maps')}
+          </div>
+          <div class="origin-note">Collect the group in Prague, then drive to the beading area. <strong>Staying at</strong> (tour hotel) is where they sleep once there — not the day-1 origin.</div>
+        </div>
+      `;
+    }
+
     const place = getTourHotelPlace();
     const name = (place && place.name) || state.plan.tourHotelName || '';
     if (!name) {
@@ -1985,28 +2157,52 @@ function renderDayTabs() {
     const addr = (place && place.address) || '';
     return `
       <div class="day-origin">
-        <div class="muted">Day starting point</div>
+        <div class="origin-kind">Overnight base · day starting point</div>
         <div class="name">🏨 ${escapeHtml(name)}</div>
         <div class="meta">
           ${addr ? `<span>${escapeHtml(addr)}</span>` : `<span>Add an address on the Places tab for better travel estimates</span>`}
           ${mapsButtonHtml(name, addr, 'Open in Apple Maps')}
         </div>
+        <div class="origin-note">Tour hotel in the beading area — start of today’s stops after arrival day.</div>
       </div>
     `;
   }
 
   function renderHotelCard() {
     const h = state.plan.pragueHotel || {};
-    const name = h.name || 'Prague hotel / airport';
     const time = h.pickupTime || '08:00';
+    const type = effectiveDay1OriginType();
+    const canAirport = hasAirportArrivalOption();
+    const a = state.plan.airportArrival || {};
+    const originOpts = [
+      `<option value="prague"${type === 'prague' ? ' selected' : ''}>Prague hotel pick-up</option>`,
+    ];
+    if (canAirport) {
+      originOpts.push(`<option value="airport"${type === 'airport' ? ' selected' : ''}>Airport (arrival time on booking)</option>`);
+    }
+    const summaryName = type === 'airport' ? PRAGUE_AIRPORT_NAME : (h.name || 'Prague hotel pick-up');
+    const summaryMeta = type === 'airport'
+      ? (a.summary || 'From booking flight arrival time(s)')
+      : (`Pick-up ${time}` + (h.address ? ' · ' + h.address : ''));
+    const mapsName = type === 'airport' ? PRAGUE_AIRPORT_NAME : (h.name || 'Prague');
+    const mapsAddr = type === 'airport' ? PRAGUE_AIRPORT_ADDRESS : (h.address || '');
+    const airportNote = canAirport
+      ? ('<p class="muted" style="margin:0;">Airport is offered because this booking has arrival time(s): '
+          + escapeHtml(a.summary || (a.times || []).join(', ')) + '.</p>')
+      : '<p class="muted" style="margin:0;">No airport arrival time on the booking — day 1 defaults to Prague hotel pick-up.</p>';
     return `
       <div class="hotel-card">
-        <div class="muted">Prague pick-up</div>
-        <div class="name">${escapeHtml(name)}</div>
-        <div class="meta">Pick-up ${escapeHtml(time)}${h.address ? ' · ' + escapeHtml(h.address) : ''}</div>
-        <a class="maps-btn" href="${appleMapsUrl(name, h.address)}" target="_blank" rel="noopener">Open in Apple Maps</a>
+        <div class="muted">Day 1 journey start</div>
+        <div class="name">${escapeHtml(summaryName)}</div>
+        <div class="meta">${escapeHtml(summaryMeta)}</div>
+        <a class="maps-btn" href="${appleMapsUrl(mapsName, mapsAddr)}" target="_blank" rel="noopener">Open in Apple Maps</a>
         <div class="stack" style="margin-top:10px;">
-          <label class="field-label">Hotel name</label>
+          <label class="field-label" for="day1OriginType">Start from</label>
+          <select id="day1OriginType" aria-label="Day 1 journey start">
+            ${originOpts.join('')}
+          </select>
+          ${airportNote}
+          <label class="field-label">Prague hotel name</label>
           <input type="text" id="pragueName" value="${escapeHtml(h.name || '')}" placeholder="Hotel name in Prague">
           <label class="field-label">Address (optional)</label>
           <input type="text" id="pragueAddress" value="${escapeHtml(h.address || '')}" placeholder="Street, Prague">
@@ -2156,8 +2352,8 @@ function renderDayTabs() {
         <div class="trip-title">${escapeHtml(state.plan.groupName || 'Tour group')}</div>
         <div class="trip-meta">
           <span>📅 ${state.plan.arrivalDate ? formatDateDMY(state.plan.arrivalDate) : '—'} – ${state.plan.departureDate ? formatDateDMY(state.plan.departureDate) : '—'}</span>
-          <span>🏨 Tour hotel: ${escapeHtml(state.plan.tourHotelName || 'Not set')}</span>
-          <span>🏙 Prague: ${escapeHtml(state.plan.pragueHotel?.name || 'Not set')}</span>
+          <span>🏨 Staying at: ${escapeHtml(state.plan.tourHotelName || 'Not set')}</span>
+          <span>🗺 Day 1 start: ${escapeHtml(effectiveDay1OriginType() === 'airport' ? PRAGUE_AIRPORT_NAME : (state.plan.pragueHotel?.name || 'Prague hotel pick-up'))}</span>
         </div>
       </div>
     `;
@@ -2215,7 +2411,7 @@ function renderDayTabs() {
           <h2>Places directory</h2>
           <button type="button" class="btn btn-outline btn-sm" id="btnBackPlanner">Back to Planner</button>
         </div>
-        <p class="muted" style="margin-bottom:8px;">Edit hotels, factories, shops, restaurants, experiences, museums and schools here — contact method, detail, address and notes. Hotels appear in the Planner “Staying at” list as the daily starting point. These feed the compact picker on the Planner tab (also saved to Supabase).</p>
+        <p class="muted" style="margin-bottom:8px;">Edit hotels, factories, shops, restaurants, experiences, museums and schools here — contact method, detail, address and notes. Hotels appear in the Planner “Staying at” list as the overnight base (day starting point from the day after arrival). These feed the compact picker on the Planner tab (also saved to Supabase).</p>
         ${renderCatalogue({ showAddToDay: false })}
       </div>
     `;
@@ -2248,7 +2444,7 @@ function renderDayTabs() {
           </div>
           ${guestsCard}
           <div class="card">
-            <h2>Prague hotel</h2>
+            <h2>Day 1 journey start</h2>
             ${renderHotelCard()}
           </div>
         </div>
@@ -2311,6 +2507,12 @@ function renderDayTabs() {
       state.plan.departureDate = parseEnteredDate(e.target.value);
       e.target.value = state.plan.departureDate ? formatDateDMY(state.plan.departureDate) : e.target.value;
       scheduleAutoSave();
+    });
+    q('#day1OriginType')?.addEventListener('change', e => {
+      const v = e.target.value === 'airport' && hasAirportArrivalOption() ? 'airport' : 'prague';
+      state.plan.day1OriginType = v;
+      scheduleAutoSave();
+      render();
     });
     q('#pragueName')?.addEventListener('input', e => { state.plan.pragueHotel.name = e.target.value; scheduleAutoSave(); });
     q('#pragueAddress')?.addEventListener('input', e => { state.plan.pragueHotel.address = e.target.value; scheduleAutoSave(); });
