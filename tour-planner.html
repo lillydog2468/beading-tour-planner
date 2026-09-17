@@ -424,6 +424,16 @@
     }
     .maps-btn-inline:hover, .maps-under-field .maps-btn:hover { border-color: var(--accent); }
     .maps-under-field { margin-top: 6px; min-height: 8px; }
+    .prague-field-actions {
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+      margin-top: 6px;
+    }
+    .prague-field-actions .btn { min-height: 40px; }
+    .prague-suggest {
+      margin-top: 6px; font-size: 12px; color: var(--text-secondary); font-weight: 600;
+      line-height: 1.35;
+    }
+    .prague-suggest strong { color: var(--text); }
     .tick-skip { font-size: 12px; margin-top: 6px; font-weight: 600; }
 
     .add-to-day-row {
@@ -736,6 +746,25 @@
     const q = mapsQuery(name, address);
     // https works in browser; Apple devices hand off to Maps
     return 'https://maps.apple.com/?q=' + encodeURIComponent(q);
+  }
+  /** Prague hotel Maps: prefer street address; otherwise always qualify name with Prague. */
+  function pragueHotelMapsQuery(name, address) {
+    const addr = (address || '').trim();
+    if (addr) return addr;
+    const n = (name || '').trim();
+    if (!n) return 'Prague, Czech Republic';
+    if (/\bprague\b|\bpraha\b/i.test(n)) return n;
+    return n + ', Prague';
+  }
+  function pragueHotelAppleMapsUrl(name, address) {
+    return 'https://maps.apple.com/?q=' + encodeURIComponent(pragueHotelMapsQuery(name, address));
+  }
+  function pragueHotelMapsButtonHtml(name, address, label, id) {
+    const href = pragueHotelAppleMapsUrl(name, address);
+    const text = label || 'Open in Apple Maps';
+    const q = pragueHotelMapsQuery(name, address);
+    const idAttr = id ? ` id="${escapeHtml(id)}"` : '';
+    return `<a class="maps-btn maps-btn-inline" data-prague-maps="1"${idAttr} href="${href}" target="_blank" rel="noopener" title="Search Apple Maps: ${escapeHtml(q)}">${escapeHtml(text)}</a>`;
   }
   function typeLabel(t) {
     const singular = {
@@ -1100,6 +1129,163 @@
     if (effectiveDay1OriginType(p) === 'airport') return PRAGUE_AIRPORT_NAME;
     const name = (p?.pragueHotel && p.pragueHotel.name) || '';
     return name || 'Prague hotel pick-up';
+  }
+
+  function arrivalDay(plan) {
+    const p = plan || state.plan;
+    if (!p?.days?.length) return null;
+    if (p.arrivalDate) {
+      const hit = p.days.find(d => d.date === p.arrivalDate);
+      if (hit) return hit;
+    }
+    return p.days[0];
+  }
+
+  /** Keep day-1 Prague hotel pick-up stop title/address in sync with the hotel card. */
+  function syncDay1PraguePickupStop() {
+    if (!state.plan) return;
+    if (effectiveDay1OriginType(state.plan) === 'airport') return;
+    const day = arrivalDay(state.plan);
+    if (!day || !Array.isArray(day.blocks)) return;
+    const h = state.plan.pragueHotel || {};
+    const name = String(h.name || '').trim();
+    const addr = String(h.address || '').trim();
+    const title = name ? ('Hotel pick-up — ' + name) : 'Hotel pick-up — Prague hotel';
+    const stop = day.blocks.find(s => s && s.type === 'pickup' && !/airport/i.test(String(s.title || '')));
+    if (!stop) return;
+    stop.title = title;
+    stop.address = addr;
+    if (h.pickupTime) {
+      stop.time = normaliseStopTime(h.pickupTime, stop.time || '08:00');
+      stop.period = periodForTime(stop.time);
+    }
+  }
+
+  function formatNominatimStreet(hit) {
+    if (!hit) return '';
+    const a = hit.address || {};
+    const road = a.road || a.pedestrian || a.footway || a.square || a.neighbourhood || '';
+    const num = a.house_number || '';
+    const city = a.city || a.town || a.municipality || a.village || 'Prague';
+    const postcode = a.postcode || '';
+    let street = '';
+    if (road && num) street = road + ' ' + num;
+    else if (road) street = road;
+    else if (hit.display_name) {
+      // Fall back carefully — take the part after the name if present
+      const parts = String(hit.display_name).split(',').map(s => s.trim()).filter(Boolean);
+      if (parts.length >= 2) street = parts.slice(1, 3).join(', ');
+    }
+    if (!street) return '';
+    const bits = [street];
+    if (postcode) bits.push(postcode);
+    if (city) bits.push(city);
+    return bits.join(', ');
+  }
+
+  function nominatimHitLooksLikeHotel(hit, hotelName) {
+    if (!hit) return false;
+    const name = String(hotelName || '').trim();
+    const hitName = hit.name || (hit.address && (hit.address.tourism || hit.address.hotel)) || '';
+    const display = hit.display_name || '';
+    const classOk = hit.class === 'tourism' || hit.type === 'hotel' || hit.addresstype === 'tourism'
+      || /hotel/i.test(String(hit.type || '')) || /hotel/i.test(String(hitName));
+    const nameOk = !name || namesRoughlyMatch(hitName, name) || namesRoughlyMatch(display, name);
+    const inPrague = /praha|prague|\bcz\b/i.test(display)
+      || /praha|prague/i.test(String((hit.address && (hit.address.city || hit.address.town)) || ''));
+    return classOk && nameOk && inPrague;
+  }
+
+  async function lookupPragueHotelAddress() {
+    const h = state.plan?.pragueHotel || {};
+    const name = String(h.name || '').trim();
+    const hint = document.getElementById('pragueAddressHint');
+    const setHint = (msg, isError) => {
+      if (!hint) return;
+      hint.innerHTML = msg || '';
+      hint.style.color = isError ? 'var(--danger)' : '';
+    };
+    if (!name) {
+      setHint('Type a Prague hotel name first, then try Find address.', true);
+      toast('Enter the Prague hotel name first');
+      return;
+    }
+    const btn = document.getElementById('btnFindPragueAddress');
+    if (btn) { btn.disabled = true; btn.textContent = 'Looking up…'; }
+    setHint('Searching OpenStreetMap (Nominatim) for a suggested street — please double-check.');
+    const q = name + ' Prague';
+    const url = 'https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&q='
+      + encodeURIComponent(q);
+    try {
+      const res = await fetch(url, {
+        headers: {
+          'Accept': 'application/json',
+          // Nominatim asks for a valid identifying User-Agent / Referer; browsers set Referer.
+        },
+      });
+      if (!res.ok) throw new Error('Lookup failed (' + res.status + ')');
+      const rows = await res.json();
+      const hits = Array.isArray(rows) ? rows : [];
+      const confident = hits.find(hit => nominatimHitLooksLikeHotel(hit, name));
+      const street = formatNominatimStreet(confident);
+      if (confident && street) {
+        state.plan.pragueHotel.address = street;
+        const inp = document.getElementById('pragueAddress');
+        if (inp) inp.value = street;
+        syncDay1PraguePickupStop();
+        updatePragueHotelMapsUi();
+        scheduleAutoSave();
+        setHint('Suggested street from OpenStreetMap — please confirm it matches the real hotel before relying on it: <strong>'
+          + escapeHtml(street) + '</strong>');
+        toast('Suggested address filled — please double-check');
+        return;
+      }
+      // Not confident enough to invent a street — open Apple Maps instead
+      setHint('No confident street found in OpenStreetMap. Opening Apple Maps so you can copy the real address back.');
+      toast('No confident address — opening Apple Maps');
+      window.open(pragueHotelAppleMapsUrl(name, ''), '_blank', 'noopener');
+    } catch (err) {
+      setHint('Address lookup unavailable right now. Use Open in Apple Maps and copy the street back.', true);
+      toast('Lookup failed — use Apple Maps instead');
+      window.open(pragueHotelAppleMapsUrl(name, state.plan.pragueHotel.address || ''), '_blank', 'noopener');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Find address'; }
+    }
+  }
+
+  function updatePragueHotelMapsUi() {
+    const h = state.plan?.pragueHotel || {};
+    const href = pragueHotelAppleMapsUrl(h.name || '', h.address || '');
+    const q = pragueHotelMapsQuery(h.name || '', h.address || '');
+    const airportMode = effectiveDay1OriginType() === 'airport';
+    document.querySelectorAll('#pragueMapsLink, #pragueMapsLookup, #pragueDayOriginMaps, a[data-prague-maps]').forEach(a => {
+      // Keep the summary top button on airport Maps when day 1 starts at the airport.
+      if (airportMode && a.id === 'pragueMapsLinkTop') return;
+      a.href = href;
+      a.setAttribute('title', 'Search Apple Maps: ' + q);
+    });
+    if (!airportMode) {
+      const top = document.getElementById('pragueMapsLinkTop');
+      if (top) {
+        top.href = href;
+        top.setAttribute('title', 'Search Apple Maps: ' + q);
+      }
+      const summary = document.getElementById('pragueHotelSummaryName');
+      if (summary) summary.textContent = (h.name || '').trim() || 'Prague hotel pick-up';
+      const meta = document.getElementById('pragueHotelSummaryMeta');
+      if (meta) {
+        const time = h.pickupTime || '08:00';
+        meta.textContent = 'Pick-up ' + time + (h.address ? ' · ' + h.address : '');
+      }
+    }
+  }
+
+  function onPragueHotelFieldChange(opts) {
+    const options = opts || {};
+    syncDay1PraguePickupStop();
+    updatePragueHotelMapsUi();
+    scheduleAutoSave();
+    if (options.render) render();
   }
 
   function mergeCatalogueSeed(existing) {
@@ -2142,7 +2328,7 @@ function renderDayTabs() {
           <div class="name">🏙 ${escapeHtml(name)}</div>
           <div class="meta">
             <span>Pick-up ${escapeHtml(time)}${h.address ? ' · ' + escapeHtml(h.address) : ''}</span>
-            ${mapsButtonHtml(h.name || 'Prague', h.address || '', 'Open in Apple Maps')}
+            ${pragueHotelMapsButtonHtml(h.name || '', h.address || '', 'Open in Apple Maps', 'pragueDayOriginMaps')}
           </div>
           <div class="origin-note">Collect the group in Prague, then drive to the beading area. <strong>Staying at</strong> (tour hotel) is where they sleep once there — not the day-1 origin.</div>
         </div>
@@ -2184,29 +2370,41 @@ function renderDayTabs() {
     const summaryMeta = type === 'airport'
       ? (a.summary || 'From booking flight arrival time(s)')
       : (`Pick-up ${time}` + (h.address ? ' · ' + h.address : ''));
-    const mapsName = type === 'airport' ? PRAGUE_AIRPORT_NAME : (h.name || 'Prague');
-    const mapsAddr = type === 'airport' ? PRAGUE_AIRPORT_ADDRESS : (h.address || '');
+    const topMapsHref = type === 'airport'
+      ? appleMapsUrl(PRAGUE_AIRPORT_NAME, PRAGUE_AIRPORT_ADDRESS)
+      : pragueHotelAppleMapsUrl(h.name || '', h.address || '');
+    const topMapsTitle = type === 'airport'
+      ? PRAGUE_AIRPORT_NAME
+      : pragueHotelMapsQuery(h.name || '', h.address || '');
     const airportNote = canAirport
       ? ('<p class="muted" style="margin:0;">Airport is offered because this booking has arrival time(s): '
           + escapeHtml(a.summary || (a.times || []).join(', ')) + '.</p>')
       : '<p class="muted" style="margin:0;">No airport arrival time on the booking — day 1 defaults to Prague hotel pick-up.</p>';
+    const pragueMapsLive = pragueHotelMapsButtonHtml(h.name || '', h.address || '', 'Open in Apple Maps', 'pragueMapsLink');
     return `
       <div class="hotel-card">
         <div class="muted">Day 1 journey start</div>
-        <div class="name">${escapeHtml(summaryName)}</div>
-        <div class="meta">${escapeHtml(summaryMeta)}</div>
-        <a class="maps-btn" href="${appleMapsUrl(mapsName, mapsAddr)}" target="_blank" rel="noopener">Open in Apple Maps</a>
+        <div class="name" id="pragueHotelSummaryName">${escapeHtml(summaryName)}</div>
+        <div class="meta" id="pragueHotelSummaryMeta">${escapeHtml(summaryMeta)}</div>
+        <a class="maps-btn" id="pragueMapsLinkTop" data-prague-maps="1" href="${topMapsHref}" target="_blank" rel="noopener" title="Search Apple Maps: ${escapeHtml(topMapsTitle)}">Open in Apple Maps</a>
         <div class="stack" style="margin-top:10px;">
           <label class="field-label" for="day1OriginType">Start from</label>
           <select id="day1OriginType" aria-label="Day 1 journey start">
             ${originOpts.join('')}
           </select>
           ${airportNote}
-          <label class="field-label">Prague hotel name</label>
-          <input type="text" id="pragueName" value="${escapeHtml(h.name || '')}" placeholder="Hotel name in Prague">
-          <label class="field-label">Address (optional)</label>
-          <input type="text" id="pragueAddress" value="${escapeHtml(h.address || '')}" placeholder="Street, Prague">
-          <label class="field-label">Pick-up time</label>
+          <label class="field-label" for="pragueName">Prague hotel name</label>
+          <input type="text" id="pragueName" value="${escapeHtml(h.name || '')}" placeholder="e.g. Hotel Axa" autocomplete="off">
+          <div class="maps-under-field" id="pragueNameMaps">${pragueMapsLive}</div>
+          <p class="muted" style="margin:0;font-size:12px;">Maps searches <strong>Name, Prague</strong> (or the street address below when filled). Link updates as you type.</p>
+          <label class="field-label" for="pragueAddress">Street address in Prague</label>
+          <input type="text" id="pragueAddress" value="${escapeHtml(h.address || '')}" placeholder="Street and number, Prague" autocomplete="street-address">
+          <div class="prague-field-actions">
+            <button type="button" class="btn btn-outline btn-sm" id="btnFindPragueAddress">Find address</button>
+            <a class="maps-btn-inline" data-prague-maps="1" id="pragueMapsLookup" href="${pragueHotelAppleMapsUrl(h.name || '', h.address || '')}" target="_blank" rel="noopener" title="Look up in Apple Maps">Look up in Apple Maps</a>
+          </div>
+          <div class="prague-suggest" id="pragueAddressHint">Optional: Find address suggests a street from OpenStreetMap — always double-check before you rely on it.</div>
+          <label class="field-label" for="pragueTime">Pick-up time</label>
           <input type="time" id="pragueTime" value="${escapeHtml(time)}">
         </div>
       </div>
@@ -2511,12 +2709,26 @@ function renderDayTabs() {
     q('#day1OriginType')?.addEventListener('change', e => {
       const v = e.target.value === 'airport' && hasAirportArrivalOption() ? 'airport' : 'prague';
       state.plan.day1OriginType = v;
+      if (v === 'prague') syncDay1PraguePickupStop();
       scheduleAutoSave();
       render();
     });
-    q('#pragueName')?.addEventListener('input', e => { state.plan.pragueHotel.name = e.target.value; scheduleAutoSave(); });
-    q('#pragueAddress')?.addEventListener('input', e => { state.plan.pragueHotel.address = e.target.value; scheduleAutoSave(); });
-    q('#pragueTime')?.addEventListener('input', e => { state.plan.pragueHotel.pickupTime = e.target.value; scheduleAutoSave(); });
+    q('#pragueName')?.addEventListener('input', e => {
+      state.plan.pragueHotel.name = e.target.value;
+      onPragueHotelFieldChange();
+    });
+    q('#pragueName')?.addEventListener('change', () => onPragueHotelFieldChange({ render: true }));
+    q('#pragueAddress')?.addEventListener('input', e => {
+      state.plan.pragueHotel.address = e.target.value;
+      onPragueHotelFieldChange();
+    });
+    q('#pragueAddress')?.addEventListener('change', () => onPragueHotelFieldChange({ render: true }));
+    q('#pragueTime')?.addEventListener('input', e => {
+      state.plan.pragueHotel.pickupTime = e.target.value;
+      onPragueHotelFieldChange();
+    });
+    q('#pragueTime')?.addEventListener('change', () => onPragueHotelFieldChange({ render: true }));
+    q('#btnFindPragueAddress')?.addEventListener('click', () => { lookupPragueHotelAddress(); });
     q('#btnAddGuest')?.addEventListener('click', addGuest);
     q('#btnAddDay')?.addEventListener('click', addManualDay);
     q('#btnRebuildDays')?.addEventListener('click', rebuildFromDates);
