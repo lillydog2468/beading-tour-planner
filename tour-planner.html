@@ -495,6 +495,31 @@
       .autosave-status { font-size: 10px; min-width: 0; }
     }
 
+    .main-tabs {
+      display: flex; gap: 8px; flex-wrap: wrap;
+      margin: 0 0 14px; padding: 4px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+    }
+    .main-tab {
+      flex: 1 1 140px; min-height: 48px; padding: 10px 14px;
+      border: 1px solid transparent; border-radius: 10px;
+      background: transparent; color: var(--text);
+      font-weight: 800; font-size: 15px; cursor: pointer;
+    }
+    .main-tab.active {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+      color: var(--accent);
+    }
+    .main-tab .tab-sub {
+      display: block; font-size: 12px; font-weight: 600;
+      color: var(--text-secondary); margin-top: 2px;
+    }
+    .main-tab.active .tab-sub { color: inherit; opacity: .85; }
+
   </style>
 </head>
 <body>
@@ -576,6 +601,7 @@
     plan: null,
     selectedDay: 0,
     placeFilter: 'all',
+    mainTab: localStorage.getItem('planner_main_tab') === 'places' ? 'places' : 'planner',
     liveBookings: false,
     supabasePlanTable: false,
     supabasePlacesTable: false,
@@ -849,7 +875,7 @@
           <button type="button" class="btn btn-primary" data-place-picker-add="${selectId}">Add selected place</button>
           <button type="button" class="btn btn-outline" id="${blankId}">Add blank stop</button>
         </div>
-        <p class="muted" style="margin-top:6px;">Choose a time, then add. Grouped as factories, shops, restaurants, experiences, museums and schools.</p>
+        <p class="muted" style="margin-top:6px;">Choose a time, then add. Grouped from your Places list (edit contacts and addresses on the Places tab).</p>
       </div>
     `;
   }
@@ -1640,7 +1666,11 @@
     }).join('');
   }
 
-  function renderCatalogue(compact) {
+  function renderCatalogue(opts) {
+    const options = (opts && typeof opts === 'object') ? opts : { compact: !!opts };
+    const compact = !!options.compact;
+    // Add to this day only when explicitly requested (Planner no longer embeds the directory)
+    const showAddToDay = !!options.showAddToDay && !compact;
     const filter = state.placeFilter;
     const list = state.catalogue.filter(p => filter === 'all' || p.type === filter);
     const suggestedTime = suggestNextStopTime(currentDay && currentDay());
@@ -1692,13 +1722,13 @@
           </div>
         </div>
         <input type="text" data-place-notes="${p.id}" value="${escapeHtml(p.notes || '')}" placeholder="Notes / description (editable)" style="margin-top:8px;">
-        ${compact ? '' : `<div class="add-to-day-row">
+        ${showAddToDay ? `<div class="add-to-day-row">
           <div class="time-field">
             <label class="field-label" for="add_time_${p.id}">Time</label>
             <input type="time" id="add_time_${p.id}" data-add-place-time="${p.id}" value="${escapeHtml(suggestedTime)}" aria-label="Time">
           </div>
           <button type="button" class="btn btn-primary btn-sm" data-add-place="${p.id}">Add to this day</button>
-        </div>`}
+        </div>` : ''}
       </div>`;
     }).join('') || `<p class="muted">No places in this filter yet.</p>`;
 
@@ -1897,7 +1927,8 @@ function renderDayTabs() {
           <h2>${view === 'phone' ? 'Today’s plan' : 'Day timeline'}</h2>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
             <button type="button" class="btn btn-outline btn-sm" id="btnAddDay">Add a day</button>
-            <button type="button" class="btn btn-primary btn-sm phone-only" id="btnOpenSheet">Browse places</button>
+            <button type="button" class="btn btn-outline btn-sm" id="btnGotoPlaces">Manage Places</button>
+            <button type="button" class="btn btn-primary btn-sm phone-only" id="btnOpenSheet">Quick add</button>
           </div>
         </div>
         ${renderDayTabs()}
@@ -1910,54 +1941,90 @@ function renderDayTabs() {
       </div>
     `;
 
-    const app = document.getElementById('app');
-    if (view === 'phone') {
-      app.innerHTML = `
-        <div class="status-row">${live}${auth}${resetDemo}</div>
-        ${tripSummary}
-        ${renderHotelCard()}
-        <div style="height:12px;"></div>
-        ${dayCard}
-        <div style="height:12px;"></div>
-        ${guestsCard}
-        <div style="height:12px;"></div>
-        <div class="card">
+    const mainTabs = `
+      <div class="main-tabs" role="tablist" aria-label="Planner sections">
+        <button type="button" class="main-tab ${state.mainTab === 'planner' ? 'active' : ''}" data-main-tab="planner" role="tab" aria-selected="${state.mainTab === 'planner'}">
+          Planner
+          <span class="tab-sub">Day plan, times, stops</span>
+        </button>
+        <button type="button" class="main-tab ${state.mainTab === 'places' ? 'active' : ''}" data-main-tab="places" role="tab" aria-selected="${state.mainTab === 'places'}">
+          Places
+          <span class="tab-sub">Factories, shops, contacts</span>
+        </button>
+      </div>
+    `;
+
+    const placesPanel = `
+      <div class="card">
+        <div class="row-between">
           <h2>Places directory</h2>
-          <p class="muted" style="margin-bottom:8px;">Maintainable list of everywhere you visit — contact method, detail and address.</p>
-          ${renderCatalogue(false)}
+          <button type="button" class="btn btn-outline btn-sm" id="btnBackPlanner">Back to Planner</button>
         </div>
-        <div style="height:12px;"></div>
-        <div class="card">
-          <h2>Dates &amp; hotel</h2>
-          ${datesRow}
+        <p class="muted" style="margin-bottom:8px;">Edit factories, shops, restaurants, experiences, museums and schools here — contact method, detail, address and notes. These feed the compact picker on the Planner tab (also saved to Supabase).</p>
+        ${renderCatalogue({ showAddToDay: false })}
+      </div>
+    `;
+
+    const plannerPhone = `
+      <div class="status-row">${live}${auth}${resetDemo}</div>
+      ${mainTabs}
+      ${tripSummary}
+      ${renderHotelCard()}
+      <div style="height:12px;"></div>
+      ${dayCard}
+      <div style="height:12px;"></div>
+      ${guestsCard}
+      <div style="height:12px;"></div>
+      <div class="card">
+        <h2>Dates &amp; hotel</h2>
+        ${datesRow}
+      </div>
+    `;
+
+    const plannerDesktop = `
+      <div class="status-row">${live}${auth}${resetDemo}</div>
+      ${mainTabs}
+      ${tripSummary}
+      <div class="grid-3">
+        <div class="stack">
+          <div class="card">
+            <h2>Group</h2>
+            ${datesRow}
+          </div>
+          ${guestsCard}
+          <div class="card">
+            <h2>Prague hotel</h2>
+            ${renderHotelCard()}
+          </div>
         </div>
-      `;
+        <div style="grid-column: span 2;">${dayCard}</div>
+      </div>
+    `;
+
+    const placesView = `
+      <div class="status-row">${live}${auth}${resetDemo}</div>
+      ${mainTabs}
+      ${placesPanel}
+    `;
+
+    const app = document.getElementById('app');
+    if (state.mainTab === 'places') {
+      app.innerHTML = placesView;
+    } else if (view === 'phone') {
+      app.innerHTML = plannerPhone;
     } else {
-      app.innerHTML = `
-        <div class="status-row">${live}${auth}${resetDemo}</div>
-        ${tripSummary}
-        <div class="grid-3">
-          <div class="stack">
-            <div class="card">
-              <h2>Group</h2>
-              ${datesRow}
-            </div>
-            ${guestsCard}
-            <div class="card">
-              <h2>Prague hotel</h2>
-              ${renderHotelCard()}
-            </div>
-          </div>
-          <div>${dayCard}</div>
-          <div class="card desktop-only">
-            <div class="row-between"><h2>Places directory</h2></div>
-            <p class="muted" style="margin-bottom:8px;">Full list with contact method, detail and address. Day picker is grouped by subcategory.</p>
-            ${renderCatalogue(false)}
-          </div>
-        </div>
-      `;
+      app.innerHTML = plannerDesktop;
     }
     bindDynamic();
+  }
+
+  function setMainTab(tab) {
+    state.mainTab = tab === 'places' ? 'places' : 'planner';
+    localStorage.setItem('planner_main_tab', state.mainTab);
+    render();
+    try {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch { window.scrollTo(0, 0); }
   }
 
   function parseEnteredDate(value) {
@@ -1995,6 +2062,11 @@ function renderDayTabs() {
     q('#btnRebuildDays')?.addEventListener('click', rebuildFromDates);
     q('#btnAddStop')?.addEventListener('click', addBlankStop);
     q('#btnOpenSheet')?.addEventListener('click', openSheet);
+    q('#btnGotoPlaces')?.addEventListener('click', () => setMainTab('places'));
+    q('#btnBackPlanner')?.addEventListener('click', () => setMainTab('planner'));
+    document.querySelectorAll('[data-main-tab]').forEach(btn => {
+      btn.addEventListener('click', () => setMainTab(btn.getAttribute('data-main-tab')));
+    });
     q('#btnResetDemo')?.addEventListener('click', () => {
       state.plans[DEMO_ID] = buildDemoPlan();
       state.catalogue = defaultCatalogue();
@@ -2175,15 +2247,25 @@ function renderDayTabs() {
   function openSheet() {
     const sheet = document.getElementById('sheet');
     const body = document.getElementById('sheetBody');
-    body.innerHTML = renderPlacePickerSelect('sheetPlacePicker', 'btnSheetAddStop') + renderCatalogue(false);
+    // Compact picker only — full Places editing lives on the Places tab
+    body.innerHTML = `
+      <div class="row-between" style="margin-bottom:10px;">
+        <h2 style="margin:0;font-size:18px;">Add a stop</h2>
+        <button type="button" class="btn btn-outline btn-sm" id="btnSheetManagePlaces">Manage Places</button>
+      </div>
+      ${renderPlacePickerSelect('sheetPlacePicker', 'btnSheetAddStop')}
+      <p class="muted" style="margin-top:12px;">Edit contact details and addresses on the Places tab — they stay shared with this picker and Supabase.</p>
+    `;
     sheet.classList.add('open');
     sheet.setAttribute('aria-hidden', 'false');
-    bindCatalogue(body, { onFilter: openSheet });
     body.querySelectorAll('[data-place-picker-add]').forEach(btn => {
       btn.addEventListener('click', () => addPlaceFromPicker(btn.getAttribute('data-place-picker-add')));
     });
-    // Sheet place select: pick Time, then tap Add selected place (no auto-add).
     document.getElementById('btnSheetAddStop')?.addEventListener('click', addBlankStop);
+    document.getElementById('btnSheetManagePlaces')?.addEventListener('click', () => {
+      closeSheet();
+      setMainTab('places');
+    });
   }
   function closeSheet() {
     const sheet = document.getElementById('sheet');
