@@ -945,7 +945,29 @@
     .people-visit-list li {
       font-size: 13px; padding: 8px 10px; border-radius: 8px;
       background: var(--surface); border: 1px solid var(--border);
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;
     }
+    .people-visit-list .visit-line { flex: 1; min-width: 0; line-height: 1.35; }
+    .people-visit-list .visit-line a { color: var(--accent); font-weight: 700; text-decoration: none; }
+    .people-visit-list .visit-line a:hover { text-decoration: underline; }
+    .people-visit-banner {
+      margin: 10px 0 4px; padding: 12px 14px; border-radius: 12px;
+      background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+      display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+    }
+    .people-visit-banner .visit-big {
+      font-size: 20px; font-weight: 800; color: var(--accent); letter-spacing: -0.01em;
+    }
+    .people-visit-banner .visit-hint { font-size: 12px; color: var(--text-secondary); }
+    .people-visit-add {
+      margin-top: 10px; padding: 10px; border-radius: 10px;
+      border: 1px dashed var(--border); background: var(--surface);
+      display: grid; grid-template-columns: 1fr 1.4fr 0.7fr auto; gap: 8px; align-items: end;
+    }
+    @media (max-width: 720px) {
+      .people-visit-add { grid-template-columns: 1fr 1fr; }
+    }
+    .people-visit-add .field-label { margin: 0; }
     .people-mailto { font-weight: 700; color: var(--accent); word-break: break-all; }
     .place-name-empty { padding: 14px 12px; color: var(--text-secondary); font-size: 14px; }
     .places-add-box {
@@ -6298,7 +6320,7 @@ function renderDayTabs() {
           <h2>People directory</h2>
           <button type="button" class="btn btn-outline btn-sm" id="btnBackPlanner">Back to Planner</button>
         </div>
-        <p class="muted" style="margin-bottom:8px;">Search and pick a person on the left; edit name, email, notes and visits on the right. The plan <strong>Organiser</strong> is the contact person (one People row). <strong>Group name</strong> is only the tour label — absorb never invents a person from group name alone. Guests stay as separate ladies; booking visits attach to the organiser. Saves to Supabase like Places.</p>
+        <p class="muted" style="margin-bottom:8px;">Search and pick a person on the left; edit name, email, notes and <strong>visit history</strong> on the right. One People row per real person (e.g. Angela Clark) — tour labels like “Boutique week 1” belong in visit history, not as separate people. The plan <strong>Organiser</strong> is the contact person; <strong>Group name</strong> is only the tour label. Booking visits attach to the organiser. Saves to Supabase like Places.</p>
         ${renderPeopleDirectory()}
       </div>
     `;
@@ -6657,9 +6679,9 @@ function renderDayTabs() {
   function formatVisitRefsText(refs) {
     return (refs || []).map(r => {
       const bits = [];
-      if (r.booking_id != null) bits.push('#' + r.booking_id);
       if (r.date) bits.push(r.date);
       if (r.label) bits.push(r.label);
+      if (r.booking_id != null) bits.push('#' + r.booking_id);
       return bits.join(' · ') || '(visit)';
     }).join('\n');
   }
@@ -6667,20 +6689,60 @@ function renderDayTabs() {
     const lines = String(text || '').split('\n').map(s => s.trim()).filter(Boolean);
     const refs = [];
     lines.forEach(line => {
-      const m = /#?\s*(\d+)/.exec(line);
-      const booking_id = m ? Number(m[1]) : null;
-      const dateM = /(\d{4}-\d{2}-\d{2})/.exec(line);
-      let label = line;
-      if (m) label = label.replace(m[0], '').trim();
-      if (dateM) label = label.replace(dateM[0], '').trim();
-      label = label.replace(/^[·\-|]+/, '').replace(/[·\-|]+$/, '').trim();
+      const dateM = /(\d{4}-\d{2}-\d{2}|\d{4})(?!\d)/.exec(line);
+      let rest = line;
+      let date = null;
+      if (dateM) {
+        date = dateM[1];
+        rest = (line.slice(0, dateM.index) + line.slice(dateM.index + dateM[0].length)).trim();
+      }
+      // Require #booking so "week 1" in a tour label is never treated as a booking id
+      const bookingM = /#\s*(\d{1,6})\b/.exec(rest);
+      let booking_id = null;
+      if (bookingM) {
+        booking_id = Number(bookingM[1]);
+        rest = rest.replace(bookingM[0], ' ').trim();
+      }
+      let label = rest.replace(/^[·\-|,#\s]+/, '').replace(/[·\-|,#\s]+$/, '').trim();
+      if (label && /^#?\d+$/.test(label)) label = null;
       refs.push({
         booking_id,
-        date: dateM ? dateM[1] : null,
+        date,
         label: label || null,
       });
     });
     return refs;
+  }
+  function sortVisitRefs(refs) {
+    return [...(refs || [])].sort((a, b) => {
+      const da = String(a.date || '');
+      const db = String(b.date || '');
+      if (da && db && da !== db) return da < db ? -1 : 1;
+      if (da && !db) return -1;
+      if (!da && db) return 1;
+      const ba = a.booking_id != null ? Number(a.booking_id) : 0;
+      const bb = b.booking_id != null ? Number(b.booking_id) : 0;
+      return ba - bb;
+    });
+  }
+  function renderVisitHistoryList(person) {
+    const refs = sortVisitRefs(person.visitRefs || []);
+    if (!refs.length) {
+      return `<p class="muted" style="margin-top:8px;">No tour visits recorded yet. Add one below — use the real person here; tour/group names belong in the visit label, not as separate People.</p>`;
+    }
+    return `<ul class="people-visit-list">${refs.map((r, idx) => {
+      const bits = [];
+      if (r.date) bits.push(`<strong>${escapeHtml(String(r.date))}</strong>`);
+      if (r.label) bits.push(escapeHtml(r.label));
+      if (r.booking_id != null) {
+        bits.push(`<a href="?booking=${encodeURIComponent(String(r.booking_id))}" title="Open this booking in the planner">Booking #${escapeHtml(String(r.booking_id))}</a>`);
+      }
+      const line = bits.join(' <span class="muted">·</span> ') || 'Visit';
+      return `<li>
+        <span class="visit-line">${line}</span>
+        <button type="button" class="icon-btn" data-remove-visit="${escapeHtml(person.id)}" data-visit-idx="${idx}" aria-label="Remove visit" title="Remove this visit">×</button>
+      </li>`;
+    }).join('')}</ul>`;
   }
   function renderPeopleDirectory() {
     const list = filteredPeopleList();
@@ -6689,11 +6751,12 @@ function renderDayTabs() {
       ? list.map(p => {
           ensurePerson(p);
           const sel = state.selectedPersonId === p.id ? ' selected' : '';
-          const visits = Number(p.visitCount) || 0;
+          const visits = Math.max(Number(p.visitCount) || 0, (p.visitRefs || []).length);
+          const vtitle = visits === 1 ? 'Visited 1 time' : ('Visited ' + visits + ' times');
           return `
         <button type="button" class="place-name-item${sel}" data-select-person="${p.id}" aria-pressed="${state.selectedPersonId === p.id ? 'true' : 'false'}">
           <span class="pname">${escapeHtml(p.name || 'Unnamed')}</span>
-          <span class="pvisits" title="Visits from booking-linked plans">${visits}</span>
+          <span class="pvisits" title="${escapeHtml(vtitle)}">${visits}</span>
         </button>`;
         }).join('')
       : `<p class="place-name-empty">No people yet. Add someone on the left, or open a booking-linked plan — guests are absorbed automatically.</p>`;
@@ -6706,23 +6769,20 @@ function renderDayTabs() {
       const mailto = p.email
         ? `<a class="people-mailto" href="mailto:${escapeHtml(p.email)}">${escapeHtml(p.email)}</a>`
         : '<span class="muted">No email yet</span>';
-      const visitItems = (p.visitRefs || []).length
-        ? `<ul class="people-visit-list">${(p.visitRefs || []).map(r => {
-            const bits = [];
-            if (r.booking_id != null) bits.push('Booking #' + r.booking_id);
-            if (r.date) bits.push(escapeHtml(String(r.date)));
-            if (r.label) bits.push(escapeHtml(r.label));
-            return `<li>${bits.join(' · ') || 'Visit'}</li>`;
-          }).join('')}</ul>`
-        : `<p class="muted" style="margin-top:8px;">No booking-linked visits yet.</p>`;
+      const visitsN = Math.max(Number(p.visitCount) || 0, (p.visitRefs || []).length);
+      const visitWord = visitsN === 1 ? 'time' : 'times';
       detailHtml = `
       <div class="place-dir-item" data-person-id="${p.id}">
         <div class="row-between">
           <div>
-            <input type="text" data-person-name="${p.id}" value="${escapeHtml(p.name)}" placeholder="Name" style="font-weight:800;margin-bottom:6px;">
+            <input type="text" data-person-name="${p.id}" value="${escapeHtml(p.name)}" placeholder="Person name (not the tour/group label)" style="font-weight:800;margin-bottom:6px;">
             <div style="margin-bottom:6px;">${mailto}</div>
           </div>
           <button type="button" class="icon-btn" data-remove-person="${p.id}" aria-label="Remove person">×</button>
+        </div>
+        <div class="people-visit-banner" role="status">
+          <div class="visit-big">Visited ${visitsN} ${visitWord}</div>
+          <div class="visit-hint">Tour / group names are visit labels — keep one People row per person.</div>
         </div>
         <div class="dir-grid">
           <div>
@@ -6730,16 +6790,34 @@ function renderDayTabs() {
             <input type="email" data-person-email="${p.id}" value="${escapeHtml(p.email || '')}" placeholder="name@example.com" autocomplete="email">
           </div>
           <div>
-            <label class="field-label">Visit count</label>
-            <input type="number" min="0" step="1" data-person-visit-count="${p.id}" value="${escapeHtml(String(p.visitCount ?? 0))}" title="Usually matches booking-linked visits below">
+            <label class="field-label">Visit count (manual override)</label>
+            <input type="number" min="0" step="1" data-person-visit-count="${p.id}" value="${escapeHtml(String(p.visitCount ?? 0))}" title="Usually matches the visit history below">
           </div>
         </div>
         <label class="field-label" style="margin-top:8px;">Notes</label>
         <input type="text" data-person-notes="${p.id}" value="${escapeHtml(p.notes || '')}" placeholder="Notes (dietary, preferences, …)">
-        <label class="field-label" style="margin-top:8px;">Visits (from bookings)</label>
-        ${visitItems}
-        <label class="field-label" style="margin-top:8px;">Visit refs (light edit — one per line: #booking · date · label)</label>
-        <textarea data-person-visit-refs="${p.id}" rows="4" style="width:100%;font:inherit;font-size:13px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);">${escapeHtml(formatVisitRefsText(p.visitRefs))}</textarea>
+        <label class="field-label" style="margin-top:12px;">Visit history</label>
+        ${renderVisitHistoryList(p)}
+        <div class="people-visit-add" data-add-visit-for="${p.id}">
+          <div>
+            <label class="field-label" for="addVisitDate_${p.id}">Date</label>
+            <input type="text" id="addVisitDate_${p.id}" data-add-visit-date placeholder="2026-09-21 or 2023" autocomplete="off">
+          </div>
+          <div>
+            <label class="field-label" for="addVisitLabel_${p.id}">Tour label</label>
+            <input type="text" id="addVisitLabel_${p.id}" data-add-visit-label placeholder="e.g. Angela Clark Boutique week 2" autocomplete="off">
+          </div>
+          <div>
+            <label class="field-label" for="addVisitBooking_${p.id}">Booking #</label>
+            <input type="number" id="addVisitBooking_${p.id}" data-add-visit-booking min="1" step="1" placeholder="optional">
+          </div>
+          <button type="button" class="btn btn-outline btn-sm" data-add-visit-btn="${p.id}">Add visit</button>
+        </div>
+        <details style="margin-top:10px;">
+          <summary class="muted" style="cursor:pointer;font-size:13px;">Advanced: edit visit lines as text</summary>
+          <label class="field-label" style="margin-top:8px;">One per line — date · tour label · #booking</label>
+          <textarea data-person-visit-refs="${p.id}" rows="4" style="width:100%;font:inherit;font-size:13px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);">${escapeHtml(formatVisitRefsText(p.visitRefs))}</textarea>
+        </details>
       </div>`;
     } else {
       detailHtml = `<p class="places-detail-empty">Select a person from the list to edit name, email, notes and visits. Or add someone on the left — they will open here straight away. Guests from real bookings appear here when you load or save those plans.</p>`;
@@ -6887,6 +6965,59 @@ function renderDayTabs() {
         if (!p) return;
         p.visitRefs = parseVisitRefsText(ta.value);
         p.visitCount = Math.max(Number(p.visitCount) || 0, p.visitRefs.length);
+        scheduleAutoSave();
+        render();
+      });
+    });
+    root.querySelectorAll('[data-remove-visit]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const pid = btn.getAttribute('data-remove-visit');
+        const idx = Number(btn.getAttribute('data-visit-idx'));
+        const p = state.people.find(x => x.id === pid);
+        if (!p || !Array.isArray(p.visitRefs)) return;
+        const sorted = sortVisitRefs(p.visitRefs);
+        if (idx < 0 || idx >= sorted.length) return;
+        sorted.splice(idx, 1);
+        p.visitRefs = sorted;
+        p.visitCount = sorted.length;
+        scheduleAutoSave();
+        render();
+      });
+    });
+    root.querySelectorAll('[data-add-visit-btn]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const pid = btn.getAttribute('data-add-visit-btn');
+        const p = state.people.find(x => x.id === pid);
+        if (!p) return;
+        const box = root.querySelector(`[data-add-visit-for="${CSS.escape(pid)}"]`);
+        if (!box) return;
+        const date = (box.querySelector('[data-add-visit-date]')?.value || '').trim();
+        const label = (box.querySelector('[data-add-visit-label]')?.value || '').trim();
+        const bookingRaw = (box.querySelector('[data-add-visit-booking]')?.value || '').trim();
+        const booking_id = bookingRaw ? Number(bookingRaw) : null;
+        if (!date && !label && booking_id == null) {
+          toast('Add a date, tour label, or booking #');
+          return;
+        }
+        ensurePerson(p);
+        if (!Array.isArray(p.visitRefs)) p.visitRefs = [];
+        if (booking_id != null && !Number.isNaN(booking_id)) {
+          const exists = p.visitRefs.some(r => Number(r.booking_id) === booking_id);
+          if (exists) {
+            p.visitRefs.forEach(r => {
+              if (Number(r.booking_id) !== booking_id) return;
+              if (date && !r.date) r.date = date;
+              if (label && (!r.label || r.label.length < label.length)) r.label = label;
+            });
+          } else {
+            p.visitRefs.push({ booking_id, date: date || null, label: label || null });
+          }
+        } else {
+          const exists = p.visitRefs.some(r => (r.date || '') === date && (r.label || '') === label);
+          if (!exists) p.visitRefs.push({ booking_id: null, date: date || null, label: label || null });
+        }
+        p.visitCount = Math.max(Number(p.visitCount) || 0, p.visitRefs.length);
+        toast('Visit added');
         scheduleAutoSave();
         render();
       });
