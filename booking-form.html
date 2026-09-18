@@ -580,6 +580,67 @@
     [data-theme="dark"] .year-band-4 { --year-band-bg: rgba(59,130,246,.12); --year-band-bg-hover: rgba(59,130,246,.20); --year-band-header: rgba(59,130,246,.26); --year-band-border: rgba(59,130,246,.32); --year-band-fg: #bfdbfe; }
     [data-theme="dark"] .year-band-5 { --year-band-bg: rgba(139,92,246,.12); --year-band-bg-hover: rgba(139,92,246,.20); --year-band-header: rgba(139,92,246,.26); --year-band-border: rgba(139,92,246,.32); --year-band-fg: #ddd6fe; }
 
+    /* Year identity on form chrome (same mapping as list bands) */
+    .tab-panel-header.year-band {
+      position: sticky;
+      top: 0;
+      z-index: 4;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 12px 14px;
+      margin: 0 0 18px;
+      border-radius: 12px;
+      border: 1px solid var(--year-band-border, var(--border));
+      background: var(--year-band-header, var(--surface-alt));
+      box-shadow: 0 1px 0 rgba(0,0,0,.04);
+    }
+    .tab-panel-header.year-band h2 {
+      color: var(--year-band-fg, var(--text));
+    }
+    .year-tint-badge {
+      display: inline-flex;
+      align-items: center;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 3px 9px;
+      border-radius: 999px;
+      border: 1px solid var(--year-band-border, var(--border));
+      background: var(--year-band-bg, var(--surface));
+      color: var(--year-band-fg, var(--text));
+      white-space: nowrap;
+    }
+
+    /* Year identity on table view rows / year groups */
+    .data-table tbody tr.year-band td {
+      background: var(--year-band-bg, transparent);
+      border-bottom-color: var(--year-band-border, var(--border));
+    }
+    .data-table tbody tr.year-band:hover td {
+      background: var(--year-band-bg-hover, var(--accent-soft));
+    }
+    .data-table tbody tr.table-year-header {
+      cursor: default;
+    }
+    .data-table tbody tr.table-year-header td {
+      position: sticky;
+      top: 38px;
+      z-index: 5;
+      padding: 7px 14px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--year-band-fg, var(--text));
+      background: var(--year-band-header, var(--surface-alt));
+      border-bottom: 1px solid var(--year-band-border, var(--border));
+      box-shadow: 0 1px 0 rgba(0,0,0,.04);
+    }
+    .data-table tbody tr.table-year-header:hover td {
+      background: var(--year-band-header, var(--surface-alt));
+    }
+
     .empty-state {
       display: flex;
       flex-direction: column;
@@ -682,8 +743,12 @@
     .tab-panel-header {
       display: flex; align-items: center;
       justify-content: space-between; margin-bottom: 28px;
+      gap: 10px;
     }
-    .tab-panel-header h2 { font-size: 20px; font-weight: 700; letter-spacing: -.3px; }
+    .tab-panel-header-title {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0;
+    }
+    .tab-panel-header h2 { font-size: 20px; font-weight: 700; letter-spacing: -.3px; margin: 0; }
 
     .welcome-panel {
       display: flex; flex-direction: column;
@@ -1628,7 +1693,8 @@
       .tab-panel.active { display: block; }
       .tab-panels { flex: 1; overflow-y: auto; position: relative; min-height: 0; }
       .tab-panel-header { margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
-      .tab-panel-header h2 { font-size: 17px; width: 100%; }
+      .tab-panel-header-title { width: 100%; }
+      .tab-panel-header h2 { font-size: 17px; }
 
       .grid-2, .grid-3, .grid-4, .grid-5 { grid-template-columns: 1fr; }
       .grid { gap: 12px; }
@@ -2358,6 +2424,7 @@
       if (delBtn) delBtn.style.display = 'none';
       updateTabTitle(tabId, 'New Booking');
     }
+    applyTabYearTint(tabId);
   }
 
   function rerenderAllTabs() {
@@ -2814,8 +2881,11 @@
   function buildFormHTML(tabId) {
     const t = tabId;
     return `
-    <div class="tab-panel-header">
-      <h2 id="t${t}_formTitle">New Booking</h2>
+    <div class="tab-panel-header" id="t${t}_formHeader">
+      <div class="tab-panel-header-title">
+        <h2 id="t${t}_formTitle">New Booking</h2>
+        <span class="year-tint-badge" id="t${t}_yearBadge" hidden></span>
+      </div>
       <div class="form-header-actions">
         <button class="btn btn-outline btn-sm" onclick="resetTab('${t}')">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 1 3.26-6.93"/><path d="M3 2v5h5"/></svg>
@@ -2950,8 +3020,11 @@
   function buildLayoutFormHTML(tabId) {
     const t = tabId;
     return `
-    <div class="tab-panel-header">
-      <h2 id="t${t}_formTitle">New Booking</h2>
+    <div class="tab-panel-header" id="t${t}_formHeader">
+      <div class="tab-panel-header-title">
+        <h2 id="t${t}_formTitle">New Booking</h2>
+        <span class="year-tint-badge" id="t${t}_yearBadge" hidden></span>
+      </div>
       <div class="form-header-actions">
         <div class="layout-zoom-controls">
           <span class="layout-zoom-label">Zoom</span>
@@ -3944,6 +4017,7 @@
       populateTab(tabId, bookingRecord);
     } else {
       addMemberRow(tabId);
+      applyTabYearTint(tabId);
     }
     updateGlobalAnalytics();
     applyLayoutZoomToOpenTabs();
@@ -4068,6 +4142,9 @@
 	      changedId.endsWith('_group_name')
 	    ) {
       renderYearCalendar(tabId);
+    }
+    if (changedId.endsWith('_tour_arrival_date') || changedId.endsWith('_departure_date')) {
+      applyTabYearTint(tabId);
     }
     if (autoSaveEnabled) scheduleTabAutoSave(tabId);
   }
@@ -4256,6 +4333,7 @@
     const deleteBtn = tEl(tabId, 'deleteBtn');
     if (deleteBtn) deleteBtn.style.display = 'inline-flex';
     recalculateTab(tabId);
+    applyTabYearTint(tabId);
   }
 
   function openTourPlanner(tabId) {
@@ -4275,6 +4353,7 @@
     updateTabTitle(tabId, 'New Booking');
     const deleteBtn = tEl(tabId, 'deleteBtn');
     if (deleteBtn) deleteBtn.style.display = 'none';
+    applyTabYearTint(tabId);
     ['cv_totalexpenses', 'cv_totalcost', 'cv_left_to_pay', 'cv_totalprofit', 'cv_profit_forecast', 'cv_final_payment_due_date'].forEach(cv => {
       const cvEl = tEl(tabId, cv);
       if (!cvEl) return;
@@ -4457,6 +4536,35 @@
 	    const y = Number(year);
 	    if (!Number.isFinite(y)) return 0;
 	    return ((Math.trunc(y) % 6) + 6) % 6;
+	  }
+
+	  function yearBandClass(year) {
+	    return 'year-band year-band-' + yearBandIndex(year == null ? 0 : year);
+	  }
+
+	  /** Soft year tint on form chrome so identity matches the list / table. */
+	  function applyTabYearTint(tabId) {
+	    const header = tEl(tabId, 'formHeader') || el('tabPanel_' + tabId)?.querySelector('.tab-panel-header');
+	    const badge = tEl(tabId, 'yearBadge');
+	    if (!header) return;
+
+	    header.classList.remove('year-band', 'year-band-0', 'year-band-1', 'year-band-2', 'year-band-3', 'year-band-4', 'year-band-5');
+
+	    const arr = parseFlexibleDateUTC(tEl(tabId, 'tour_arrival_date')?.value || '');
+	    const dep = parseFlexibleDateUTC(tEl(tabId, 'departure_date')?.value || '');
+	    const start = arr || dep;
+	    const y = start ? start.getUTCFullYear() : null;
+
+	    if (y == null || y < 1990 || y > 2100) {
+	      if (badge) { badge.hidden = true; badge.textContent = ''; }
+	      return;
+	    }
+
+	    header.classList.add('year-band', 'year-band-' + yearBandIndex(y));
+	    if (badge) {
+	      badge.hidden = false;
+	      badge.textContent = String(y);
+	    }
 	  }
 
 	  function renderRecords(records) {
@@ -4725,6 +4833,7 @@
         updateTabTitle(tabId, `Edit: ${bookingData.group_name}`);
         const delBtn = tEl(tabId, 'deleteBtn');
         if (delBtn) delBtn.style.display = 'inline-flex';
+        applyTabYearTint(tabId);
 
         if (_members.length) await sb.from('members').insert(_members.map(m => ({ first_name: m.first_name, last_name: m.last_name, booking_id: newId })));
         if (_flights.length) await sb.from('flights').insert(_flights.map(f => ({ flight_number: f.flight_number, arrival_date: f.arrival_date, arrival_time: f.arrival_time, departure_date: f.departure_date, departure_time: f.departure_time, comments: f.comments, booking_id: newId })));
@@ -4888,31 +4997,54 @@
     renderTableHead();
     const body = el('dataTableBody');
     const activeColumns = getActiveTableColumns();
+    const colCount = Math.max(activeColumns.length, 1);
     const sortedRecords = [...records].sort((a, b) => compareTableRecords(a, b, tableSortKey, tableSortAsc));
 
     if (!sortedRecords.length) {
-      body.innerHTML = `<tr><td colspan="${Math.max(activeColumns.length, 1)}" style="text-align:center;padding:40px;color:var(--text-secondary);">No bookings to display</td></tr>`;
+      body.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center;padding:40px;color:var(--text-secondary);">No bookings to display</td></tr>`;
       el('tableCount').textContent = '0 bookings';
       return;
     }
 
-    body.innerHTML = sortedRecords.map(r => {
-      return '<tr onclick="tableRowClick(' + r.id + ')">' + activeColumns.map(col => {
-        const val = r[col.key];
-        let display = val != null ? val : '—';
-        if (val && isDateKey(col.key)) display = formatDateDMY(val);
-        if (col.curKey && val != null) {
-          const cur = normalizeCurrency(r[col.curKey] || DEFAULT_CURRENCY);
-          display = formatMoney(val, cur);
-        }
-        let cls = col.type === 'num' ? 'num' : '';
-        if (col.highlight && col.type === 'num' && val != null) {
-          cls += val > 0 ? ' positive' : val < 0 ? ' negative' : '';
-        }
-        return `<td class="${cls}">${display}</td>`;
-      }).join('') + '</tr>';
-    }).join('');
+    const groupByYear = tableSortKey === 'tour_arrival_date' || tableSortKey === 'departure_date';
+    const parts = [];
+    let lastYearKey = null;
 
+    for (const r of sortedRecords) {
+      const y = bookingYear(r);
+      const yearKey = y == null ? 'none' : String(y);
+      const bandCls = yearBandClass(y);
+
+      if (groupByYear && yearKey !== lastYearKey) {
+        lastYearKey = yearKey;
+        const label = y == null ? 'No year' : String(y);
+        parts.push(
+          `<tr class="table-year-header ${bandCls}" role="row">` +
+          `<td colspan="${colCount}">${escapeHtml(label)}</td></tr>`
+        );
+      }
+
+      parts.push(
+        `<tr class="${bandCls}" onclick="tableRowClick(${r.id})">` +
+        activeColumns.map(col => {
+          const val = r[col.key];
+          let display = val != null ? val : '—';
+          if (val && isDateKey(col.key)) display = formatDateDMY(val);
+          if (col.curKey && val != null) {
+            const cur = normalizeCurrency(r[col.curKey] || DEFAULT_CURRENCY);
+            display = formatMoney(val, cur);
+          }
+          let cls = col.type === 'num' ? 'num' : '';
+          if (col.highlight && col.type === 'num' && val != null) {
+            cls += val > 0 ? ' positive' : val < 0 ? ' negative' : '';
+          }
+          return `<td class="${cls}">${display}</td>`;
+        }).join('') +
+        '</tr>'
+      );
+    }
+
+    body.innerHTML = parts.join('');
     el('tableCount').textContent = sortedRecords.length + ' booking' + (sortedRecords.length !== 1 ? 's' : '');
   }
 
