@@ -888,6 +888,24 @@
 
     .guest-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
     .guest-row input { flex: 1; }
+    .guest-name-stack {
+      flex: 1; min-width: 0;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .guest-name-link {
+      appearance: none; border: none; background: none;
+      padding: 0; margin: 0; text-align: left;
+      font: inherit; font-weight: 800; font-size: 16px; line-height: 1.3;
+      color: var(--accent); cursor: pointer;
+      text-decoration: underline; text-underline-offset: 3px;
+      word-break: break-word;
+    }
+    .guest-name-link:hover { color: var(--text); }
+    .guest-name-link:disabled,
+    .guest-name-link.is-unlinked {
+      color: var(--text); text-decoration: none; cursor: default; font-weight: 700;
+    }
+    .guest-name-input { width: 100%; min-width: 0; font-size: 15px; }
     .debt-grid {
       display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 8px;
     }
@@ -1034,6 +1052,54 @@
       color: var(--accent);
     }
     .place-name-item .pname { flex: 1; min-width: 0; word-break: break-word; }
+    .place-name-item .pname-block {
+      flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;
+    }
+    .place-name-item .pemail {
+      font-size: 12px; font-weight: 600; color: var(--text-secondary);
+      word-break: break-all; line-height: 1.3;
+    }
+    .place-name-item.selected .pemail { color: color-mix(in srgb, var(--accent) 70%, var(--text-secondary)); }
+    .people-email-line {
+      margin-bottom: 6px; font-size: 14px; line-height: 1.4;
+    }
+    .people-email-line .people-mailto { font-weight: 700; }
+    .people-albums {
+      margin-top: 12px;
+      display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center;
+    }
+    .people-albums .tw-label {
+      font-size: 12px; font-weight: 700; color: var(--text-secondary); margin: 0;
+    }
+    .people-albums .tw-empty { font-size: 13px; color: var(--text-secondary); }
+    .people-albums .people-album-list { flex: 1 1 100%; }
+    .people-album-list,
+    .albums-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+    .people-album-list li,
+    .album-row {
+      font-size: 13px; padding: 8px 10px; border-radius: 8px;
+      background: var(--surface); border: 1px solid var(--border);
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; flex-wrap: wrap;
+    }
+    .people-album-list a,
+    .album-open-link {
+      color: var(--accent); font-weight: 700; text-decoration: none;
+    }
+    .people-album-list a:hover,
+    .album-open-link:hover { text-decoration: underline; }
+    .albums-block {
+      margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--border);
+    }
+    .album-row { align-items: end; }
+    .album-row .album-fields {
+      flex: 1; min-width: 160px;
+      display: grid; grid-template-columns: 1fr 1.4fr; gap: 6px;
+    }
+    @media (max-width: 520px) {
+      .album-row .album-fields { grid-template-columns: 1fr; }
+    }
+    .album-row input { width: 100%; min-height: 40px; font-size: 15px; }
+    .album-row-actions { display: flex; align-items: center; gap: 6px; padding-bottom: 2px; }
     .place-name-item .ptype {
       flex-shrink: 0; font-size: 11px; font-weight: 800;
       text-transform: uppercase; letter-spacing: .03em;
@@ -1075,6 +1141,7 @@
     }
     .people-visit-add .field-label { margin: 0; }
     .people-mailto { font-weight: 700; color: var(--accent); word-break: break-all; }
+    .people-mailto:hover { text-decoration: underline; }
     .place-name-empty { padding: 14px 12px; color: var(--text-secondary); font-size: 14px; }
     .places-add-box {
       border: 1px solid var(--border); border-radius: 12px;
@@ -1987,6 +2054,7 @@
     people: [],
     personSearch: '',
     selectedPersonId: null,
+    personDeepLink: '',
     mainTab: (function () {
       const t = localStorage.getItem('planner_main_tab');
       return (t === 'places' || t === 'rough' || t === 'people' || t === 'issues') ? t : 'planner';
@@ -2430,6 +2498,78 @@
     const v = Number(n) || 0;
     return (Math.round(v * 100) / 100).toFixed(2);
   }
+
+  /**
+   * Shared iCloud / iPhoto albums on a plan payload (Tour Archivist may upsert this).
+   * Shape: payload.sharedAlbums = [{ name: string, url?: string, albumId?: string }]
+   * Optional extra `id` is a client-only row key for the planner UI; Archivist may omit it.
+   */
+  function albumIdFromICloudUrl(url) {
+    const s = String(url || '').trim();
+    if (!s) return '';
+    const hash = s.split('#')[1] || '';
+    const id = hash.replace(/^\/+/, '').trim();
+    return id || '';
+  }
+  function isSafeHttpUrl(url) {
+    try {
+      const u = new URL(String(url || '').trim());
+      return u.protocol === 'http:' || u.protocol === 'https:';
+    } catch (_) {
+      return false;
+    }
+  }
+  function normalizeSharedAlbum(raw, index) {
+    const a = (raw && typeof raw === 'object') ? raw : {};
+    const name = String(a.name || '').trim();
+    const url = String(a.url || '').trim();
+    let albumId = String(a.albumId || a.album_id || '').trim();
+    if (!albumId && url) albumId = albumIdFromICloudUrl(url);
+    const id = String(a.id || '').trim() || ('album_' + (index == null ? uid('') : String(index)));
+    return { id, name, url, albumId };
+  }
+  function normalizeSharedAlbums(list) {
+    if (!Array.isArray(list)) return [];
+    return list.map((a, i) => normalizeSharedAlbum(a, i));
+  }
+  function ensureSharedAlbums(plan) {
+    if (!plan) return [];
+    plan.sharedAlbums = normalizeSharedAlbums(plan.sharedAlbums);
+    return plan.sharedAlbums;
+  }
+  function sharedAlbumDedupeKey(a) {
+    if (!a) return '';
+    const url = String(a.url || '').trim().toLowerCase();
+    if (url) return 'u:' + url;
+    const albumId = String(a.albumId || '').trim().toLowerCase();
+    if (albumId) return 'i:' + albumId;
+    return 'n:' + String(a.name || '').trim().toLowerCase();
+  }
+  function mergeSharedAlbums(primary, secondary) {
+    const out = [];
+    const seen = new Set();
+    function add(list) {
+      normalizeSharedAlbums(list).forEach(a => {
+        const key = sharedAlbumDedupeKey(a);
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        out.push(a);
+      });
+    }
+    add(primary);
+    add(secondary);
+    return out;
+  }
+  function albumToPayload(a) {
+    const row = {
+      name: String(a.name || '').trim(),
+    };
+    const url = String(a.url || '').trim();
+    const albumId = String(a.albumId || '').trim();
+    if (url) row.url = url;
+    if (albumId) row.albumId = albumId;
+    return row;
+  }
   function ensureStopTicks(s) {
     if (!s) return s;
     if (typeof s.messageSent !== 'boolean') s.messageSent = !!s.messageSent;
@@ -2567,6 +2707,7 @@
       plan.day1OriginType = 'prague';
     }
     plan.guests = (plan.guests || []).map(g => ensureGuestDebt(g));
+    plan.sharedAlbums = normalizeSharedAlbums(plan.sharedAlbums);
     if (!Array.isArray(plan.issues)) plan.issues = [];
     else {
       plan.issues = plan.issues.map((iss, i) => {
@@ -3405,6 +3546,7 @@
       organiserPersonId: partial.organiserPersonId || '',
       organiserName: partial.organiserName || '',
       guests: (partial.guests || []).map(g => ensureGuestDebt({ ...g, lent: g.lent || 0, repayments: g.repayments || [] })),
+      sharedAlbums: normalizeSharedAlbums(partial.sharedAlbums),
       arrivalDate: arrival,
       departureDate: departure,
       tourHotelPlaceId: partial.tourHotelPlaceId || '',
@@ -3496,6 +3638,7 @@
     if (plan.pragueHotel && String(plan.pragueHotel.name || '').trim()) score += 20;
     if (plan.pragueHotel && String(plan.pragueHotel.address || '').trim()) score += 10;
     if (plan.tourHotelName && String(plan.tourHotelName).trim()) score += 3;
+    if (Array.isArray(plan.sharedAlbums) && plan.sharedAlbums.length) score += Math.min(12, plan.sharedAlbums.length * 3);
     try { score += Math.min(80, Math.floor(JSON.stringify(plan).length / 80)); } catch (_) {}
     return score;
   }
@@ -3507,13 +3650,16 @@
     const cloudScore = planRichnessScore(cloudPlan);
     if (localScore > cloudScore) {
       console.info('Keeping richer local plan (score', localScore, '> cloud', cloudScore, ')');
+      localPlan.sharedAlbums = mergeSharedAlbums(localPlan.sharedAlbums, cloudPlan.sharedAlbums);
       return localPlan;
     }
     if (cloudScore > localScore) {
       console.info('Using richer cloud plan (score', cloudScore, '> local', localScore, ')');
+      cloudPlan.sharedAlbums = mergeSharedAlbums(cloudPlan.sharedAlbums, localPlan.sharedAlbums);
       return cloudPlan;
     }
     // Tie: keep local so we never wipe Keith's in-progress edits with a same-thin skeleton
+    localPlan.sharedAlbums = mergeSharedAlbums(localPlan.sharedAlbums, cloudPlan.sharedAlbums);
     return localPlan;
   }
 
@@ -4294,6 +4440,26 @@
     if (!nk) return null;
     return (state.people || []).find(p => normPersonName(p.name) === nk) || null;
   }
+  function findPersonByEmail(email) {
+    const ne = normPersonEmail(email);
+    if (!ne) return null;
+    return (state.people || []).find(p => normPersonEmail(p.email) === ne) || null;
+  }
+  /**
+   * Link a guest row to People: personId, else email, else exact name.
+   * Does not create a person (use absorbGuestsFromPlan for that).
+   */
+  function resolvePersonForGuest(g, plan) {
+    if (!g) return null;
+    let person = findPersonById(g.personId);
+    if (person) return person;
+    person = findPersonByEmail(g.email);
+    if (person) return person;
+    const name = String(g.name || '').trim();
+    if (!name) return null;
+    if (plan && isGroupLabelGuestName(name, plan.groupName)) return null;
+    return findPersonByName(name);
+  }
   /** Find or create a People row from a typed organiser name. Never uses groupName. */
   function upsertPersonFromOrganiserName(name) {
     const clean = String(name || '').trim();
@@ -4414,18 +4580,13 @@
 
       const email = String(g.email || '').trim();
       const ne = normPersonEmail(email);
-      let person = null;
-      if (ne) person = state.people.find(p => normPersonEmail(p.email) === ne) || null;
+      let person = findPersonById(g.personId);
+      if (!person && ne) person = findPersonByEmail(email);
+      if (!person) person = findPersonByName(name);
       if (!person) {
-        const nk = normPersonName(name);
-        person = state.people.find(p => {
-          if (ne && normPersonEmail(p.email)) return false;
-          return !normPersonEmail(p.email) && normPersonName(p.name) === nk;
-        }) || null;
-      }
-      if (!person) {
+        const reuseId = String(g.personId || '').trim();
         person = ensurePerson({
-          id: uid('person'),
+          id: (reuseId && !findPersonById(reuseId)) ? reuseId : uid('person'),
           name,
           email: email || '',
           notes: '',
@@ -4807,6 +4968,7 @@
     existing.groupName = existing.groupName || base.groupName;
     existing.organiserPersonId = existing.organiserPersonId || base.organiserPersonId || '';
     existing.organiserName = existing.organiserName || base.organiserName || '';
+    existing.sharedAlbums = mergeSharedAlbums(existing.sharedAlbums, base.sharedAlbums);
     const named = (existing.guests || []).some(g => (g.name || '').trim());
     if (!existing.guests?.length || !named) existing.guests = base.guests;
     else existing.guests = existing.guests.map(g => ensureGuestDebt(g));
@@ -5363,6 +5525,11 @@
       const owes = guestOwes(g);
       const nameMissing = markEmpties && guestNameIsMissing(g.name);
       const emailMissing = markEmpties && !String(g.email || '').trim();
+      const person = resolvePersonForGuest(g, state.plan);
+      if (person && g.personId !== person.id) g.personId = person.id;
+      const personId = person ? person.id : (g.personId || '');
+      const displayName = String(g.name || '').trim() || 'Unnamed';
+      const canOpen = !!personId && !!findPersonById(personId);
       const repayRows = (g.repayments || []).map(r => `
         <div class="repay-row">
           <input type="date" data-repay-date="${g.id}" data-repay-id="${r.id}" value="${escapeHtml(r.date || '')}" aria-label="Repayment date">
@@ -5371,9 +5538,12 @@
         </div>
       `).join('') || `<p class="muted">No daily repayments yet.</p>`;
       return `
-      <div class="guest-block${missingMarkerClass(nameMissing || emailMissing)}">
+      <div class="guest-block${missingMarkerClass(nameMissing || emailMissing)}" data-guest-id="${escapeHtml(g.id)}" data-person-id="${escapeHtml(personId)}">
         <div class="guest-row">
-          <input type="text" class="${missingFieldClass(nameMissing).trim()}" data-guest-name="${g.id}" value="${escapeHtml(g.name)}" placeholder="Lady / guest name" aria-invalid="${nameMissing ? 'true' : 'false'}">
+          <div class="guest-name-stack">
+            <button type="button" class="guest-name-link${canOpen ? '' : ' is-unlinked'}" data-open-person="${escapeHtml(personId)}" data-guest-id="${escapeHtml(g.id)}" ${canOpen ? '' : 'disabled'} title="${canOpen ? 'Open in People' : 'No matching person in People yet'}">${escapeHtml(displayName)}</button>
+            <input type="text" class="guest-name-input ${missingFieldClass(nameMissing).trim()}" data-guest-name="${g.id}" value="${escapeHtml(g.name)}" placeholder="Lady / guest name" aria-label="Guest name" aria-invalid="${nameMissing ? 'true' : 'false'}">
+          </div>
           ${nameMissing ? missingBadgeHtml('Name missing') : ''}
           <button type="button" class="icon-btn" data-remove-guest="${g.id}" aria-label="Remove guest">×</button>
         </div>
@@ -5400,9 +5570,44 @@
           <button type="button" class="btn btn-outline btn-sm" data-add-repay="${g.id}">Add today’s repayment</button>
         </div>
         <div class="repay-list">${repayRows}</div>
-        <p class="repay-note">Enter amounts yourself — nothing is invented.</p>
+        <p class="repay-note">Enter amounts yourself — nothing is invented. Click the name to open that person in People.</p>
       </div>`;
     }).join('');
+  }
+
+  function renderSharedAlbumsEditor() {
+    const albums = ensureSharedAlbums(state.plan);
+    const rows = albums.map(a => {
+      const open = isSafeHttpUrl(a.url)
+        ? `<a class="album-open-link" href="${escapeHtml(a.url)}" target="_blank" rel="noopener noreferrer">Open</a>`
+        : `<span class="muted">No link</span>`;
+      return `
+        <div class="album-row" data-album-id="${escapeHtml(a.id)}">
+          <div class="album-fields">
+            <div>
+              <label class="field-label">Album name</label>
+              <input type="text" data-album-name="${escapeHtml(a.id)}" value="${escapeHtml(a.name)}" placeholder="e.g. shared iCloud album" autocomplete="off">
+            </div>
+            <div>
+              <label class="field-label">Link</label>
+              <input type="url" data-album-url="${escapeHtml(a.id)}" value="${escapeHtml(a.url)}" placeholder="https://www.icloud.com/sharedalbum/#…" autocomplete="off">
+            </div>
+          </div>
+          <div class="album-row-actions">
+            ${open}
+            <button type="button" class="icon-btn" data-remove-album="${escapeHtml(a.id)}" aria-label="Remove album">×</button>
+          </div>
+        </div>`;
+    }).join('') || `<p class="muted" style="margin:0;">No shared albums on this plan yet. Paste an iCloud shared-album link — do not invent one.</p>`;
+    return `
+      <div class="albums-block">
+        <div class="row-between">
+          <label class="field-label" style="margin:0;">Shared iCloud albums</label>
+          <button type="button" class="btn btn-outline btn-sm" id="btnAddAlbum">Add album</button>
+        </div>
+        <p class="muted" style="margin:4px 0 8px;">Old group photos live in shared iPhoto / iCloud albums. Stored on this plan as <code>payload.sharedAlbums</code> (name + optional url / albumId).</p>
+        <div class="albums-list">${rows}</div>
+      </div>`;
   }
 
   function filteredCatalogueList() {
@@ -6944,7 +7149,8 @@ function renderDayTabs() {
         'data-place-nickname', 'data-place-icon',
         'data-place-type', 'data-place-contact-method', 'data-add-place-time',
         'data-stop-title', 'data-stop-notes', 'data-stop-address', 'data-stop-time', 'data-stop-travel',
-        'data-guest-name', 'data-guest-email', 'data-guest-lent', 'data-repay-amount', 'data-repay-date'
+        'data-guest-name', 'data-guest-email', 'data-guest-lent', 'data-repay-amount', 'data-repay-date',
+        'data-album-name', 'data-album-url', 'data-person-email', 'data-person-name'
       ];
       for (const attr of focusAttrs) {
         if (active.hasAttribute && active.hasAttribute(attr)) {
@@ -7087,6 +7293,7 @@ function renderDayTabs() {
           </div>
         </div>
         ${renderTourHotelSelect()}
+        ${renderSharedAlbumsEditor()}
         <button type="button" class="btn btn-outline btn-sm" id="btnRebuildDays">Rebuild days from dates</button>
         <button type="button" class="btn btn-outline btn-sm" id="btnSuggestRoughWeek" title="Lay down a draft week from Places and usual tour patterns — you can edit everything after">Suggest a rough week</button>
       </div>
@@ -7291,7 +7498,83 @@ function renderDayTabs() {
     else if (tab === 'rough') state.mainTab = 'rough';
     else state.mainTab = 'planner';
     localStorage.setItem('planner_main_tab', state.mainTab);
+    const url = new URL(location.href);
+    if (state.mainTab === 'planner') url.searchParams.delete('tab');
+    else url.searchParams.set('tab', state.mainTab);
+    if (state.mainTab !== 'people') url.searchParams.delete('person');
+    if (state.mainTab !== 'places') url.searchParams.delete('place');
+    history.replaceState(null, '', url);
     render({ resetScroll: true });
+  }
+
+  function openPersonInPeopleTab(personId, guest) {
+    let id = personId ? String(personId) : '';
+    let person = findPersonById(id);
+    if (!person && guest) {
+      if (state.plan) absorbGuestsFromPlan(state.plan);
+      person = resolvePersonForGuest(guest, state.plan);
+      if (person) {
+        id = person.id;
+        if (guest.personId !== id) {
+          guest.personId = id;
+          scheduleAutoSave();
+        }
+      }
+    }
+    if (!person) {
+      toast('No matching person in People yet');
+      return;
+    }
+    state.selectedPersonId = person.id;
+    state.personDeepLink = person.id;
+    state.personSearch = '';
+    state.mainTab = 'people';
+    localStorage.setItem('planner_main_tab', 'people');
+    const url = new URL(location.href);
+    url.searchParams.set('tab', 'people');
+    url.searchParams.set('person', person.id);
+    url.searchParams.delete('place');
+    history.replaceState(null, '', url);
+    render({ resetScroll: true });
+    const row = document.querySelector(`[data-select-person="${CSS.escape(person.id)}"]`);
+    if (row && typeof row.scrollIntoView === 'function') {
+      try { row.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (_) { row.scrollIntoView(); }
+    }
+  }
+
+  function addSharedAlbum() {
+    if (!state.plan) return;
+    ensureSharedAlbums(state.plan);
+    state.plan.sharedAlbums.push(normalizeSharedAlbum({ name: '', url: '', albumId: '' }));
+    scheduleAutoSave();
+    render();
+    const inputs = document.querySelectorAll('[data-album-name]');
+    const last = inputs[inputs.length - 1];
+    if (last) last.focus();
+  }
+  function findSharedAlbum(id) {
+    if (!state.plan) return null;
+    ensureSharedAlbums(state.plan);
+    return (state.plan.sharedAlbums || []).find(a => a.id === id) || null;
+  }
+  function setSharedAlbumField(id, field, value) {
+    const a = findSharedAlbum(id);
+    if (!a) return;
+    const v = String(value || '').trim();
+    if (field === 'name') a.name = v;
+    if (field === 'url') {
+      a.url = v;
+      if (v && !a.albumId) a.albumId = albumIdFromICloudUrl(v);
+    }
+    if (field === 'albumId') a.albumId = v;
+    scheduleAutoSave();
+  }
+  function removeSharedAlbum(id) {
+    if (!state.plan) return;
+    ensureSharedAlbums(state.plan);
+    state.plan.sharedAlbums = state.plan.sharedAlbums.filter(a => a.id !== id);
+    scheduleAutoSave();
+    render();
   }
 
   function parseEnteredDate(value) {
@@ -7387,8 +7670,41 @@ function renderDayTabs() {
     document.querySelectorAll('[data-guest-name]').forEach(inp => {
       inp.addEventListener('input', () => {
         const g = state.plan.guests.find(x => x.id === inp.getAttribute('data-guest-name'));
-        if (g) { g.name = inp.value; scheduleAutoSave(); }
+        if (g) {
+          g.name = inp.value;
+          const link = document.querySelector(`.guest-name-link[data-guest-id="${CSS.escape(g.id)}"]`);
+          if (link) link.textContent = String(g.name || '').trim() || 'Unnamed';
+          scheduleAutoSave();
+        }
       });
+      inp.addEventListener('change', () => {
+        if (state.plan && absorbGuestsFromPlan(state.plan)) {
+          if (state.supabasePeopleTable) savePeopleToSupabase().catch(() => {});
+        }
+        scheduleAutoSave();
+        render();
+      });
+    });
+    document.querySelectorAll('[data-open-person]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const guestId = btn.getAttribute('data-guest-id');
+        const guest = guestId && state.plan ? state.plan.guests.find(x => x.id === guestId) : null;
+        openPersonInPeopleTab(btn.getAttribute('data-open-person'), guest);
+      });
+    });
+    q('#btnAddAlbum')?.addEventListener('click', addSharedAlbum);
+    document.querySelectorAll('[data-album-name]').forEach(inp => {
+      inp.addEventListener('input', () => setSharedAlbumField(inp.getAttribute('data-album-name'), 'name', inp.value));
+    });
+    document.querySelectorAll('[data-album-url]').forEach(inp => {
+      inp.addEventListener('input', () => setSharedAlbumField(inp.getAttribute('data-album-url'), 'url', inp.value));
+      inp.addEventListener('change', () => {
+        setSharedAlbumField(inp.getAttribute('data-album-url'), 'url', inp.value);
+        render();
+      });
+    });
+    document.querySelectorAll('[data-remove-album]').forEach(btn => {
+      btn.addEventListener('click', () => removeSharedAlbum(btn.getAttribute('data-remove-album')));
     });
     document.querySelectorAll('[data-guest-email]').forEach(inp => {
       inp.addEventListener('input', () => {
@@ -7551,8 +7867,23 @@ function renderDayTabs() {
     });
     return list;
   }
+  function applyPersonDeepLink() {
+    const id = String(state.personDeepLink || '').trim();
+    if (!id) return false;
+    if (findPersonById(id)) {
+      state.selectedPersonId = id;
+      return true;
+    }
+    return false;
+  }
   function ensureSelectedPersonId(list) {
-    if (state.selectedPersonId && !(state.people || []).some(p => p.id === state.selectedPersonId)) {
+    if (applyPersonDeepLink()) return;
+    if (state.personDeepLink) {
+      // Honour ?person= even if the row is still loading — never silently select someone else.
+      state.selectedPersonId = String(state.personDeepLink);
+      return;
+    }
+    if (state.selectedPersonId && !(state.people || []).some(p => String(p.id) === String(state.selectedPersonId))) {
       state.selectedPersonId = null;
     }
     if (!state.selectedPersonId && list && list.length) {
@@ -7657,6 +7988,70 @@ function renderDayTabs() {
       String(a.name || '').localeCompare(String(b.name || ''), 'en', { sensitivity: 'base' })
     );
   }
+  function personIsOnPlan(person, plan) {
+    if (!person || !plan) return false;
+    const pid = String(person.id);
+    if (String(plan.organiserPersonId || '') === pid) return true;
+    if ((plan.guests || []).some(g => g && String(g.personId || '') === pid)) return true;
+    const key = plan.bookingKey;
+    if (key && /^[0-9]+$/.test(String(key))) {
+      if (personBookingIdSet(person).has(Number(key))) return true;
+    }
+    return false;
+  }
+  function albumsForPerson(person) {
+    if (!person) return [];
+    const out = [];
+    const seen = new Set();
+    Object.values(state.plans || {}).forEach(plan => {
+      if (!plan) return;
+      if (!personIsOnPlan(person, plan)) return;
+      normalizeSharedAlbums(plan.sharedAlbums).forEach(a => {
+        if (!(a.name || a.url || a.albumId)) return;
+        const key = sharedAlbumDedupeKey(a);
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        out.push({
+          name: a.name,
+          url: a.url,
+          albumId: a.albumId,
+          groupName: plan.groupName || '',
+          bookingKey: plan.bookingKey || '',
+        });
+      });
+    });
+    if (state.plan && personIsOnPlan(person, state.plan)) {
+      normalizeSharedAlbums(state.plan.sharedAlbums).forEach(a => {
+        if (!(a.name || a.url || a.albumId)) return;
+        const key = sharedAlbumDedupeKey(a);
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        out.push({
+          name: a.name,
+          url: a.url,
+          albumId: a.albumId,
+          groupName: state.plan.groupName || '',
+          bookingKey: state.plan.bookingKey || '',
+        });
+      });
+    }
+    return out;
+  }
+  function renderPersonAlbums(person) {
+    const albums = albumsForPerson(person);
+    if (!albums.length) {
+      return `<div class="people-albums"><span class="tw-label">Shared albums</span><span class="tw-empty">No album links on tours this person attended</span></div>`;
+    }
+    const items = albums.map(a => {
+      const label = a.name || a.albumId || 'Shared album';
+      const context = a.groupName ? ` <span class="muted">· ${escapeHtml(a.groupName)}</span>` : '';
+      const link = isSafeHttpUrl(a.url)
+        ? `<a href="${escapeHtml(a.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>`
+        : `<span>${escapeHtml(label)}</span>`;
+      return `<li>${link}${context}</li>`;
+    }).join('');
+    return `<div class="people-albums"><span class="tw-label">Shared albums</span><ul class="people-album-list">${items}</ul></div>`;
+  }
   function renderTravelledWith(person) {
     const companions = companionsForPerson(person);
     if (!companions.length) {
@@ -7705,18 +8100,23 @@ function renderDayTabs() {
     const nameList = list.length
       ? list.map(p => {
           ensurePerson(p);
-          const sel = state.selectedPersonId === p.id ? ' selected' : '';
+          const sel = String(state.selectedPersonId || '') === String(p.id) ? ' selected' : '';
           const visits = Math.max(Number(p.visitCount) || 0, (p.visitRefs || []).length);
           const vtitle = visits === 1 ? 'Visited 1 time' : ('Visited ' + visits + ' times');
+          const email = String(p.email || '').trim();
+          const emailLine = email ? `<span class="pemail">${escapeHtml(email)}</span>` : '';
           return `
-        <button type="button" class="place-name-item${sel}" data-select-person="${p.id}" aria-pressed="${state.selectedPersonId === p.id ? 'true' : 'false'}">
-          <span class="pname">${escapeHtml(p.name || 'Unnamed')}</span>
+        <button type="button" class="place-name-item${sel}" data-select-person="${p.id}" aria-pressed="${String(state.selectedPersonId || '') === String(p.id) ? 'true' : 'false'}">
+          <span class="pname-block">
+            <span class="pname">${escapeHtml(p.name || 'Unnamed')}</span>
+            ${emailLine}
+          </span>
           <span class="pvisits" title="${escapeHtml(vtitle)}">${visits}</span>
         </button>`;
         }).join('')
       : `<p class="place-name-empty">No people yet. Add someone on the left, or open a booking-linked plan — guests are absorbed automatically.</p>`;
 
-    const selected = (state.people || []).find(p => p.id === state.selectedPersonId) || null;
+    const selected = (state.people || []).find(p => String(p.id) === String(state.selectedPersonId || '')) || null;
     let detailHtml = '';
     if (selected) {
       ensurePerson(selected);
@@ -7731,7 +8131,7 @@ function renderDayTabs() {
         <div class="row-between">
           <div>
             <input type="text" data-person-name="${p.id}" value="${escapeHtml(p.name)}" placeholder="Person name (not the tour/group label)" style="font-weight:800;margin-bottom:6px;">
-            <div style="margin-bottom:6px;">${mailto}</div>
+            <div class="people-email-line">${mailto}</div>
           </div>
           <button type="button" class="icon-btn" data-remove-person="${p.id}" aria-label="Remove person">×</button>
         </div>
@@ -7740,6 +8140,7 @@ function renderDayTabs() {
           <div class="visit-hint">Tour / group names are visit labels — keep one People row per person.</div>
         </div>
         ${renderTravelledWith(p)}
+        ${renderPersonAlbums(p)}
         <div class="dir-grid">
           <div>
             <label class="field-label">Email</label>
@@ -7865,6 +8266,12 @@ function renderDayTabs() {
     root.querySelectorAll('[data-select-person]').forEach(btn => {
       btn.addEventListener('click', () => {
         state.selectedPersonId = btn.getAttribute('data-select-person');
+        state.personDeepLink = state.selectedPersonId || '';
+        const url = new URL(location.href);
+        url.searchParams.set('tab', 'people');
+        if (state.selectedPersonId) url.searchParams.set('person', state.selectedPersonId);
+        else url.searchParams.delete('person');
+        history.replaceState(null, '', url);
         render();
       });
     });
@@ -7886,7 +8293,25 @@ function renderDayTabs() {
     root.querySelectorAll('[data-person-email]').forEach(inp => {
       inp.addEventListener('input', () => {
         const p = state.people.find(x => x.id === inp.getAttribute('data-person-email'));
-        if (p) { p.email = inp.value.trim(); scheduleAutoSave(); }
+        if (!p) return;
+        p.email = inp.value.trim();
+        scheduleAutoSave();
+        const listEmail = root.querySelector(`[data-select-person="${CSS.escape(p.id)}"] .pemail`);
+        if (listEmail) listEmail.textContent = p.email;
+        else if (p.email) {
+          const block = root.querySelector(`[data-select-person="${CSS.escape(p.id)}"] .pname-block`);
+          if (block && !block.querySelector('.pemail')) {
+            const span = document.createElement('span');
+            span.className = 'pemail';
+            span.textContent = p.email;
+            block.appendChild(span);
+          }
+        }
+        const mailtoLine = root.querySelector('.people-email-line');
+        if (mailtoLine) {
+          if (p.email) mailtoLine.innerHTML = `<a class="people-mailto" href="mailto:${escapeHtml(p.email)}">${escapeHtml(p.email)}</a>`;
+          else mailtoLine.innerHTML = '<span class="muted">No email yet</span>';
+        }
       });
       inp.addEventListener('change', () => {
         const p = state.people.find(x => x.id === inp.getAttribute('data-person-email'));
@@ -8441,6 +8866,7 @@ function renderDayTabs() {
     if (personParam) {
       state.mainTab = 'people';
       state.selectedPersonId = String(personParam);
+      state.personDeepLink = String(personParam);
       state.personSearch = '';
       localStorage.setItem('planner_main_tab', 'people');
     }
@@ -8528,6 +8954,12 @@ function renderDayTabs() {
       }
     } else {
       render();
+    }
+    if (personParam) {
+      state.personDeepLink = String(personParam);
+      state.mainTab = 'people';
+      applyPersonDeepLink();
+      render({ resetScroll: true });
     }
     if (state.supabasePlacesTable || state.supabasePlanTable || state.supabasePeopleTable) {
       setCloudStatus(true, 'Cloud ready');
