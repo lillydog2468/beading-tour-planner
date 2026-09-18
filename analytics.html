@@ -16,6 +16,7 @@
   <title>Booking Form — Analytics</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="global-search.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -577,6 +578,7 @@
 		        </div>
 		      </div>
 	      <div class="topbar-actions">
+        <div id="globalSearchMount" class="global-search-mount" aria-live="polite"></div>
 		        <!-- nav moved to left to match other pages -->
 	        <span class="status" id="status">
 	          <span class="dot" id="statusDot"></span>
@@ -930,6 +932,32 @@
 	    let allExpenses = [];
 	    let charts = { trend: null, topTours: null, byYear: null, sizeByYear: null };
 	    let allPeople = [];
+
+	    let globalSearchApi = null;
+	    function initGlobalSearch() {
+	      if (!window.GlobalSearch || globalSearchApi) return;
+	      globalSearchApi = window.GlobalSearch.init({
+	        supabase: sb,
+	        requireAuth: true,
+	        isSignedIn: async () => {
+	          try {
+	            const { data: { session } } = await sb.auth.getSession();
+	            return !!session;
+	          } catch { return false; }
+	        },
+	        getBookings: () => allBookings || [],
+	        getPeople: () => (allPeople || []).map(p => ({
+	          id: p.client_id || p.id,
+	          name: p.name,
+	          email: p.email,
+	          notes: p.notes,
+	          visit_refs: p.visit_refs,
+	          visit_count: p.visit_count,
+	        })),
+	        getPlaces: () => null,
+	      });
+	    }
+
 	    let selectedTourIds = new Set(); // empty = "All tours"
 
 	    const FILTERS_STORAGE_KEY = 'analyticsFiltersV2';
@@ -1672,7 +1700,7 @@
         const [bookingsRes, expensesRes, peopleRes] = await Promise.all([
           sb.from('bookings').select('*').order('tour_arrival_date', { ascending: true }),
           sb.from('booking_expenses').select('*'),
-          sb.from('planner_people').select('name, visit_count, visit_refs').order('visit_count', { ascending: false }),
+          sb.from('planner_people').select('client_id, name, email, notes, visit_count, visit_refs').order('visit_count', { ascending: false }),
         ]);
         if (bookingsRes.error) throw bookingsRes.error;
         if (expensesRes.error) throw expensesRes.error;
@@ -1682,6 +1710,8 @@
 	        allBookings = bookingsRes.data || [];
 	        allExpenses = expensesRes.data || [];
 	        allPeople = peopleRes.error ? [] : (peopleRes.data || []);
+	        initGlobalSearch();
+	        if (globalSearchApi) globalSearchApi.refresh();
 	        populateTourPicker();
 
 	        const presetEl = document.getElementById('datePreset');

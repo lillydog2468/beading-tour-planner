@@ -15,6 +15,7 @@
   <title>Tour planner — Keith Dudman beading tours</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="global-search.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -1900,6 +1901,7 @@
         </nav>
       </div>
       <div class="topbar-actions">
+        <div id="globalSearchMount" class="global-search-mount" aria-live="polite"></div>
         <label class="autosave-toggle" title="Auto-save changes after 2 seconds of inactivity">
           <input type="checkbox" id="autosaveToggle" onchange="toggleAutoSave(this.checked)">
           <span class="toggle-track"></span>
@@ -8287,6 +8289,94 @@ function renderDayTabs() {
     }
   }
 
+  let globalSearchApi = null;
+  function initGlobalSearch() {
+    if (!window.GlobalSearch || globalSearchApi) return;
+    globalSearchApi = window.GlobalSearch.init({
+      supabase: sb,
+      requireAuth: true,
+      isSignedIn: () => !!state.sessionEmail,
+      getBookings: () => state.bookings || [],
+      getPeople: () => (state.people || []).map(p => ({
+        id: p.id,
+        name: p.name,
+        email: p.email,
+        notes: p.notes,
+        visit_refs: p.visit_refs,
+        visit_count: p.visit_count,
+      })),
+      getPlaces: () => (state.catalogue || []).map(p => ({
+        id: p.id,
+        name: p.name,
+        nickname: p.nickname,
+        address: p.address,
+        notes: p.notes,
+        type: p.type,
+      })),
+      getPlanGuests: () => {
+        const out = [];
+        const plan = state.plan;
+        if (plan) {
+          if (plan.organiserName || plan.organiserPersonId) {
+            out.push({
+              id: plan.organiserPersonId || '',
+              name: plan.organiserName || '',
+              notes: 'Organiser',
+              booking_id: plan.bookingKey && /^[0-9]+$/.test(String(plan.bookingKey)) ? Number(plan.bookingKey) : null,
+            });
+          }
+          (plan.guests || []).forEach(g => {
+            out.push({
+              id: g.personId || g.id || '',
+              name: g.name || '',
+              email: g.email || '',
+              notes: g.notes || 'Guest',
+              booking_id: plan.bookingKey && /^[0-9]+$/.test(String(plan.bookingKey)) ? Number(plan.bookingKey) : null,
+            });
+          });
+        }
+        return out;
+      },
+      onNavigate: ({ tab, person, place, booking }) => {
+        if (booking && String(booking) !== String(state.bookingKey)) {
+          // Let full navigation reload the booking plan
+          return false;
+        }
+        if (tab === 'people' || person) {
+          state.mainTab = 'people';
+          if (person) state.selectedPersonId = String(person);
+          localStorage.setItem('planner_main_tab', 'people');
+          render();
+          const url = new URL(location.href);
+          url.searchParams.set('tab', 'people');
+          if (person) url.searchParams.set('person', person);
+          else url.searchParams.delete('person');
+          url.searchParams.delete('place');
+          history.replaceState(null, '', url);
+          return true;
+        }
+        if (tab === 'places' || place) {
+          state.mainTab = 'places';
+          if (place) {
+            state.selectedPlaceId = String(place);
+            state.placeFilter = 'all';
+            state.placeSearch = '';
+          }
+          localStorage.setItem('planner_main_tab', 'places');
+          render();
+          const url = new URL(location.href);
+          url.searchParams.set('tab', 'places');
+          if (place) url.searchParams.set('place', place);
+          else url.searchParams.delete('place');
+          url.searchParams.delete('person');
+          history.replaceState(null, '', url);
+          return true;
+        }
+        return false;
+      },
+    });
+  }
+
   async function fixExternalNavLinks() {
     const onGithubPages = location.hostname.includes('github.io');
     const bookings = document.getElementById('navBookings');
@@ -8345,6 +8435,21 @@ function renderDayTabs() {
     if (tabParam === 'people' || tabParam === 'places' || tabParam === 'issues' || tabParam === 'rough' || tabParam === 'planner') {
       state.mainTab = tabParam;
       localStorage.setItem('planner_main_tab', state.mainTab);
+    }
+    const personParam = params.get('person');
+    const placeParam = params.get('place');
+    if (personParam) {
+      state.mainTab = 'people';
+      state.selectedPersonId = String(personParam);
+      state.personSearch = '';
+      localStorage.setItem('planner_main_tab', 'people');
+    }
+    if (placeParam) {
+      state.mainTab = 'places';
+      state.selectedPlaceId = String(placeParam);
+      state.placeSearch = '';
+      state.placeFilter = 'all';
+      localStorage.setItem('planner_main_tab', 'places');
     }
 
     // Probe tables first so cloud places/plans can load before first render
@@ -8426,6 +8531,11 @@ function renderDayTabs() {
     }
     if (state.supabasePlacesTable || state.supabasePlanTable || state.supabasePeopleTable) {
       setCloudStatus(true, 'Cloud ready');
+    }
+    initGlobalSearch();
+    if (globalSearchApi) {
+      globalSearchApi.setSignedIn(!!state.sessionEmail);
+      globalSearchApi.refresh();
     }
   }
 

@@ -16,6 +16,7 @@
   <title>Booking Form</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="global-search.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -1927,6 +1928,7 @@
 	      </div>
 	    </div>
 	    <div class="topbar-actions">
+      <div id="globalSearchMount" class="global-search-mount" aria-live="polite"></div>
       <label class="autosave-toggle" title="Auto-save changes after 2 seconds of inactivity">
         <input type="checkbox" id="autosaveToggle" onchange="toggleAutoSave(this.checked)">
         <span class="toggle-track"></span>
@@ -2156,6 +2158,20 @@
   let layoutZoom = Number(localStorage.getItem('layout_zoom') || 1);
 
   let currentUser = null;
+
+  let globalSearchApi = null;
+  function initGlobalSearch() {
+    if (!window.GlobalSearch || globalSearchApi) return;
+    globalSearchApi = window.GlobalSearch.init({
+      supabase: sb,
+      requireAuth: true,
+      isSignedIn: () => !!currentUser,
+      getBookings: () => allBookings || [],
+      getPeople: () => null,
+      getPlaces: () => null,
+    });
+  }
+
 
   // Dummy users for local testing — remove when Supabase is connected
   const DUMMY_USERS = [
@@ -2782,6 +2798,8 @@
   function onAuthSuccess(email, role = 'user') {
     currentUser = { email, role };
     sessionStorage.setItem('session_user', JSON.stringify(currentUser));
+    initGlobalSearch();
+    if (globalSearchApi) globalSearchApi.setSignedIn(true);
     el('loginScreen').classList.add('hidden');
     applyUserMenuState(email, role);
     applyStoredFormLayout();
@@ -4745,6 +4763,7 @@
         };
 	      }));
 	      allBookings = enriched;
+	      if (globalSearchApi) globalSearchApi.refresh();
 
 	      highlightSidebarRecords();
 	      if (currentView === 'table') renderTable(allBookings);

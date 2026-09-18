@@ -15,6 +15,7 @@
   <title>Places visit stats — Keith Dudman beading tours</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="global-search.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -288,7 +289,8 @@
           <a href="places-stats.html" class="active" id="navPlacesStats">Places stats</a>
         </nav>
       </div>
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <div class="topbar-actions" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <div id="globalSearchMount" class="global-search-mount" aria-live="polite"></div>
         <span class="status" id="status">
           <span class="dot" id="statusDot"></span>
           <span id="statusText">Loading…</span>
@@ -352,6 +354,25 @@
     const SUPABASE_URL = 'https://ojulhplswtcmheonsnlv.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9qdWxocGxzd3RjbWhlb25zbmx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MTk3MDUsImV4cCI6MjA4ODk5NTcwNX0.n45cEd4soEC4gLDs2KSnBBvPs4nivDcSoj4GsG6u8IU';
     const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    let globalSearchApi = null;
+    function initGlobalSearch() {
+      if (!window.GlobalSearch || globalSearchApi) return;
+      globalSearchApi = window.GlobalSearch.init({
+        supabase: sb,
+        requireAuth: true,
+        isSignedIn: async () => {
+          try {
+            const { data: { session } } = await sb.auth.getSession();
+            return !!session;
+          } catch { return false; }
+        },
+        getBookings: () => null,
+        getPeople: () => null,
+        getPlaces: () => null,
+      });
+    }
+
 
     const LIVE_BOOKINGS_ORIGIN = 'https://keith-booking-form.netlify.app';
     const SKIP_TYPES = new Set(['travel', 'pickup', 'meal']);
@@ -610,6 +631,8 @@
       document.getElementById('placesEmpty').style.display = 'block';
       document.getElementById('placesEmpty').textContent = 'Could not load place stats from Supabase.';
     });
-  </script>
+  
+    initGlobalSearch();
+</script>
 </body>
 </html>
