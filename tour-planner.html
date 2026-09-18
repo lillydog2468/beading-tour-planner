@@ -6188,7 +6188,7 @@ function renderDayTabs() {
         <label class="field-label">Organiser</label>
         <input type="text" id="organiserName" list="organiserPeopleList" value="${escapeHtml(organiserDisplay)}" placeholder="Search People or type a name" autocomplete="off">
         <datalist id="organiserPeopleList">
-          ${(state.people || []).map(p => `<option value="${escapeHtml(p.name || '')}" data-person-id="${escapeHtml(p.id)}"></option>`).join('')}
+          ${(state.people || []).map(p => '<option value="' + escapeHtml(p.name || '') + '"></option>').join('')}
         </datalist>
         <p class="muted" style="margin:0 0 8px;">Contact person in People — not the tour label. Typing a new name adds or links a person.</p>
         <label class="field-label">Group name</label>
