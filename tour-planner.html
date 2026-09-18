@@ -1401,6 +1401,137 @@
       font-weight: 700;
       color: var(--text-secondary);
     }
+
+    /* Rough day focus — larger single-day edit mode */
+    .rough-day-head-main {
+      border: none;
+      background: transparent;
+      padding: 0;
+      margin: 0;
+      text-align: left;
+      cursor: pointer;
+      color: inherit;
+      font: inherit;
+      flex: 1;
+      min-width: 0;
+      border-radius: 8px;
+    }
+    .rough-day-head-main:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    .rough-day-head-main:disabled,
+    .rough-day-head-main[aria-disabled="true"] {
+      cursor: default;
+    }
+    .rough-day-head-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex-shrink: 0;
+      align-items: stretch;
+    }
+    @media (min-width: 520px) {
+      .rough-day-head-actions {
+        flex-direction: row;
+        align-items: flex-start;
+      }
+    }
+    .rough-day-focus {
+      flex-shrink: 0;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 6px 8px;
+      min-height: 36px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      font-family: inherit;
+      white-space: nowrap;
+    }
+    .rough-day-focus:hover,
+    .rough-day-focus:focus-visible {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .view-phone .rough-day-focus,
+    .view-phone .rough-day-add {
+      min-height: 40px;
+      font-size: 13px;
+      padding: 8px 10px;
+    }
+    .rough-focus-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-width: 0;
+    }
+    .rough-focus-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      position: sticky;
+      top: 0;
+      z-index: 6;
+      background: color-mix(in srgb, var(--surface) 92%, transparent);
+      backdrop-filter: blur(6px);
+      padding: 8px 4px;
+      border-bottom: 1px solid var(--border);
+      margin: 0 0 2px;
+    }
+    .rough-focus-bar-label {
+      font-weight: 800;
+      font-size: 14px;
+      color: var(--text);
+    }
+    .rough-focus-bar-hint {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      flex: 1 1 12em;
+    }
+    .rough-day.rough-focus-day {
+      min-height: min(70vh, 720px);
+      padding: 16px;
+      border-radius: 16px;
+      border-style: solid;
+    }
+    .rough-day.rough-focus-day .rough-day-title { font-size: 20px; }
+    .rough-day.rough-focus-day .rough-day-date { font-size: 15px; }
+    .rough-day.rough-focus-day .rough-day-load-hint { font-size: 13px; }
+    .rough-day.rough-focus-day .rough-day-list { gap: 10px; margin-top: 4px; }
+    .rough-day.rough-focus-day .rough-stop {
+      padding: 12px 14px;
+      gap: 10px;
+      border-radius: 12px;
+    }
+    .rough-day.rough-focus-day .rough-stop-nick { font-size: 17px; }
+    .rough-day.rough-focus-day .rough-stop-icon .type-icon-badge {
+      width: 2em; height: 2em; min-width: 2em;
+    }
+    .rough-day.rough-focus-day .rough-stop-actions button {
+      min-width: 44px; min-height: 44px; width: 44px; height: 44px;
+    }
+    .rough-day.rough-focus-day .rough-stop-actions .rough-again {
+      width: auto; min-width: auto; padding: 0 10px; font-size: 13px; height: 44px;
+    }
+    .rough-day.rough-focus-day .time-wheel-btn {
+      min-width: 7em;
+      font-size: 16px;
+      min-height: 44px;
+      padding: 8px 10px;
+    }
+    .rough-day.rough-focus-day .time-wheel-btn .tw-clock { font-size: 14px; }
+    .rough-day.rough-focus-day .rough-empty-day { font-size: 14px; margin-top: 8px; }
+    .rough-day.rough-focus-day .rough-day-add {
+      min-height: 44px;
+      font-size: 14px;
+      padding: 10px 12px;
+    }
+
     .rough-selected-banner {
       margin: 0 0 12px; padding: 10px 12px;
       border-radius: 10px;
@@ -1515,6 +1646,7 @@
     roughTraySearch: '',
     roughSelectedPlaceId: null,
     roughShowUsed: false,
+    roughFocusDayIndex: null,
     liveBookings: false,
     supabasePlanTable: false,
     supabasePlacesTable: false,
@@ -4716,8 +4848,9 @@
     `;
   }
 
-  function renderRoughDayLane(day, dayIndex) {
+  function renderRoughDayLane(day, dayIndex, opts) {
     if (!day) return '';
+    const focused = !!(opts && opts.focused);
     sortDayBlocks(day);
     const today = todayISO();
     const isToday = day.date && day.date === today;
@@ -4758,17 +4891,27 @@
     const selReady = !!state.roughSelectedPlaceId;
     const load = roughDayLoadLevel(day);
     const loadStops = load.count === 1 ? '1 place stop' : (load.count + ' place stops');
+    const focusBtn = focused
+      ? ''
+      : `<button type="button" class="rough-day-focus" data-rough-focus="${dayIndex}" title="Open this day larger for easier editing">Focus day</button>`;
+    const headDisabled = focused ? ' disabled aria-disabled="true"' : '';
+    const headTitle = focused
+      ? 'Day in focus'
+      : 'Open this day larger for easier editing';
     return `
-      <section class="rough-day load-${load.key}" data-rough-day-drop="${dayIndex}" aria-label="Day ${dayIndex + 1} — ${escapeHtml(load.label)}">
+      <section class="rough-day load-${load.key}${focused ? ' rough-focus-day' : ''}" data-rough-day-drop="${dayIndex}" aria-label="Day ${dayIndex + 1} — ${escapeHtml(load.label)}${focused ? ' (focus)' : ''}">
         <div class="rough-day-head">
-          <div>
+          <button type="button" class="rough-day-head-main" data-rough-focus="${dayIndex}"${headDisabled} title="${escapeHtml(headTitle)}">
             <div class="rough-day-title">${isToday ? 'Today · ' : ''}Day ${dayIndex + 1}</div>
             <div class="rough-day-date">${day.date ? `${weekdayName(day.date)} ${formatDateDMY(day.date)}` : 'Date not set'}</div>
             <div class="rough-day-load-hint">${escapeHtml(load.label)} · ${escapeHtml(loadStops)}</div>
-          </div>
-          <button type="button" class="rough-day-add${selReady ? ' ready' : ''}" data-rough-add-day="${dayIndex}" ${selReady ? '' : 'disabled'} title="Tap a place in the tray first, then tap here">
-            Add to Day ${dayIndex + 1}
           </button>
+          <div class="rough-day-head-actions">
+            ${focusBtn}
+            <button type="button" class="rough-day-add${selReady ? ' ready' : ''}" data-rough-add-day="${dayIndex}" ${selReady ? '' : 'disabled'} title="Tap a place in the tray first, then tap here">
+              Add to Day ${dayIndex + 1}
+            </button>
+          </div>
         </div>
         <ul class="rough-day-list">${rows}</ul>
         ${empty}
@@ -4778,6 +4921,13 @@
 
   function renderRoughPlanPanel() {
     const days = (state.plan && state.plan.days) || [];
+    // Clamp focus if days were rebuilt shorter
+    if (state.roughFocusDayIndex != null) {
+      const fi = Number(state.roughFocusDayIndex);
+      if (!Number.isFinite(fi) || fi < 0 || fi >= days.length) state.roughFocusDayIndex = null;
+    }
+    const focusIdx = state.roughFocusDayIndex;
+    const inFocus = focusIdx != null;
     let selectedBanner = '';
     if (state.roughSelectedPlaceId) {
       const p = placeById(state.roughSelectedPlaceId);
@@ -4794,16 +4944,31 @@
           </div>`;
       }
     }
-    const lanes = days.length
-      ? days.map((d, i) => renderRoughDayLane(d, i)).join('')
-      : '<p class="muted">No days yet — set tour dates on the Planner tab (or Add day).</p>';
+    let weekOrFocus;
+    if (inFocus) {
+      const d = days[focusIdx];
+      weekOrFocus = `
+        <div class="rough-focus-wrap" id="roughFocus" role="region" aria-label="Day ${focusIdx + 1} in focus">
+          <div class="rough-focus-bar">
+            <button type="button" class="btn btn-outline btn-sm" id="btnRoughBackWeek" title="Return to the week overview">← Week overview</button>
+            <span class="rough-focus-bar-label">Focus · Day ${focusIdx + 1}</span>
+            <span class="rough-focus-bar-hint">Same stops and controls — larger for easier editing. Esc or Week overview to go back.</span>
+          </div>
+          ${renderRoughDayLane(d, focusIdx, { focused: true })}
+        </div>`;
+    } else {
+      const lanes = days.length
+        ? days.map((d, i) => renderRoughDayLane(d, i)).join('')
+        : '<p class="muted">No days yet — set tour dates on the Planner tab (or Add day).</p>';
+      weekOrFocus = `<div class="rough-week" id="roughWeek">${lanes}</div>`;
+    }
     const pace = roughWeekPaceSummary();
     return `
       <div class="card">
         <div class="row-between" style="align-items:flex-start;gap:10px;flex-wrap:wrap;">
           <div>
             <h2 style="margin:0;">Rough plan</h2>
-            <p class="muted" style="margin:6px 0 0;max-width:42em;">Sketch the week with Simi — drag places onto days or tap-to-add. Same plan as Planner (shared cloud save). Leave time blank when adding and we’ll suggest an approximate slot (about 1 hour 30 minutes after the last timed stop, or about 30 minutes for lunch-like places). Tap the <strong>🕐 time chip</strong> on each stop to open the scroll wheel (hour + minute), then Done.</p>
+            <p class="muted" style="margin:6px 0 0;max-width:42em;">Sketch the week with Simi — drag places onto days or tap-to-add. Same plan as Planner (shared cloud save). Leave time blank when adding and we’ll suggest an approximate slot (about 1 hour 30 minutes after the last timed stop, or about 30 minutes for lunch-like places). Tap the <strong>🕐 time chip</strong> on each stop to open the scroll wheel (hour + minute), then Done. Tap a <strong>day header</strong> or <strong>Focus day</strong> to edit that day larger.</p>
             <p class="rough-week-pace pace-${pace.key}" id="roughWeekPace" aria-live="polite">${escapeHtml(pace.text)}</p>
           </div>
           <button type="button" class="btn btn-outline btn-sm" id="btnRoughGotoPlanner">Open Planner</button>
@@ -4811,7 +4976,7 @@
         ${selectedBanner}
         <div class="rough-layout" style="margin-top:12px;">
           ${renderRoughTray()}
-          <div class="rough-week" id="roughWeek">${lanes}</div>
+          ${weekOrFocus}
         </div>
       </div>
     `;
@@ -4914,8 +5079,33 @@
         moveRoughStop(dayIndex, btn.getAttribute('data-rough-move'), Number(btn.getAttribute('data-dir')));
       });
     });
+
+    document.getElementById('btnRoughBackWeek')?.addEventListener('click', () => {
+      state.roughFocusDayIndex = null;
+      render({ resetScroll: true });
+    });
+    document.querySelectorAll('[data-rough-focus]').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        if (btn.disabled || btn.getAttribute('aria-disabled') === 'true') return;
+        const dayIndex = Number(btn.getAttribute('data-rough-focus'));
+        if (!Number.isFinite(dayIndex) || dayIndex < 0) return;
+        state.roughFocusDayIndex = dayIndex;
+        render({ resetScroll: true });
+      });
+    });
   }
 
+
+  // Escape closes Rough day focus (time wheel Escape is handled separately)
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (state.mainTab !== 'rough') return;
+    if (state.roughFocusDayIndex == null) return;
+    if (_twState && _twState.open) return;
+    state.roughFocusDayIndex = null;
+    render({ resetScroll: true });
+  });
 
   function renderDayGlance(day) {
     if (!day) return '';
