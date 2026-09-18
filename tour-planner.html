@@ -933,6 +933,20 @@
       text-transform: uppercase; letter-spacing: .03em;
       color: var(--text-secondary); padding-top: 2px;
     }
+    .place-name-item .pvisits {
+      flex-shrink: 0; font-size: 11px; font-weight: 800;
+      letter-spacing: .02em; padding: 2px 8px; border-radius: 999px;
+      background: var(--accent-soft); color: var(--accent); margin-top: 1px;
+    }
+    .people-visit-list {
+      list-style: none; padding: 0; margin: 8px 0 0;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .people-visit-list li {
+      font-size: 13px; padding: 8px 10px; border-radius: 8px;
+      background: var(--surface); border: 1px solid var(--border);
+    }
+    .people-mailto { font-weight: 700; color: var(--accent); word-break: break-all; }
     .place-name-empty { padding: 14px 12px; color: var(--text-secondary); font-size: 14px; }
     .places-add-box {
       border: 1px solid var(--border); border-radius: 12px;
@@ -1736,9 +1750,12 @@
     placeFilter: 'all',
     placeSearch: '',
     selectedPlaceId: null,
+    people: [],
+    personSearch: '',
+    selectedPersonId: null,
     mainTab: (function () {
       const t = localStorage.getItem('planner_main_tab');
-      return (t === 'places' || t === 'rough') ? t : 'planner';
+      return (t === 'places' || t === 'rough' || t === 'people') ? t : 'planner';
     })(),
     roughTrayFilter: 'all',
     roughTraySearch: '',
@@ -1748,6 +1765,7 @@
     liveBookings: false,
     supabasePlanTable: false,
     supabasePlacesTable: false,
+    supabasePeopleTable: false,
     cloudSaveOk: false,
   };
 
@@ -2160,6 +2178,8 @@
       date: r.date || todayISO(),
       amount: Number(r.amount) || 0,
     }));
+    if (g.email == null) g.email = '';
+    else g.email = String(g.email).trim();
     return g;
   }
   function guestPaidBack(g) {
@@ -2186,11 +2206,11 @@
   }
   /** Short family-friendly labels — Keith / Simi can edit in Places. */
   const DEFAULT_NICKNAMES = {
-    kf01: 'Rut', kf02: 'Mat', kf03: 'GB', kf04: 'Lucka', kf05: 'Peg',
+    kf01: 'Rut', kf02: 'Mat', kf03: 'GB', kf04: 'wood pile', kf05: 'Peg',
     kf06: 'Clever fam', kf07: 'Ral', kf08: 'Oliver', kf09: 'Janov', kf10: 'Pes',
     kf11: 'Black', kf12: 'Buttons', kf13: 'Press', kf14: 'Lamp', kf15: 'Lhot',
     kf16: 'Clever',
-    ks01: 'Antik', ks02: 'Držkov', ks03: 'Vlad', ks04: 'Bijou NS', ks05: 'Bijou C',
+    ks01: 'Antik', ks02: 'Držkov', ks03: 'Vlad', ks04: 'roundabout', ks05: 'Bijou C',
     ks06: 'Ráj', ks07: 'House', ks08: 'Smrž', ks09: 'Haberdash', ks10: 'Preciosa',
     kr01: 'Studnice', kr02: 'Petřín', kr03: 'Baště food', kr04: 'Splzov',
     kr05: 'Park food', kr06: 'Snack',
@@ -2255,6 +2275,9 @@
       const seeded = (p.id && DEFAULT_NICKNAMES[p.id]) || inventShortNickname(p.name);
       if (seeded) p.nickname = seeded;
     }
+    // Keith / big bob nicknames (migrate prior short labels)
+    if (p.id === 'kf04' && (p.nickname === 'Lucka' || !String(p.nickname).trim())) p.nickname = 'wood pile';
+    if (p.id === 'ks04' && (p.nickname === 'Bijou NS' || !String(p.nickname).trim())) p.nickname = 'roundabout';
     if (!String(p.icon).trim() && p.id && DEFAULT_ICONS[p.id]) {
       p.icon = DEFAULT_ICONS[p.id];
     }
@@ -3235,6 +3258,9 @@
     if (Array.isArray(state.catalogue) && state.catalogue.length) {
       store.catalogue = state.catalogue;
     }
+    if (Array.isArray(state.people)) {
+      store.people = state.people;
+    }
     store.plans = store.plans || {};
     const memPlans = state.plans || {};
     const mergedPlans = Object.assign({}, store.plans);
@@ -3407,6 +3433,253 @@
     });
   }
 
+
+  /* ── People directory (planner_people) ── */
+  function normPersonEmail(email) {
+    return String(email || '').trim().toLowerCase();
+  }
+  function normPersonName(name) {
+    return String(name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  }
+  function ensurePerson(p) {
+    if (!p) return p;
+    if (!p.id) p.id = uid('person');
+    p.name = p.name || '';
+    p.email = p.email || '';
+    p.notes = p.notes || '';
+    if (typeof p.visitCount !== 'number' || Number.isNaN(p.visitCount)) {
+      p.visitCount = Number(p.visitCount) || 0;
+    }
+    if (!Array.isArray(p.visitRefs)) {
+      try {
+        p.visitRefs = typeof p.visitRefs === 'string' ? JSON.parse(p.visitRefs || '[]') : [];
+      } catch (_) { p.visitRefs = []; }
+      if (!Array.isArray(p.visitRefs)) p.visitRefs = [];
+    }
+    p.visitRefs = p.visitRefs.map(r => ({
+      booking_id: r.booking_id != null ? r.booking_id : (r.bookingId != null ? r.bookingId : null),
+      date: r.date || null,
+      label: r.label || null,
+    })).filter(r => r.booking_id != null || r.date || r.label);
+    if (p.visitCount < p.visitRefs.length) p.visitCount = p.visitRefs.length;
+    return p;
+  }
+  function personToRow(p) {
+    ensurePerson(p);
+    return {
+      client_id: String(p.id),
+      name: p.name || 'Unnamed',
+      email: p.email ? String(p.email).trim() : null,
+      notes: p.notes || null,
+      visit_count: Number(p.visitCount) || 0,
+      visit_refs: Array.isArray(p.visitRefs) ? p.visitRefs : [],
+      updated_at: new Date().toISOString(),
+    };
+  }
+  function rowToPerson(r) {
+    return ensurePerson({
+      id: r.client_id || ('person' + r.id),
+      name: r.name || '',
+      email: r.email || '',
+      notes: r.notes || '',
+      visitCount: r.visit_count == null ? 0 : Number(r.visit_count),
+      visitRefs: r.visit_refs || [],
+    });
+  }
+  function dedupePeopleByEmail() {
+    const byEmail = new Map();
+    const kept = [];
+    let changed = false;
+    (state.people || []).forEach(raw => {
+      const p = ensurePerson({ ...raw });
+      const e = normPersonEmail(p.email);
+      if (!e) { kept.push(p); return; }
+      if (!byEmail.has(e)) {
+        byEmail.set(e, p);
+        kept.push(p);
+        return;
+      }
+      changed = true;
+      const dest = byEmail.get(e);
+      if ((!dest.name || dest.name === 'Unnamed') && p.name) dest.name = p.name;
+      if (!dest.notes && p.notes) dest.notes = p.notes;
+      const refs = [...(dest.visitRefs || [])];
+      (p.visitRefs || []).forEach(r => {
+        const bid = r.booking_id != null ? Number(r.booking_id) : null;
+        const exists = bid != null
+          ? refs.some(x => Number(x.booking_id) === bid)
+          : refs.some(x => (x.date || '') === (r.date || '') && (x.label || '') === (r.label || ''));
+        if (!exists) refs.push(r);
+      });
+      dest.visitRefs = refs;
+      dest.visitCount = Math.max(Number(dest.visitCount) || 0, Number(p.visitCount) || 0, refs.length);
+    });
+    if (changed) state.people = kept;
+    return changed;
+  }
+  /** Upsert from plan.guests. Visits only grow for real booking-linked plans (numeric bookingKey). */
+  function absorbGuestsFromPlan(plan) {
+    if (!plan || !Array.isArray(plan.guests)) return false;
+    if (!Array.isArray(state.people)) state.people = [];
+    const key = String(plan.bookingKey || '');
+    const isBooking = /^[0-9]+$/.test(key);
+    const bookingId = isBooking ? Number(key) : null;
+    const label = (plan.groupName || (bookingId ? ('Booking #' + bookingId) : '')).trim();
+    const date = plan.arrivalDate || '';
+    let changed = false;
+    plan.guests.forEach(g => {
+      if (!g) return;
+      const name = String(g.name || '').trim();
+      if (!name) return;
+      const email = String(g.email || '').trim();
+      const ne = normPersonEmail(email);
+      let person = null;
+      if (ne) person = state.people.find(p => normPersonEmail(p.email) === ne) || null;
+      if (!person) {
+        const nk = normPersonName(name);
+        person = state.people.find(p => {
+          if (ne && normPersonEmail(p.email)) return false;
+          return !normPersonEmail(p.email) && normPersonName(p.name) === nk;
+        }) || null;
+      }
+      if (!person) {
+        person = ensurePerson({
+          id: uid('person'),
+          name,
+          email: email || '',
+          notes: '',
+          visitCount: 0,
+          visitRefs: [],
+        });
+        state.people.push(person);
+        changed = true;
+      } else {
+        ensurePerson(person);
+        if (name && person.name !== name) { person.name = name; changed = true; }
+        if (email && normPersonEmail(person.email) !== ne) {
+          if (!person.email || normPersonEmail(person.email) === ne) {
+            person.email = email;
+            changed = true;
+          }
+        }
+      }
+      if (isBooking && bookingId != null) {
+        const refs = Array.isArray(person.visitRefs) ? person.visitRefs : [];
+        const already = refs.some(r => Number(r.booking_id) === bookingId);
+        if (!already) {
+          refs.push({ booking_id: bookingId, date: date || null, label: label || null });
+          person.visitRefs = refs;
+          person.visitCount = refs.length;
+          changed = true;
+        } else {
+          // Refresh label/date on existing ref when richer
+          refs.forEach(r => {
+            if (Number(r.booking_id) !== bookingId) return;
+            if (date && !r.date) { r.date = date; changed = true; }
+            if (label && (!r.label || r.label.length < label.length)) { r.label = label; changed = true; }
+          });
+        }
+      }
+    });
+    if (dedupePeopleByEmail()) changed = true;
+    return changed;
+  }
+  async function fetchCloudPeople() {
+    if (!state.supabasePeopleTable) return null;
+    try {
+      const { data, error } = await withTimeout(
+        sb.from('planner_people').select('*').order('name', { ascending: true }),
+        5000,
+        'People lookup timed out'
+      );
+      if (error) throw error;
+      return (data || []).map(rowToPerson);
+    } catch (err) {
+      console.warn('Cloud people not loaded:', err);
+      return null;
+    }
+  }
+  async function savePeopleToSupabase() {
+    if (!state.supabasePeopleTable) return false;
+    if (!Array.isArray(state.people) || !state.people.length) return false;
+    try {
+      const rows = state.people.map(p => personToRow(p));
+      const { error } = await sb.from('planner_people').upsert(rows, { onConflict: 'client_id' });
+      if (error) throw error;
+      return true;
+    } catch (err) {
+      console.warn('Could not save people to Supabase:', err);
+      return false;
+    }
+  }
+  async function absorbPeopleFromCloudPlans() {
+    if (!state.supabasePlanTable) return false;
+    try {
+      const { data, error } = await withTimeout(
+        sb.from('planner_plans').select('booking_id, client_key, payload').not('booking_id', 'is', null).limit(200),
+        8000,
+        'People absorb from plans timed out'
+      );
+      if (error) throw error;
+      let changed = false;
+      (data || []).forEach(row => {
+        if (!row || !row.payload) return;
+        const plan = normalizePlan({
+          ...row.payload,
+          bookingKey: row.booking_id != null ? String(row.booking_id) : String(row.client_key || ''),
+        });
+        if (absorbGuestsFromPlan(plan)) changed = true;
+      });
+      return changed;
+    } catch (err) {
+      console.warn('Could not absorb people from cloud plans:', err);
+      return false;
+    }
+  }
+  function mergePeopleLists(primary, secondary) {
+    const out = [];
+    const byId = new Map();
+    const byEmail = new Map();
+    function add(list) {
+      (list || []).forEach(raw => {
+        const p = ensurePerson({ ...raw });
+        if (!p.id) p.id = uid('person');
+        const e = normPersonEmail(p.email);
+        if (byId.has(p.id)) {
+          const dest = byId.get(p.id);
+          Object.assign(dest, { ...dest, ...p, id: dest.id, visitRefs: dest.visitRefs });
+          (p.visitRefs || []).forEach(r => {
+            const bid = r.booking_id != null ? Number(r.booking_id) : null;
+            if (bid == null) return;
+            if (!dest.visitRefs.some(x => Number(x.booking_id) === bid)) dest.visitRefs.push(r);
+          });
+          dest.visitCount = Math.max(dest.visitCount || 0, dest.visitRefs.length);
+          return;
+        }
+        if (e && byEmail.has(e)) {
+          const dest = byEmail.get(e);
+          if ((!dest.name || dest.name === 'Unnamed') && p.name) dest.name = p.name;
+          if (!dest.notes && p.notes) dest.notes = p.notes;
+          (p.visitRefs || []).forEach(r => {
+            const bid = r.booking_id != null ? Number(r.booking_id) : null;
+            if (bid == null) return;
+            if (!dest.visitRefs.some(x => Number(x.booking_id) === bid)) dest.visitRefs.push(r);
+          });
+          dest.visitCount = Math.max(dest.visitCount || 0, dest.visitRefs.length);
+          return;
+        }
+        byId.set(p.id, p);
+        if (e) byEmail.set(e, p);
+        out.push(p);
+      });
+    }
+    add(secondary);
+    add(primary);
+    state.people = out;
+    dedupePeopleByEmail();
+    return state.people;
+  }
+
   function mergeCatalogueLists(primary, secondary) {
     const byId = new Map();
     const byName = new Map();
@@ -3510,8 +3783,19 @@
     state._lastCloudRefuse = null;
     let placesOk = false;
     let planOk = false;
+    let peopleOk = false;
+    try {
+      if (planToSave) absorbGuestsFromPlan(planToSave);
+    } catch (err) {
+      console.warn(err);
+    }
     try {
       placesOk = await savePlacesToSupabase();
+    } catch (err) {
+      console.warn(err);
+    }
+    try {
+      peopleOk = await savePeopleToSupabase();
     } catch (err) {
       console.warn(err);
     }
@@ -3734,6 +4018,12 @@
     }
     normalizePlan(state.plan);
     state.plans[state.plan.bookingKey] = state.plan;
+    try {
+      if (absorbGuestsFromPlan(state.plan)) {
+        schedulePersist();
+        if (state.supabasePeopleTable) savePeopleToSupabase().catch(() => {});
+      }
+    } catch (err) { console.warn(err); }
     const today = todayISO();
     const idx = state.plan.days.findIndex(d => d.date === today);
     state.selectedDay = idx >= 0 ? idx : 0;
@@ -4137,6 +4427,9 @@
         <div class="guest-row">
           <input type="text" data-guest-name="${g.id}" value="${escapeHtml(g.name)}" placeholder="Lady / guest name">
           <button type="button" class="icon-btn" data-remove-guest="${g.id}" aria-label="Remove guest">×</button>
+        </div>
+        <div class="guest-row">
+          <input type="email" data-guest-email="${g.id}" value="${escapeHtml(g.email || '')}" placeholder="Email (optional — feeds People)">
         </div>
         <div class="debt-grid">
           <div class="debt-field">
@@ -5655,7 +5948,7 @@ function renderDayTabs() {
         'data-place-nickname', 'data-place-icon',
         'data-place-type', 'data-place-contact-method', 'data-add-place-time',
         'data-stop-title', 'data-stop-notes', 'data-stop-address', 'data-stop-time', 'data-stop-travel',
-        'data-guest-name', 'data-guest-lent', 'data-repay-amount', 'data-repay-date'
+        'data-guest-name', 'data-guest-email', 'data-guest-lent', 'data-repay-amount', 'data-repay-date'
       ];
       for (const attr of focusAttrs) {
         if (active.hasAttribute && active.hasAttribute(attr)) {
@@ -5852,6 +6145,10 @@ function renderDayTabs() {
           Places
           <span class="tab-sub">Hotels, factories, shops, contacts</span>
         </button>
+        <button type="button" class="main-tab ${state.mainTab === 'people' ? 'active' : ''}" data-main-tab="people" role="tab" aria-selected="${state.mainTab === 'people'}">
+          People
+          <span class="tab-sub">Guests, emails, visit history</span>
+        </button>
       </div>
     `;
 
@@ -5863,6 +6160,17 @@ function renderDayTabs() {
         </div>
         <p class="muted" style="margin-bottom:8px;">Search and pick a place on the left; edit name, type, contact, address and notes on the right. Hotels appear in the Planner “Staying at” list as the overnight base (day starting point from the day after arrival). This directory feeds the Planner picker and saves to Supabase.</p>
         ${renderCatalogue({ showAddToDay: false })}
+      </div>
+    `;
+
+    const peoplePanel = `
+      <div class="card">
+        <div class="row-between">
+          <h2>People directory</h2>
+          <button type="button" class="btn btn-outline btn-sm" id="btnBackPlanner">Back to Planner</button>
+        </div>
+        <p class="muted" style="margin-bottom:8px;">Search and pick a person on the left; edit name, email, notes and visits on the right. Guests from booking-linked plans are absorbed automatically (deduped by email). Visit counts only grow from real bookings — not the sample demo. Saves to Supabase like Places.</p>
+        ${renderPeopleDirectory()}
       </div>
     `;
 
@@ -5908,6 +6216,12 @@ function renderDayTabs() {
       ${placesPanel}
     `;
 
+    const peopleView = `
+      <div class="status-row">${live}${auth}${resetDemo}</div>
+      ${mainTabs}
+      ${peoplePanel}
+    `;
+
     const roughView = `
       <div class="status-row">${live}${auth}${resetDemo}</div>
       ${mainTabs}
@@ -5917,6 +6231,8 @@ function renderDayTabs() {
     const app = document.getElementById('app');
     if (state.mainTab === 'places') {
       app.innerHTML = placesView;
+    } else if (state.mainTab === 'people') {
+      app.innerHTML = peopleView;
     } else if (state.mainTab === 'rough') {
       app.innerHTML = roughView;
     } else if (view === 'phone') {
@@ -5926,6 +6242,7 @@ function renderDayTabs() {
     }
     bindDynamic();
     if (state.mainTab === 'rough') bindRoughPlan();
+    if (state.mainTab === 'people') bindPeopleDirectory();
     if (resetScroll) {
       try { window.scrollTo({ top: 0, behavior: 'smooth' }); }
       catch { window.scrollTo(0, 0); }
@@ -5936,6 +6253,7 @@ function renderDayTabs() {
 
   function setMainTab(tab) {
     if (tab === 'places') state.mainTab = 'places';
+    else if (tab === 'people') state.mainTab = 'people';
     else if (tab === 'rough') state.mainTab = 'rough';
     else state.mainTab = 'planner';
     localStorage.setItem('planner_main_tab', state.mainTab);
@@ -6014,6 +6332,18 @@ function renderDayTabs() {
       inp.addEventListener('input', () => {
         const g = state.plan.guests.find(x => x.id === inp.getAttribute('data-guest-name'));
         if (g) { g.name = inp.value; scheduleAutoSave(); }
+      });
+    });
+    document.querySelectorAll('[data-guest-email]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const g = state.plan.guests.find(x => x.id === inp.getAttribute('data-guest-email'));
+        if (g) { g.email = inp.value.trim(); scheduleAutoSave(); }
+      });
+      inp.addEventListener('change', () => {
+        if (state.plan && absorbGuestsFromPlan(state.plan)) {
+          if (state.supabasePeopleTable) savePeopleToSupabase().catch(() => {});
+        }
+        scheduleAutoSave();
       });
     });
     document.querySelectorAll('[data-remove-guest]').forEach(btn => {
@@ -6144,6 +6474,272 @@ function renderDayTabs() {
       btn.addEventListener('click', () => moveStop(btn.getAttribute('data-move'), Number(btn.getAttribute('data-dir'))));
     });
     bindCatalogue(document.getElementById('app'));
+  }
+
+
+  function filteredPeopleList() {
+    const q = String(state.personSearch || '').trim().toLowerCase();
+    let list = (state.people || []).map(p => ensurePerson(p));
+    if (q) {
+      list = list.filter(p => {
+        const hay = [p.name, p.email, p.notes].join(' ').toLowerCase();
+        return hay.includes(q);
+      });
+    }
+    list.sort((a, b) => {
+      const an = String(a.name || '').toLowerCase();
+      const bn = String(b.name || '').toLowerCase();
+      if (an < bn) return -1;
+      if (an > bn) return 1;
+      return 0;
+    });
+    return list;
+  }
+  function ensureSelectedPersonId(list) {
+    if (state.selectedPersonId && !(state.people || []).some(p => p.id === state.selectedPersonId)) {
+      state.selectedPersonId = null;
+    }
+    if (!state.selectedPersonId && list && list.length) {
+      state.selectedPersonId = list[0].id;
+    }
+  }
+  function formatVisitRefsText(refs) {
+    return (refs || []).map(r => {
+      const bits = [];
+      if (r.booking_id != null) bits.push('#' + r.booking_id);
+      if (r.date) bits.push(r.date);
+      if (r.label) bits.push(r.label);
+      return bits.join(' · ') || '(visit)';
+    }).join('\n');
+  }
+  function parseVisitRefsText(text) {
+    const lines = String(text || '').split('\n').map(s => s.trim()).filter(Boolean);
+    const refs = [];
+    lines.forEach(line => {
+      const m = /#?\s*(\d+)/.exec(line);
+      const booking_id = m ? Number(m[1]) : null;
+      const dateM = /(\d{4}-\d{2}-\d{2})/.exec(line);
+      let label = line;
+      if (m) label = label.replace(m[0], '').trim();
+      if (dateM) label = label.replace(dateM[0], '').trim();
+      label = label.replace(/^[·\-|]+/, '').replace(/[·\-|]+$/, '').trim();
+      refs.push({
+        booking_id,
+        date: dateM ? dateM[1] : null,
+        label: label || null,
+      });
+    });
+    return refs;
+  }
+  function renderPeopleDirectory() {
+    const list = filteredPeopleList();
+    ensureSelectedPersonId(list);
+    const nameList = list.length
+      ? list.map(p => {
+          ensurePerson(p);
+          const sel = state.selectedPersonId === p.id ? ' selected' : '';
+          const visits = Number(p.visitCount) || 0;
+          return `
+        <button type="button" class="place-name-item${sel}" data-select-person="${p.id}" aria-pressed="${state.selectedPersonId === p.id ? 'true' : 'false'}">
+          <span class="pname">${escapeHtml(p.name || 'Unnamed')}</span>
+          <span class="pvisits" title="Visits from booking-linked plans">${visits}</span>
+        </button>`;
+        }).join('')
+      : `<p class="place-name-empty">No people yet. Add someone on the left, or open a booking-linked plan — guests are absorbed automatically.</p>`;
+
+    const selected = (state.people || []).find(p => p.id === state.selectedPersonId) || null;
+    let detailHtml = '';
+    if (selected) {
+      ensurePerson(selected);
+      const p = selected;
+      const mailto = p.email
+        ? `<a class="people-mailto" href="mailto:${escapeHtml(p.email)}">${escapeHtml(p.email)}</a>`
+        : '<span class="muted">No email yet</span>';
+      const visitItems = (p.visitRefs || []).length
+        ? `<ul class="people-visit-list">${(p.visitRefs || []).map(r => {
+            const bits = [];
+            if (r.booking_id != null) bits.push('Booking #' + r.booking_id);
+            if (r.date) bits.push(escapeHtml(String(r.date)));
+            if (r.label) bits.push(escapeHtml(r.label));
+            return `<li>${bits.join(' · ') || 'Visit'}</li>`;
+          }).join('')}</ul>`
+        : `<p class="muted" style="margin-top:8px;">No booking-linked visits yet.</p>`;
+      detailHtml = `
+      <div class="place-dir-item" data-person-id="${p.id}">
+        <div class="row-between">
+          <div>
+            <input type="text" data-person-name="${p.id}" value="${escapeHtml(p.name)}" placeholder="Name" style="font-weight:800;margin-bottom:6px;">
+            <div style="margin-bottom:6px;">${mailto}</div>
+          </div>
+          <button type="button" class="icon-btn" data-remove-person="${p.id}" aria-label="Remove person">×</button>
+        </div>
+        <div class="dir-grid">
+          <div>
+            <label class="field-label">Email</label>
+            <input type="email" data-person-email="${p.id}" value="${escapeHtml(p.email || '')}" placeholder="name@example.com" autocomplete="email">
+          </div>
+          <div>
+            <label class="field-label">Visit count</label>
+            <input type="number" min="0" step="1" data-person-visit-count="${p.id}" value="${escapeHtml(String(p.visitCount ?? 0))}" title="Usually matches booking-linked visits below">
+          </div>
+        </div>
+        <label class="field-label" style="margin-top:8px;">Notes</label>
+        <input type="text" data-person-notes="${p.id}" value="${escapeHtml(p.notes || '')}" placeholder="Notes (dietary, preferences, …)">
+        <label class="field-label" style="margin-top:8px;">Visits (from bookings)</label>
+        ${visitItems}
+        <label class="field-label" style="margin-top:8px;">Visit refs (light edit — one per line: #booking · date · label)</label>
+        <textarea data-person-visit-refs="${p.id}" rows="4" style="width:100%;font:inherit;font-size:13px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);">${escapeHtml(formatVisitRefsText(p.visitRefs))}</textarea>
+      </div>`;
+    } else {
+      detailHtml = `<p class="places-detail-empty">Select a person from the list to edit name, email, notes and visits. Or add someone on the left — they will open here straight away. Guests from real bookings appear here when you load or save those plans.</p>`;
+    }
+
+    const addBox = `
+      <div class="places-add-box">
+        <div class="field-label">Add a person</div>
+        <input type="text" id="newPersonName" placeholder="Name" autocomplete="name">
+        <input type="email" id="newPersonEmail" placeholder="Email (optional)" autocomplete="email">
+        <button type="button" class="btn btn-outline btn-sm" id="btnAddPerson">Save to People</button>
+        <p class="muted" style="margin:0;">No seed list — only people you add, or guests absorbed from booking-linked plans.</p>
+      </div>`;
+
+    return `
+      <div class="places-md">
+        <div class="places-master">
+          <label class="field-label" for="personSearch">Search people</label>
+          <input type="search" id="personSearch" class="place-search" value="${escapeHtml(state.personSearch || '')}" placeholder="Type to filter by name or email…" autocomplete="off" enterkeyhint="search">
+          <div class="place-name-list" role="listbox" aria-label="People">${nameList}</div>
+          ${addBox}
+        </div>
+        <div class="places-detail" aria-live="polite">
+          <div class="field-label" style="margin-bottom:8px;">${selected ? 'Edit person' : 'Person details'}</div>
+          ${detailHtml}
+        </div>
+      </div>
+    `;
+  }
+  function addPerson() {
+    const name = document.getElementById('newPersonName')?.value.trim();
+    if (!name) { toast('Enter a name'); return; }
+    const email = document.getElementById('newPersonEmail')?.value.trim() || '';
+    if (!Array.isArray(state.people)) state.people = [];
+    if (email) {
+      const ne = normPersonEmail(email);
+      const existing = state.people.find(p => normPersonEmail(p.email) === ne);
+      if (existing) {
+        state.selectedPersonId = existing.id;
+        if (name && existing.name !== name) existing.name = name;
+        toast('That email is already in People');
+        scheduleAutoSave();
+        render();
+        return;
+      }
+    }
+    const person = ensurePerson({
+      id: uid('person'),
+      name,
+      email,
+      notes: '',
+      visitCount: 0,
+      visitRefs: [],
+    });
+    state.people.push(person);
+    state.selectedPersonId = person.id;
+    const nn = document.getElementById('newPersonName');
+    const ne = document.getElementById('newPersonEmail');
+    if (nn) nn.value = '';
+    if (ne) ne.value = '';
+    toast('Person saved');
+    scheduleAutoSave();
+    render();
+  }
+  function removePerson(id) {
+    const wasSelected = state.selectedPersonId === id;
+    state.people = (state.people || []).filter(p => p.id !== id);
+    if (wasSelected) {
+      state.selectedPersonId = state.people.length ? state.people[0].id : null;
+    }
+    if (state.supabasePeopleTable) {
+      sb.from('planner_people').delete().eq('client_id', String(id)).then(({ error }) => {
+        if (error) console.warn('Could not delete person in cloud:', error);
+      }).catch(err => console.warn(err));
+    }
+    scheduleAutoSave();
+    render();
+  }
+  function bindPeopleDirectory() {
+    const root = document.getElementById('app');
+    if (!root) return;
+    const searchEl = root.querySelector('#personSearch');
+    if (searchEl) {
+      searchEl.addEventListener('input', () => {
+        state.personSearch = searchEl.value;
+        render();
+      });
+    }
+    root.querySelectorAll('[data-select-person]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.selectedPersonId = btn.getAttribute('data-select-person');
+        render();
+      });
+    });
+    root.querySelector('#btnAddPerson')?.addEventListener('click', addPerson);
+    root.querySelectorAll('[data-remove-person]').forEach(btn => {
+      btn.addEventListener('click', () => removePerson(btn.getAttribute('data-remove-person')));
+    });
+    root.querySelectorAll('[data-person-name]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const p = state.people.find(x => x.id === inp.getAttribute('data-person-name'));
+        if (p) {
+          p.name = inp.value;
+          scheduleAutoSave();
+          const label = root.querySelector(`[data-select-person="${CSS.escape(p.id)}"] .pname`);
+          if (label) label.textContent = p.name || 'Unnamed';
+        }
+      });
+    });
+    root.querySelectorAll('[data-person-email]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const p = state.people.find(x => x.id === inp.getAttribute('data-person-email'));
+        if (p) { p.email = inp.value.trim(); scheduleAutoSave(); }
+      });
+      inp.addEventListener('change', () => {
+        const p = state.people.find(x => x.id === inp.getAttribute('data-person-email'));
+        if (p) {
+          p.email = inp.value.trim();
+          dedupePeopleByEmail();
+          scheduleAutoSave();
+          render();
+        }
+      });
+    });
+    root.querySelectorAll('[data-person-notes]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const p = state.people.find(x => x.id === inp.getAttribute('data-person-notes'));
+        if (p) { p.notes = inp.value; scheduleAutoSave(); }
+      });
+    });
+    root.querySelectorAll('[data-person-visit-count]').forEach(inp => {
+      inp.addEventListener('change', () => {
+        const p = state.people.find(x => x.id === inp.getAttribute('data-person-visit-count'));
+        if (p) {
+          p.visitCount = Math.max(0, Number(inp.value) || 0);
+          scheduleAutoSave();
+          const badge = root.querySelector(`[data-select-person="${CSS.escape(p.id)}"] .pvisits`);
+          if (badge) badge.textContent = String(p.visitCount);
+        }
+      });
+    });
+    root.querySelectorAll('[data-person-visit-refs]').forEach(ta => {
+      ta.addEventListener('change', () => {
+        const p = state.people.find(x => x.id === ta.getAttribute('data-person-visit-refs'));
+        if (!p) return;
+        p.visitRefs = parseVisitRefsText(ta.value);
+        p.visitCount = Math.max(Number(p.visitCount) || 0, p.visitRefs.length);
+        scheduleAutoSave();
+        render();
+      });
+    });
   }
 
   function bindCatalogue(root, opts = {}) {
@@ -6389,6 +6985,12 @@ function renderDayTabs() {
     } catch {
       state.supabasePlacesTable = false;
     }
+    try {
+      const probePeople = await withTimeout(sb.from('planner_people').select('id').limit(1), 2000, 'People table probe timed out');
+      state.supabasePeopleTable = !probePeople.error;
+    } catch {
+      state.supabasePeopleTable = false;
+    }
   }
 
   // On GitHub Pages: prefer same-origin booking-form.html when present; else Netlify.
@@ -6459,6 +7061,7 @@ function renderDayTabs() {
     const localCatalogue = Array.isArray(store.catalogue) && store.catalogue.length
       ? normalizeCatalogue(store.catalogue)
       : [];
+    const localPeople = Array.isArray(store.people) ? store.people.map(p => ensurePerson({ ...p })) : [];
     state.plans = store.plans || {};
     if (!state.plans[DEMO_ID]) state.plans[DEMO_ID] = buildDemoPlan();
 
@@ -6466,6 +7069,11 @@ function renderDayTabs() {
     const requested = params.get('booking');
     const viewParam = params.get('view');
     if (viewParam === 'phone' || viewParam === 'detailed') state.viewPref = viewParam;
+    const tabParam = (params.get('tab') || '').toLowerCase();
+    if (tabParam === 'people' || tabParam === 'places' || tabParam === 'rough' || tabParam === 'planner') {
+      state.mainTab = tabParam;
+      localStorage.setItem('planner_main_tab', state.mainTab);
+    }
 
     // Probe tables first so cloud places/plans can load before first render
     await loadLiveBookings();
@@ -6491,6 +7099,28 @@ function renderDayTabs() {
       try { await savePlacesToSupabase(); } catch (_) { /* best-effort */ }
       scheduleAutoSave();
     }
+
+    let cloudPeople = await fetchCloudPeople();
+    if (cloudPeople && cloudPeople.length) {
+      mergePeopleLists(cloudPeople, localPeople);
+    } else {
+      state.people = localPeople;
+    }
+    // Absorb guests from all booking-linked cloud plans (Tour Archivist batch + any later saves)
+    try {
+      const absorbed = await absorbPeopleFromCloudPlans();
+      if (absorbed) {
+        try { await savePeopleToSupabase(); } catch (_) { /* best-effort */ }
+        schedulePersist();
+      }
+    } catch (err) {
+      console.warn(err);
+    }
+    // Also absorb from locally cached booking plans (not demo)
+    Object.keys(state.plans || {}).forEach(k => {
+      if (!/^[0-9]+$/.test(String(k))) return;
+      absorbGuestsFromPlan(state.plans[k]);
+    });
 
     // Prefetch cloud plan for requested booking into local cache
     const localKey = (requested && requested !== DEMO_ID)
@@ -6522,7 +7152,7 @@ function renderDayTabs() {
     } else {
       render();
     }
-    if (state.supabasePlacesTable || state.supabasePlanTable) {
+    if (state.supabasePlacesTable || state.supabasePlanTable || state.supabasePeopleTable) {
       setCloudStatus(true, 'Cloud ready');
     }
   }
