@@ -527,7 +527,7 @@
       padding: 12px 14px;
       border-radius: var(--radius);
       cursor: pointer;
-      transition: background .12s;
+      transition: background .12s, filter .12s;
       border: 1px solid transparent;
       margin-bottom: 4px;
     }
@@ -535,6 +535,50 @@
     .record-item.active { background: var(--accent-soft); border-color: var(--accent); }
     .record-item .record-title { font-size: 13px; font-weight: 600; }
     .record-item .record-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
+    /* Year bands: stable soft tint per year so scrolling shows which year you are in */
+    .records-year-header {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 7px 10px;
+      margin: 8px 0 4px;
+      border-radius: var(--radius);
+      border: 1px solid var(--year-band-border, var(--border));
+      background: var(--year-band-header, var(--surface-alt));
+      color: var(--year-band-fg, var(--text));
+      box-shadow: 0 1px 0 rgba(0,0,0,.04);
+    }
+    .records-year-header:first-child { margin-top: 2px; }
+    .record-item.year-band {
+      background: var(--year-band-bg, transparent);
+      border-color: var(--year-band-border, transparent);
+    }
+    .record-item.year-band:hover {
+      background: var(--year-band-bg-hover, var(--bg));
+      filter: none;
+    }
+    .record-item.year-band.active {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+    }
+    /* Soft palette cycling by year number (light) */
+    .year-band-0 { --year-band-bg: #eef2ff; --year-band-bg-hover: #e0e7ff; --year-band-header: #e0e7ff; --year-band-border: #c7d2fe; --year-band-fg: #3730a3; }
+    .year-band-1 { --year-band-bg: #ecfdf5; --year-band-bg-hover: #d1fae5; --year-band-header: #d1fae5; --year-band-border: #a7f3d0; --year-band-fg: #065f46; }
+    .year-band-2 { --year-band-bg: #fff7ed; --year-band-bg-hover: #ffedd5; --year-band-header: #ffedd5; --year-band-border: #fed7aa; --year-band-fg: #9a3412; }
+    .year-band-3 { --year-band-bg: #fdf2f8; --year-band-bg-hover: #fce7f3; --year-band-header: #fce7f3; --year-band-border: #fbcfe8; --year-band-fg: #9d174d; }
+    .year-band-4 { --year-band-bg: #eff6ff; --year-band-bg-hover: #dbeafe; --year-band-header: #dbeafe; --year-band-border: #bfdbfe; --year-band-fg: #1e40af; }
+    .year-band-5 { --year-band-bg: #f5f3ff; --year-band-bg-hover: #ede9fe; --year-band-header: #ede9fe; --year-band-border: #ddd6fe; --year-band-fg: #5b21b6; }
+    [data-theme="dark"] .year-band-0 { --year-band-bg: rgba(99,102,241,.14); --year-band-bg-hover: rgba(99,102,241,.22); --year-band-header: rgba(99,102,241,.28); --year-band-border: rgba(99,102,241,.35); --year-band-fg: #c7d2fe; }
+    [data-theme="dark"] .year-band-1 { --year-band-bg: rgba(16,185,129,.12); --year-band-bg-hover: rgba(16,185,129,.20); --year-band-header: rgba(16,185,129,.26); --year-band-border: rgba(16,185,129,.32); --year-band-fg: #a7f3d0; }
+    [data-theme="dark"] .year-band-2 { --year-band-bg: rgba(249,115,22,.12); --year-band-bg-hover: rgba(249,115,22,.20); --year-band-header: rgba(249,115,22,.26); --year-band-border: rgba(249,115,22,.32); --year-band-fg: #fed7aa; }
+    [data-theme="dark"] .year-band-3 { --year-band-bg: rgba(236,72,153,.12); --year-band-bg-hover: rgba(236,72,153,.20); --year-band-header: rgba(236,72,153,.26); --year-band-border: rgba(236,72,153,.32); --year-band-fg: #fbcfe8; }
+    [data-theme="dark"] .year-band-4 { --year-band-bg: rgba(59,130,246,.12); --year-band-bg-hover: rgba(59,130,246,.20); --year-band-header: rgba(59,130,246,.26); --year-band-border: rgba(59,130,246,.32); --year-band-fg: #bfdbfe; }
+    [data-theme="dark"] .year-band-5 { --year-band-bg: rgba(139,92,246,.12); --year-band-bg-hover: rgba(139,92,246,.20); --year-band-header: rgba(139,92,246,.26); --year-band-border: rgba(139,92,246,.32); --year-band-fg: #ddd6fe; }
 
     .empty-state {
       display: flex;
@@ -4408,6 +4452,13 @@
 	    applySidebarList();
 	  }
 
+	  /** Stable soft colour index for a calendar year (cycles every 6 years). */
+	  function yearBandIndex(year) {
+	    const y = Number(year);
+	    if (!Number.isFinite(y)) return 0;
+	    return ((Math.trunc(y) % 6) + 6) % 6;
+	  }
+
 	  function renderRecords(records) {
 	    const list = el('recordsList');
 	    if (!records.length) {
@@ -4418,8 +4469,19 @@
 	    for (const [, td] of tabs) { if (td.bookingId) openIds.add(td.bookingId); }
 	    const activeBookingId = activeTabId ? (tabs.get(activeTabId)?.bookingId) : null;
 
-	    list.innerHTML = records.map(r => `
-	      <div class="record-item ${r.id === activeBookingId ? 'active' : ''}" onclick="openBookingInTab(${r.id})">
+	    const parts = [];
+	    let lastYearKey = null;
+	    for (const r of records) {
+	      const y = bookingYear(r);
+	      const yearKey = y == null ? 'none' : String(y);
+	      const band = yearBandIndex(y == null ? 0 : y);
+	      if (yearKey !== lastYearKey) {
+	        lastYearKey = yearKey;
+	        const label = y == null ? 'No year' : String(y);
+	        parts.push(`<div class="records-year-header year-band year-band-${band}" role="presentation">${escapeHtml(label)}</div>`);
+	      }
+	      parts.push(`
+	      <div class="record-item year-band year-band-${band} ${r.id === activeBookingId ? 'active' : ''}" onclick="openBookingInTab(${r.id})">
 	        <div class="record-title">${openIds.has(r.id) ? '<span style="color:var(--accent);margin-right:4px;">●</span>' : ''}${r.group_name || 'Booking #' + r.id}</div>
 	        <div class="record-sub">${
 	          r.tour_arrival_date ? formatDateDMY(r.tour_arrival_date) : 'No date'
@@ -4428,7 +4490,9 @@
 	            ? ` · ${formatMoney(Number(r.left_to_pay) || 0, normalizeCurrency(r.beading_tour_price_currency || DEFAULT_CURRENCY))} left`
 	            : ''
 	        }</div>
-	      </div>`).join('');
+	      </div>`);
+	    }
+	    list.innerHTML = parts.join('');
 	  }
 
 	  function highlightSidebarRecords() {
