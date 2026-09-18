@@ -1126,6 +1126,67 @@
       min-width: 3.4em;
       overflow: visible;
     }
+    .rough-again-intro {
+      margin: 0 0 12px;
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+    .rough-again-intro strong { color: var(--text); font-weight: 800; }
+    .rough-again-day-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .rough-again-day-list li { margin: 0; }
+    .rough-again-day-btn {
+      width: 100%;
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 2px;
+      padding: 12px 14px;
+      min-height: 52px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--surface-alt);
+      color: var(--text);
+      cursor: pointer;
+      font-family: inherit;
+      transition: border-color .12s, background .12s, box-shadow .12s;
+    }
+    .rough-again-day-btn:hover,
+    .rough-again-day-btn:focus-visible {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+      outline: none;
+    }
+    .rough-again-day-btn .rad-title {
+      font-weight: 800;
+      font-size: 15px;
+    }
+    .rough-again-day-btn .rad-meta {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+    .rough-again-day-btn .rad-note {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent);
+      margin-top: 2px;
+    }
+    .rough-again-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 14px;
+    }
     .rough-week {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -3694,7 +3755,7 @@
     scheduleAutoSave();
     let extra = '';
     if (alreadyUsed && foodReuse) extra = ' — food can go on several days';
-    else if (alreadyUsed) extra = ' — return visit';
+    else if (alreadyUsed) extra = ' — return visit on Day ' + (dayIndex + 1);
     if (time && timeApprox) {
       toast('Added ' + place.name + ' at about ' + time + ' (approximate — tweak if you like)' + extra);
     } else if (time) {
@@ -4781,6 +4842,63 @@
     addPlaceToDay(place, dayIndex, '');
   }
 
+  /** Again → day picker: Keith chooses which day gets the return visit (auto-spaced time). */
+  function openRoughAgainDayPicker(placeId) {
+    const place = placeById(placeId);
+    if (!place) { toast('Place not found'); return; }
+    const days = (state.plan && state.plan.days) || [];
+    if (!days.length) {
+      toast('No days yet — set tour dates on the Planner tab');
+      return;
+    }
+    const nick = placeChipLabel(place);
+    const sheet = document.getElementById('sheet');
+    const body = document.getElementById('sheetBody');
+    const titleEl = document.getElementById('sheetTitle');
+    const closeBtn = document.getElementById('sheetClose');
+    if (titleEl) titleEl.textContent = 'Return visit — which day?';
+    if (closeBtn) closeBtn.textContent = 'Cancel';
+    const alreadyOn = (day) => (day.blocks || []).some(s => {
+      const pid = s && (s.placeId || s.place_id);
+      return pid && pid === placeId;
+    });
+    const rows = days.map((day, i) => {
+      const load = roughDayLoadLevel(day);
+      const loadStops = load.count === 1 ? '1 place stop' : (load.count + ' place stops');
+      const dateLine = day.date
+        ? `${weekdayName(day.date)} ${formatDateDMY(day.date)}`
+        : 'Date not set';
+      const note = alreadyOn(day)
+        ? '<span class="rad-note">Already on this day — add another visit</span>'
+        : '';
+      return `<li>
+        <button type="button" class="rough-again-day-btn" data-rough-again-day="${i}">
+          <span class="rad-title">Day ${i + 1}</span>
+          <span class="rad-meta">${escapeHtml(dateLine)} · ${escapeHtml(load.label)} · ${escapeHtml(loadStops)}</span>
+          ${note}
+        </button>
+      </li>`;
+    }).join('');
+    body.innerHTML = `
+      <p class="rough-again-intro">Add <strong>${escapeHtml(nick)}</strong> again. Pick the day for this return visit — time is auto-spaced (you can change it on the stop).</p>
+      <ul class="rough-again-day-list" role="list">${rows}</ul>
+      <div class="rough-again-actions">
+        <button type="button" class="btn btn-outline" id="btnRoughAgainCancel">Cancel</button>
+      </div>
+    `;
+    sheet.classList.add('open');
+    sheet.setAttribute('aria-hidden', 'false');
+    body.querySelectorAll('[data-rough-again-day]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const dayIndex = Number(btn.getAttribute('data-rough-again-day'));
+        if (!Number.isFinite(dayIndex) || dayIndex < 0) return;
+        closeSheet();
+        addPlaceToRoughDay(placeId, dayIndex);
+      });
+    });
+    document.getElementById('btnRoughAgainCancel')?.addEventListener('click', closeSheet);
+  }
+
   function removeRoughStop(stopId) {
     removeStop(stopId);
   }
@@ -4852,7 +4970,7 @@
     return `
       <aside class="rough-tray" aria-label="Places tray">
         <h3>Places tray</h3>
-        <p class="rough-tray-hint">Drag a chip onto a day, or tap a place then tap <strong>Add to Day</strong>. <strong>Food</strong> (restaurants / snacks) stays in the tray so you can put it on several days. Other places leave once planned — tick <strong>Show used</strong> (or tap <strong>Again</strong> on a stop) for a return visit.</p>
+        <p class="rough-tray-hint">Drag a chip onto a day, or tap a place then tap <strong>Add to Day</strong>. <strong>Food</strong> (restaurants / snacks) stays in the tray so you can put it on several days. Other places leave once planned — tick <strong>Show used</strong>, or tap <strong>Again</strong> on a stop and choose which day for a return visit.</p>
         <label class="field-label" for="roughTraySearch">Search</label>
         <input type="search" id="roughTraySearch" class="rough-tray-search" value="${escapeHtml(state.roughTraySearch || '')}" placeholder="Filter by nickname or name…" autocomplete="off">
         <div class="rough-tray-chips" role="group" aria-label="Filter by type">${chips}</div>
@@ -4890,7 +5008,7 @@
         : (food ? 'Remove this stop' : 'Remove — returns to tray');
       const removeBtn = `<button type="button" class="rough-remove" data-rough-remove="${escapeHtml(s.id)}" title="${removeTip}" aria-label="Remove ${escapeHtml(label)}">×</button>`;
       const againBtn = (!system && placeId && !food)
-        ? `<button type="button" class="rough-again" data-rough-again="${escapeHtml(placeId)}" title="Return visit — select to add again on another day" aria-label="Return visit for ${escapeHtml(label)}">Again</button>`
+        ? `<button type="button" class="rough-again" data-rough-again="${escapeHtml(placeId)}" title="Return visit — choose which day" aria-label="Return visit for ${escapeHtml(label)} — choose which day">Again</button>`
         : '';
       return `<li class="rough-stop${system ? ' system' : ''}" data-rough-stop-id="${escapeHtml(s.id)}" title="${escapeHtml(String(s.title || label))}">
         <div class="rough-stop-top">
@@ -5088,10 +5206,7 @@
       btn.addEventListener('click', () => {
         const placeId = btn.getAttribute('data-rough-again');
         if (!placeId) return;
-        state.roughSelectedPlaceId = placeId;
-        state.roughShowUsed = true;
-        toast('Return visit ready — tap Add to Day on another day');
-        render();
+        openRoughAgainDayPicker(placeId);
       });
     });
     document.querySelectorAll('[data-rough-move]').forEach(btn => {
@@ -5118,12 +5233,17 @@
   }
 
 
-  // Escape closes Rough day focus (time wheel Escape is handled separately)
+  // Escape: close sheet (e.g. Again day picker), then Rough day focus
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
+    if (_twState && _twState.open) return;
+    const sheet = document.getElementById('sheet');
+    if (sheet && sheet.classList.contains('open')) {
+      closeSheet();
+      return;
+    }
     if (state.mainTab !== 'rough') return;
     if (state.roughFocusDayIndex == null) return;
-    if (_twState && _twState.open) return;
     state.roughFocusDayIndex = null;
     render({ resetScroll: true });
   });
@@ -6074,6 +6194,10 @@ function renderDayTabs() {
   function openSheet() {
     const sheet = document.getElementById('sheet');
     const body = document.getElementById('sheetBody');
+    const titleEl = document.getElementById('sheetTitle');
+    const closeBtn = document.getElementById('sheetClose');
+    if (titleEl) titleEl.textContent = 'Add a stop';
+    if (closeBtn) closeBtn.textContent = 'Close';
     // Compact picker only — full Places editing lives on the Places tab
     body.innerHTML = `
       <div class="row-between" style="margin-bottom:10px;">
@@ -6099,6 +6223,10 @@ function renderDayTabs() {
     sheet.classList.remove('open');
     sheet.setAttribute('aria-hidden', 'true');
     document.getElementById('sheetBody').innerHTML = '';
+    const titleEl = document.getElementById('sheetTitle');
+    const closeBtn = document.getElementById('sheetClose');
+    if (titleEl) titleEl.textContent = 'Add a stop';
+    if (closeBtn) closeBtn.textContent = 'Close';
   }
 
   async function loadLiveBookings() {
