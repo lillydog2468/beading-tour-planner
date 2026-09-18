@@ -1298,6 +1298,28 @@
       font-size: 16px;
     }
     .member-remove:hover { background: rgba(220,38,38,.1); color: var(--danger); border-color: var(--danger); }
+
+    .albums-list { display: flex; flex-direction: column; gap: 8px; }
+    .album-row {
+      display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    }
+    .album-row input {
+      flex: 1; min-width: 140px;
+      padding: 9px 13px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-family: inherit; font-size: 14px;
+      color: var(--text); background: var(--input-bg); outline: none;
+    }
+    .album-row input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+    .album-open {
+      font-size: 13px; font-weight: 700; color: var(--accent); text-decoration: none; white-space: nowrap;
+    }
+    .album-open:hover { text-decoration: underline; }
+    .album-open.is-off { color: var(--text-secondary); pointer-events: none; font-weight: 600; }
     .member-add {
       display: flex;
       align-items: center;
@@ -2263,7 +2285,7 @@
   }
 
   function captureTabState(tabId) {
-    const state = { fields: {}, currencies: {}, hotel: {}, hotelStays: [], members: [], flights: [], expenses: [], addlExpenses: [] };
+    const state = { fields: {}, currencies: {}, hotel: {}, hotelStays: [], members: [], flights: [], expenses: [], addlExpenses: [], sharedAlbums: [] };
 
     FIELDS.forEach(f => {
       const input = tEl(tabId, f);
@@ -2343,6 +2365,8 @@
       });
     }
 
+    state.sharedAlbums = getSharedAlbumsData(tabId);
+
     return state;
   }
 
@@ -2417,6 +2441,8 @@
     const addlList = document.getElementById(`t${tabId}_addl_expenses_list`);
     if (addlList) addlList.innerHTML = '';
     (state.addlExpenses || []).forEach(e => addAdditionalExpenseRow(tabId, e));
+
+    setSharedAlbumsRows(tabId, state.sharedAlbums || []);
 
     recalculateTab(tabId);
   }
@@ -3015,6 +3041,12 @@
         <div class="field"><textarea id="t${t}_extra_notes" rows="4" placeholder="Any additional notes..."></textarea></div>
       </div>
       <div class="section">
+        <div class="section-title">Shared iCloud albums</div>
+        <p style="font-size:13px;color:var(--text-secondary);margin:0 0 8px;">Old group photos. Saved on the tour plan as <code>payload.sharedAlbums</code> (not a bookings column). Leave blank if there is no album.</p>
+        <div class="albums-list" id="t${t}_shared_albums_list"></div>
+        <button type="button" class="member-add" onclick="addSharedAlbumRow('${t}')">Add album</button>
+      </div>
+      <div class="section">
         <div class="section-title">Totals</div>
         <div class="grid grid-2">
           <div class="field"><label>Total Cost</label><div class="computed-value" id="t${t}_cv_totalcost">0</div></div>
@@ -3144,6 +3176,13 @@
           <div class="layout-panel lp-notes">
             <div class="layout-panel-title">Notes</div>
             <div class="field"><textarea class="resizable-box" id="t${t}_extra_notes" rows="6" placeholder="Any additional notes..."></textarea></div>
+          </div>
+
+          <div class="layout-panel lp-notes">
+            <div class="layout-panel-title">Shared iCloud albums</div>
+            <p style="font-size:13px;color:var(--text-secondary);margin:0 0 8px;">Old group photos. Saved on the tour plan as <code>payload.sharedAlbums</code> (not a bookings column).</p>
+            <div class="albums-list resizable-box" id="t${t}_shared_albums_list"></div>
+            <button type="button" class="member-add" onclick="addSharedAlbumRow('${t}')">Add album</button>
           </div>
         </div>
 
@@ -3554,6 +3593,160 @@
       if (fullName) members.push({ id: id ? parseInt(id) : null, first_name: fullName, last_name: '' });
     });
     return members;
+  }
+
+  function albumIdFromICloudUrl(url) {
+    const s = String(url || '').trim();
+    if (!s) return '';
+    const hash = s.split('#')[1] || '';
+    return hash.replace(/^\/+/, '').trim();
+  }
+  function isSafeHttpUrl(url) {
+    try {
+      const u = new URL(String(url || '').trim());
+      return u.protocol === 'http:' || u.protocol === 'https:';
+    } catch (_) {
+      return false;
+    }
+  }
+  function normalizeSharedAlbumsList(list) {
+    if (!Array.isArray(list)) return [];
+    return list.map(a => {
+      const row = (a && typeof a === 'object') ? a : {};
+      const name = String(row.name || '').trim();
+      const url = String(row.url || '').trim();
+      let albumId = String(row.albumId || row.album_id || '').trim();
+      if (!albumId && url) albumId = albumIdFromICloudUrl(url);
+      return { name, url, albumId };
+    }).filter(a => a.name || a.url || a.albumId);
+  }
+  function sharedAlbumsToPayload(list) {
+    return normalizeSharedAlbumsList(list).map(a => {
+      const row = { name: a.name };
+      if (a.url) row.url = a.url;
+      if (a.albumId) row.albumId = a.albumId;
+      return row;
+    });
+  }
+  function addSharedAlbumRow(tabId, album = null) {
+    const list = document.getElementById(`t${tabId}_shared_albums_list`);
+    if (!list) return;
+    const name = album && album.name ? String(album.name) : '';
+    const url = album && album.url ? String(album.url) : '';
+    const albumId = album && album.albumId ? String(album.albumId) : '';
+    const row = document.createElement('div');
+    row.className = 'album-row';
+    if (albumId) row.dataset.albumId = albumId;
+    const safeOpen = isSafeHttpUrl(url);
+    const openCls = safeOpen ? 'album-open' : 'album-open is-off';
+    const openHref = safeOpen ? url : '#';
+    row.innerHTML = `
+      <input type="text" class="album-name" placeholder="Album name" value="${escapeHtml(name)}">
+      <input type="url" class="album-url" placeholder="https://www.icloud.com/sharedalbum/#…" value="${escapeHtml(url)}">
+      <a class="${openCls}" href="${escapeHtml(openHref)}" target="_blank" rel="noopener noreferrer">${safeOpen ? 'Open' : 'No link'}</a>
+      <button type="button" class="member-remove" onclick="removeSharedAlbumRow(this, '${tabId}')" title="Remove">&times;</button>
+    `;
+    row.querySelectorAll('input').forEach(inp => {
+      inp.addEventListener('input', () => {
+        syncAlbumRowOpenLink(row);
+        onTabInput(tabId);
+      });
+    });
+    list.appendChild(row);
+  }
+  function syncAlbumRowOpenLink(row) {
+    const url = row.querySelector('.album-url')?.value.trim() || '';
+    const a = row.querySelector('.album-open');
+    if (!a) return;
+    if (isSafeHttpUrl(url)) {
+      a.href = url;
+      a.textContent = 'Open';
+      a.classList.remove('is-off');
+    } else {
+      a.href = '#';
+      a.textContent = 'No link';
+      a.classList.add('is-off');
+    }
+  }
+  function removeSharedAlbumRow(btn, tabId) {
+    btn.closest('.album-row')?.remove();
+    onTabInput(tabId);
+  }
+  function getSharedAlbumsData(tabId) {
+    const list = document.getElementById(`t${tabId}_shared_albums_list`);
+    if (!list) return [];
+    const albums = [];
+    list.querySelectorAll('.album-row').forEach(row => {
+      const name = row.querySelector('.album-name')?.value.trim() || '';
+      const url = row.querySelector('.album-url')?.value.trim() || '';
+      let albumId = row.dataset.albumId || '';
+      if (!albumId && url) albumId = albumIdFromICloudUrl(url);
+      if (name || url || albumId) albums.push({ name, url, albumId });
+    });
+    return albums;
+  }
+  function setSharedAlbumsRows(tabId, albums) {
+    const list = document.getElementById(`t${tabId}_shared_albums_list`);
+    if (!list) return;
+    list.innerHTML = '';
+    const rows = normalizeSharedAlbumsList(albums);
+    if (rows.length) rows.forEach(a => addSharedAlbumRow(tabId, a));
+  }
+  async function loadSharedAlbumsForBooking(tabId, bookingId) {
+    const tabData = tabs.get(tabId);
+    if (tabData) tabData.sharedAlbumsLoaded = false;
+    if (!bookingId) {
+      setSharedAlbumsRows(tabId, []);
+      if (tabData) tabData.sharedAlbumsLoaded = true;
+      return;
+    }
+    try {
+      const { data, error } = await sb.from('planner_plans').select('payload').eq('booking_id', Number(bookingId)).maybeSingle();
+      if (error) throw error;
+      const albums = data && data.payload ? data.payload.sharedAlbums : [];
+      setSharedAlbumsRows(tabId, albums);
+      if (tabData) tabData.sharedAlbumsLoaded = true;
+    } catch (err) {
+      console.warn('Shared albums not loaded:', err);
+    }
+  }
+  async function saveSharedAlbumsForBooking(tabId, bookingId) {
+    if (!bookingId) return;
+    const tabData = tabs.get(tabId);
+    const albums = getSharedAlbumsData(tabId);
+    const next = sharedAlbumsToPayload(albums);
+    const loaded = !!(tabData && tabData.sharedAlbumsLoaded);
+    try {
+      const { data, error } = await sb.from('planner_plans').select('payload').eq('booking_id', Number(bookingId)).maybeSingle();
+      if (error) throw error;
+      if (!data || !data.payload) {
+        if (!next.length) return;
+        const payload = { bookingKey: String(bookingId), sharedAlbums: next };
+        const { error: insErr } = await sb.from('planner_plans').upsert({
+          booking_id: Number(bookingId),
+          client_key: 'booking:' + bookingId,
+          payload,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'booking_id' });
+        if (insErr) throw insErr;
+        if (tabData) tabData.sharedAlbumsLoaded = true;
+        return;
+      }
+      if (!loaded && !next.length) return;
+      const payload = (typeof data.payload === 'object' && data.payload) ? { ...data.payload } : {};
+      payload.sharedAlbums = next;
+      payload.bookingKey = payload.bookingKey || String(bookingId);
+      const { error: upErr } = await sb.from('planner_plans').upsert({
+        booking_id: Number(bookingId),
+        client_key: 'booking:' + bookingId,
+        payload,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'booking_id' });
+      if (upErr) throw upErr;
+      if (tabData) tabData.sharedAlbumsLoaded = true;
+    } catch (err) {
+      console.warn('Could not save shared albums on the plan:', err);
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -4352,6 +4545,7 @@
     if (deleteBtn) deleteBtn.style.display = 'inline-flex';
     recalculateTab(tabId);
     applyTabYearTint(tabId);
+    loadSharedAlbumsForBooking(tabId, record.id);
   }
 
   function openTourPlanner(tabId) {
@@ -4389,6 +4583,7 @@
     if (expensesList) expensesList.innerHTML = '';
     const addlExpensesList = document.getElementById(`t${tabId}_addl_expenses_list`);
     if (addlExpensesList) addlExpensesList.innerHTML = '';
+    setSharedAlbumsRows(tabId, []);
     const otherWrap = document.getElementById(`t${tabId}_other_hotel_wrap`);
     if (otherWrap) otherWrap.style.display = 'none';
     markTabDirty(tabId, false);
@@ -4840,6 +5035,8 @@
         if (_expenses.length) await sb.from('booking_expenses').insert(_expenses.map(e => ({ hotel_id: e.hotel_id, custom_hotel_name: e.custom_hotel_name, cost: e.cost, currency: e.currency, comments: e.comments, booking_id: bid })));
         if (_additional_expenses.length) await sb.from('booking_expenses').insert(_additional_expenses.map(e => ({ description: e.description, cost: e.cost, currency: e.currency, comments: e.comments, booking_id: bid })));
 
+        await saveSharedAlbumsForBooking(tabId, bid);
+
         if (!silent) toast('Booking updated', 'success');
       } else {
         const { data: inserted, error } = await sb.from(TABLE).insert([bookingData]).select();
@@ -4859,6 +5056,8 @@
         if (_hotel_stays.length) await sb.from('booking_hotels').insert(_hotel_stays.map(s => ({ hotel_id: s.hotel_id, custom_hotel_name: s.custom_hotel_name, nights: s.nights, sort_order: s.sort_order, booking_id: newId })));
         if (_expenses.length) await sb.from('booking_expenses').insert(_expenses.map(e => ({ hotel_id: e.hotel_id, custom_hotel_name: e.custom_hotel_name, cost: e.cost, currency: e.currency, comments: e.comments, booking_id: newId })));
         if (_additional_expenses.length) await sb.from('booking_expenses').insert(_additional_expenses.map(e => ({ description: e.description, cost: e.cost, currency: e.currency, comments: e.comments, booking_id: newId })));
+
+        await saveSharedAlbumsForBooking(tabId, newId);
 
         if (!silent) toast('Booking created', 'success');
       }
