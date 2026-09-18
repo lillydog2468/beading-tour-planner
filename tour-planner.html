@@ -2285,6 +2285,9 @@
   }
   function normalizePlan(plan) {
     if (!plan) return plan;
+    if (plan.organiserPersonId == null) plan.organiserPersonId = '';
+    if (plan.organiserName == null) plan.organiserName = '';
+    if (plan.groupName == null) plan.groupName = '';
     if (plan.tourHotelPlaceId == null) plan.tourHotelPlaceId = '';
     if (plan.tourHotelName == null) plan.tourHotelName = '';
     if (!plan.pragueHotel || typeof plan.pragueHotel !== 'object') {
@@ -3129,6 +3132,8 @@
     const plan = {
       bookingKey: partial.bookingKey || DEMO_ID,
       groupName: partial.groupName || 'Untitled group',
+      organiserPersonId: partial.organiserPersonId || '',
+      organiserName: partial.organiserName || '',
       guests: (partial.guests || []).map(g => ensureGuestDebt({ ...g, lent: g.lent || 0, repayments: g.repayments || [] })),
       arrivalDate: arrival,
       departureDate: departure,
@@ -3517,9 +3522,121 @@
     if (changed) state.people = kept;
     return changed;
   }
-  /** Upsert from plan.guests. Visits only grow for real booking-linked plans (numeric bookingKey). */
+  /** True when a “guest” name is really the tour/group label — never invent a person from that. */
+  function isGroupLabelGuestName(guestName, groupName) {
+    const g = normPersonName(guestName);
+    if (!g) return true;
+    const gn = normPersonName(groupName);
+    if (!gn) return false;
+    if (g === gn) return true;
+    // e.g. guest "Angela Clark Boutique week 1" vs group "Angela Clark Boutique"
+    const stripWeek = (s) => s.replace(/\s+week\s*\d+\s*$/i, '').trim();
+    if (stripWeek(g) === gn || stripWeek(g) === stripWeek(gn)) return true;
+    if (g.startsWith(gn + ' ') || gn.startsWith(g + ' ')) return true;
+    return false;
+  }
+  function findPersonById(id) {
+    if (!id) return null;
+    const sid = String(id);
+    return (state.people || []).find(p => String(p.id) === sid) || null;
+  }
+  function findPersonByName(name) {
+    const nk = normPersonName(name);
+    if (!nk) return null;
+    return (state.people || []).find(p => normPersonName(p.name) === nk) || null;
+  }
+  /** Find or create a People row from a typed organiser name. Never uses groupName. */
+  function upsertPersonFromOrganiserName(name) {
+    const clean = String(name || '').trim();
+    if (!clean) return null;
+    if (!Array.isArray(state.people)) state.people = [];
+    let person = findPersonByName(clean);
+    if (person) {
+      ensurePerson(person);
+      return person;
+    }
+    person = ensurePerson({
+      id: uid('person'),
+      name: clean,
+      email: '',
+      notes: '',
+      visitCount: 0,
+      visitRefs: [],
+    });
+    state.people.push(person);
+    return person;
+  }
+  function setPlanOrganiser(plan, person) {
+    if (!plan) return false;
+    let changed = false;
+    if (person) {
+      ensurePerson(person);
+      if (plan.organiserPersonId !== person.id) { plan.organiserPersonId = person.id; changed = true; }
+      if (plan.organiserName !== person.name) { plan.organiserName = person.name || ''; changed = true; }
+    } else {
+      if (plan.organiserPersonId) { plan.organiserPersonId = ''; changed = true; }
+      if (plan.organiserName) { plan.organiserName = ''; changed = true; }
+    }
+    return changed;
+  }
+  function attachBookingVisitToPerson(person, bookingId, date, label) {
+    if (!person || bookingId == null) return false;
+    ensurePerson(person);
+    const refs = Array.isArray(person.visitRefs) ? person.visitRefs : [];
+    let changed = false;
+    const already = refs.some(r => Number(r.booking_id) === Number(bookingId));
+    if (!already) {
+      refs.push({ booking_id: Number(bookingId), date: date || null, label: label || null });
+      person.visitRefs = refs;
+      person.visitCount = Math.max(Number(person.visitCount) || 0, refs.length);
+      changed = true;
+    } else {
+      refs.forEach(r => {
+        if (Number(r.booking_id) !== Number(bookingId)) return;
+        if (date && !r.date) { r.date = date; changed = true; }
+        if (label && (!r.label || r.label.length < label.length)) { r.label = label; changed = true; }
+      });
+      person.visitRefs = refs;
+      if (person.visitCount < refs.length) { person.visitCount = refs.length; changed = true; }
+    }
+    return changed;
+  }
+  /**
+   * Resolve organiser person for a plan (by id, then cached name).
+   * Never invents a person from groupName alone.
+   */
+  function resolvePlanOrganiser(plan, { createFromName } = { createFromName: false }) {
+    if (!plan) return null;
+    let person = findPersonById(plan.organiserPersonId);
+    if (person) {
+      if (plan.organiserName !== person.name) plan.organiserName = person.name || plan.organiserName || '';
+      return person;
+    }
+    const named = String(plan.organiserName || '').trim();
+    if (named) {
+      person = findPersonByName(named);
+      if (person) {
+        plan.organiserPersonId = person.id;
+        plan.organiserName = person.name || named;
+        return person;
+      }
+      if (createFromName) {
+        person = upsertPersonFromOrganiserName(named);
+        if (person) {
+          plan.organiserPersonId = person.id;
+          plan.organiserName = person.name || named;
+          return person;
+        }
+      }
+    }
+    return null;
+  }
+  /**
+   * Upsert guests into People (directory). Booking visits attach to the organiser person only.
+   * Never invent a person from groupName alone. Group-label “guests” are skipped.
+   */
   function absorbGuestsFromPlan(plan) {
-    if (!plan || !Array.isArray(plan.guests)) return false;
+    if (!plan) return false;
     if (!Array.isArray(state.people)) state.people = [];
     const key = String(plan.bookingKey || '');
     const isBooking = /^[0-9]+$/.test(key);
@@ -3527,10 +3644,25 @@
     const label = (plan.groupName || (bookingId ? ('Booking #' + bookingId) : '')).trim();
     const date = plan.arrivalDate || '';
     let changed = false;
-    plan.guests.forEach(g => {
+
+    // Link / create organiser from organiserName when set — never from groupName.
+    const organiser = resolvePlanOrganiser(plan, { createFromName: !!String(plan.organiserName || '').trim() });
+    if (organiser && setPlanOrganiser(plan, organiser)) changed = true;
+
+    if (isBooking && bookingId != null && organiser) {
+      if (attachBookingVisitToPerson(organiser, bookingId, date, label)) changed = true;
+    }
+
+    const guests = Array.isArray(plan.guests) ? plan.guests : [];
+    guests.forEach(g => {
       if (!g) return;
       const name = String(g.name || '').trim();
       if (!name) return;
+      // Group labels parked in guests[] must not become People rows
+      if (isGroupLabelGuestName(name, plan.groupName)) return;
+      // Same name as linked organiser — keep as contact only (visit already on organiser)
+      if (organiser && normPersonName(name) === normPersonName(organiser.name)) return;
+
       const email = String(g.email || '').trim();
       const ne = normPersonEmail(email);
       let person = null;
@@ -3563,27 +3695,12 @@
           }
         }
       }
-      if (isBooking && bookingId != null) {
-        const refs = Array.isArray(person.visitRefs) ? person.visitRefs : [];
-        const already = refs.some(r => Number(r.booking_id) === bookingId);
-        if (!already) {
-          refs.push({ booking_id: bookingId, date: date || null, label: label || null });
-          person.visitRefs = refs;
-          person.visitCount = refs.length;
-          changed = true;
-        } else {
-          // Refresh label/date on existing ref when richer
-          refs.forEach(r => {
-            if (Number(r.booking_id) !== bookingId) return;
-            if (date && !r.date) { r.date = date; changed = true; }
-            if (label && (!r.label || r.label.length < label.length)) { r.label = label; changed = true; }
-          });
-        }
-      }
+      // Guests stay as ladies in the directory; visit_refs stay on the organiser for this booking.
     });
     if (dedupePeopleByEmail()) changed = true;
     return changed;
   }
+
   async function fetchCloudPeople() {
     if (!state.supabasePeopleTable) return null;
     try {
@@ -3927,6 +4044,8 @@
     });
     if (!existing) return base;
     existing.groupName = existing.groupName || base.groupName;
+    existing.organiserPersonId = existing.organiserPersonId || base.organiserPersonId || '';
+    existing.organiserName = existing.organiserName || base.organiserName || '';
     const named = (existing.guests || []).some(g => (g.name || '').trim());
     if (!existing.guests?.length || !named) existing.guests = base.guests;
     else existing.guests = existing.guests.map(g => ensureGuestDebt(g));
@@ -6063,10 +6182,18 @@ function renderDayTabs() {
       ? `<button type="button" class="btn btn-outline btn-sm" id="btnResetDemo">Reset sample tour</button>`
       : '';
 
+    const organiserDisplay = (state.plan.organiserName || (findPersonById(state.plan.organiserPersonId) || {}).name || '');
     const datesRow = `
       <div class="stack">
+        <label class="field-label">Organiser</label>
+        <input type="text" id="organiserName" list="organiserPeopleList" value="${escapeHtml(organiserDisplay)}" placeholder="Search People or type a name" autocomplete="off">
+        <datalist id="organiserPeopleList">
+          ${(state.people || []).map(p => `<option value="${escapeHtml(p.name || '')}" data-person-id="${escapeHtml(p.id)}"></option>`).join('')}
+        </datalist>
+        <p class="muted" style="margin:0 0 8px;">Contact person in People — not the tour label. Typing a new name adds or links a person.</p>
         <label class="field-label">Group name</label>
-        <input type="text" id="groupName" value="${escapeHtml(state.plan.groupName || '')}">
+        <input type="text" id="groupName" value="${escapeHtml(state.plan.groupName || '')}" placeholder="e.g. Angela Clark Boutique week 1">
+        <p class="muted" style="margin:0 0 8px;">Tour / booking label only. Keep this even when it matches the organiser’s name.</p>
         <div class="row-between">
           <div style="flex:1;min-width:140px;">
             <label class="field-label">Arrival</label>
@@ -6083,10 +6210,12 @@ function renderDayTabs() {
       </div>
     `;
 
+    const tripOrgName = state.plan.organiserName || (findPersonById(state.plan.organiserPersonId) || {}).name || '';
     const tripSummary = `
       <div class="trip-summary">
         <div class="trip-title">${escapeHtml(state.plan.groupName || 'Tour group')}</div>
         <div class="trip-meta">
+          <span>👤 Organiser: ${escapeHtml(tripOrgName || 'Not set')}</span>
           <span>📅 ${state.plan.arrivalDate ? formatDateDMY(state.plan.arrivalDate) : '—'} – ${state.plan.departureDate ? formatDateDMY(state.plan.departureDate) : '—'}</span>
           <span>🏨 Staying at: ${escapeHtml(state.plan.tourHotelName || 'Not set')}</span>
           <span>🗺 Day 1 start: ${escapeHtml(effectiveDay1OriginType() === 'airport' ? PRAGUE_AIRPORT_NAME : (state.plan.pragueHotel?.name || 'Prague hotel pick-up'))}</span>
@@ -6100,7 +6229,7 @@ function renderDayTabs() {
         <div class="row-between"><h2>Ladies / guests</h2>
           <button type="button" class="btn btn-outline btn-sm" id="btnAddGuest">Add name</button></div>
         <div id="guestList">${renderGuests()}</div>
-        <p class="muted">Seeded from booking members when a live booking is selected. Light debt tracking (lent / paid back / owes) and daily repayments stay on this device with the plan.</p>
+        <p class="muted">Ladies on this tour (not the organiser). Seeded from booking members when a live booking is selected. The organiser is set separately above — group-name labels must not appear here as people. Light debt tracking stays on this device with the plan.</p>
       </div>
     `;
 
@@ -6169,7 +6298,7 @@ function renderDayTabs() {
           <h2>People directory</h2>
           <button type="button" class="btn btn-outline btn-sm" id="btnBackPlanner">Back to Planner</button>
         </div>
-        <p class="muted" style="margin-bottom:8px;">Search and pick a person on the left; edit name, email, notes and visits on the right. Guests from booking-linked plans are absorbed automatically (deduped by email). Visit counts only grow from real bookings — not the sample demo. Saves to Supabase like Places.</p>
+        <p class="muted" style="margin-bottom:8px;">Search and pick a person on the left; edit name, email, notes and visits on the right. The plan <strong>Organiser</strong> is the contact person (one People row). <strong>Group name</strong> is only the tour label — absorb never invents a person from group name alone. Guests stay as separate ladies; booking visits attach to the organiser. Saves to Supabase like Places.</p>
         ${renderPeopleDirectory()}
       </div>
     `;
@@ -6276,6 +6405,28 @@ function renderDayTabs() {
   function bindDynamic() {
     const q = (sel) => document.querySelector(sel);
     q('#groupName')?.addEventListener('input', e => { state.plan.groupName = e.target.value; scheduleAutoSave(); });
+    const applyOrganiserFromInput = () => {
+      if (!state.plan) return;
+      const raw = (q('#organiserName')?.value || '').trim();
+      if (!raw) {
+        setPlanOrganiser(state.plan, null);
+        scheduleAutoSave();
+        return;
+      }
+      const person = upsertPersonFromOrganiserName(raw);
+      setPlanOrganiser(state.plan, person);
+      if (state.plan && absorbGuestsFromPlan(state.plan) && state.supabasePeopleTable) {
+        savePeopleToSupabase().catch(() => {});
+      }
+      scheduleAutoSave();
+    };
+    q('#organiserName')?.addEventListener('change', () => {
+      applyOrganiserFromInput();
+      render();
+    });
+    q('#organiserName')?.addEventListener('blur', () => {
+      applyOrganiserFromInput();
+    });
     q('#tourHotel')?.addEventListener('change', e => { setTourHotelPlaceId(e.target.value); });
     q('#arrivalDate')?.addEventListener('change', e => {
       state.plan.arrivalDate = parseEnteredDate(e.target.value);
