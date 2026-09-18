@@ -1121,12 +1121,14 @@
       font-size: 11px;
       font-weight: 800;
       letter-spacing: .01em;
-      padding: 0 6px;
-      min-width: auto;
+      padding: 0 7px;
+      width: auto;
+      min-width: 3.4em;
+      overflow: visible;
     }
     .rough-week {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(268px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
       gap: 10px;
     }
     @media (max-width: 820px) {
@@ -1226,6 +1228,7 @@
       justify-self: end;
       min-width: max-content;
       width: max-content;
+      overflow: visible;
     }
     .rough-stop-actions button {
       min-width: 30px; min-height: 30px;
@@ -1245,7 +1248,16 @@
       min-width: 40px; min-height: 40px; width: 40px; height: 40px;
     }
     .rough-stop-actions button:disabled { opacity: .35; cursor: not-allowed; }
-    .rough-stop-actions .rough-remove { color: #b42318; }
+    .rough-stop-actions .rough-remove {
+      color: #b42318;
+      flex-shrink: 0;
+      z-index: 1;
+    }
+    .view-phone .rough-stop-actions .rough-again {
+      width: auto;
+      min-width: 3.8em;
+      padding: 0 8px;
+    }
     .rough-empty-day {
       margin: 4px 0 0; font-size: 12px; color: var(--text-secondary);
     }
@@ -2955,16 +2967,28 @@
       store.catalogue = state.catalogue;
     }
     store.plans = store.plans || {};
-    if (state.plan) store.plans[state.plan.bookingKey] = state.plan;
-    store.plans = Object.assign(store.plans, state.plans);
-    if (state.plan) store.plans[state.plan.bookingKey] = state.plan;
+    const memPlans = state.plans || {};
+    const mergedPlans = Object.assign({}, store.plans);
+    // Other cached bookings: keep the richer of memory vs disk so a save of
+    // booking 21 cannot clobber a newer booking 20 written by another tab.
+    Object.keys(memPlans).forEach(k => {
+      if (state.plan && String(k) === String(state.plan.bookingKey)) return;
+      mergedPlans[k] = preferRicherPlan(memPlans[k], store.plans[k]) || memPlans[k] || store.plans[k];
+    });
+    if (state.plan && state.plan.bookingKey != null) {
+      mergedPlans[state.plan.bookingKey] = state.plan;
+    }
+    store.plans = mergedPlans;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
     state.plans = store.plans;
     // Always attempt cloud upsert of the current plan (autosave toggle only controls timing of edits)
     // Pass { force: true } from Force save to cloud to allow overwriting a richer cloud row
     const force = !!(arguments[0] && arguments[0].force);
-    state._lastCloudRefuse = null;
-    state._cloudSavePromise = maybeSaveSupabase({ force });
+    const planSnapshot = state.plan;
+    const run = () => maybeSaveSupabase({ force, plan: planSnapshot });
+    // Serialise cloud upserts so a slower in-flight save cannot write after a newer one
+    const prev = state._cloudSavePromise;
+    state._cloudSavePromise = Promise.resolve(prev).catch(() => false).then(run);
     return state._cloudSavePromise;
   }
 
@@ -3015,6 +3039,10 @@
         if (ok) {
           status.textContent = 'Cloud saved';
           status.className = 'autosave-status saved';
+        } else if (state._lastCloudRefuse) {
+          // Do not say "failed" — that nudges Force save, which would clobber the richer cloud plan
+          status.textContent = 'Kept richer cloud';
+          status.className = 'autosave-status failed';
         } else {
           status.textContent = 'Cloud save failed';
           status.className = 'autosave-status failed';
@@ -3207,6 +3235,10 @@
 
   async function maybeSaveSupabase(opts) {
     const force = !!(opts && opts.force);
+    // Capture the plan at queue-time. After await, state.plan may be a different booking
+    // (Keith switched groups) — never upsert that live object under the old booking_id.
+    const planToSave = (opts && opts.plan) || state.plan;
+    state._lastCloudRefuse = null;
     let placesOk = false;
     let planOk = false;
     try {
@@ -3214,18 +3246,18 @@
     } catch (err) {
       console.warn(err);
     }
-    if (state.supabasePlanTable && state.plan) {
+    if (state.supabasePlanTable && planToSave) {
       try {
-        const key = String(state.plan.bookingKey || DEMO_ID);
+        const key = String(planToSave.bookingKey || DEMO_ID);
         const isBooking = /^[0-9]+$/.test(key);
         // Anti-clobber: never overwrite a richer cloud plan with a thinner local one unless Force save
         if (!force) {
           const existingCloud = await loadPlanFromSupabase(key);
           if (existingCloud) {
             const cloudBlocks = countPlanBlocks(existingCloud);
-            const localBlocks = countPlanBlocks(state.plan);
+            const localBlocks = countPlanBlocks(planToSave);
             const cloudScore = planRichnessScore(existingCloud);
-            const localScore = planRichnessScore(state.plan);
+            const localScore = planRichnessScore(planToSave);
             // Only refuse when cloud has strictly more stops — time/title tweaks must
             // still upload (score alone used to block Rough plan wheel edits).
             if (cloudBlocks > localBlocks) {
@@ -3238,7 +3270,7 @@
           }
         }
         const row = {
-          payload: state.plan,
+          payload: planToSave,
           updated_at: new Date().toISOString(),
           booking_id: isBooking ? Number(key) : null,
           client_key: isBooking ? ('booking:' + key) : key,
@@ -3253,7 +3285,7 @@
       }
     }
     // Plan upsert is what matters for Keith's schedules; places-only success is not "Cloud saved"
-    if (state.supabasePlanTable && state.plan) {
+    if (state.supabasePlanTable && planToSave) {
       if (planOk) setCloudStatus(true, 'Cloud saved');
       else if (!(state._lastCloudRefuse && !force)) setCloudStatus(false, 'Cloud save failed');
       return planOk;
