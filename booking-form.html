@@ -1908,6 +1908,12 @@
 	              <option value="fully_paid">Fully paid</option>
 	            </select>
 	          </div>
+	          <div class="control">
+	            <div class="control-title">Year</div>
+	            <select id="sidebarYear" onchange="onSidebarControlsChange()">
+	              <option value="all">All years</option>
+	            </select>
+	          </div>
 	          <div class="control full">
 	            <div class="control-title">Sort</div>
 	            <select id="sidebarSort" onchange="onSidebarControlsChange()">
@@ -4280,8 +4286,26 @@
 	  function getSidebarControls() {
 	    const searchField = el('sidebarSearchField')?.value || 'any';
 	    const filter = el('sidebarFilter')?.value || 'all';
+	    const year = el('sidebarYear')?.value || 'all';
 	    const sort = el('sidebarSort')?.value || 'arrival_desc';
-	    return { searchField, filter, sort };
+	    return { searchField, filter, year, sort };
+	  }
+
+	  function bookingYear(b) {
+	    const iso = b?.tour_arrival_date || b?.departure_date || '';
+	    const y = Number(String(iso).slice(0, 4));
+	    return (y >= 1990 && y <= 2100) ? y : null;
+	  }
+
+	  function fillSidebarYearOptions() {
+	    const sel = el('sidebarYear');
+	    if (!sel) return;
+	    const cur = sel.value || 'all';
+	    const years = [...new Set((allBookings || []).map(bookingYear).filter(Boolean))].sort((a, b) => b - a);
+	    sel.innerHTML = ['<option value="all">All years</option>']
+	      .concat(years.map(y => `<option value="${y}">${y}</option>`))
+	      .join('');
+	    sel.value = (cur !== 'all' && years.includes(Number(cur))) ? cur : 'all';
 	  }
 
 	  function matchesSidebarQuery(b, q, field) {
@@ -4349,10 +4373,13 @@
 	  }
 
 	  function applySidebarList() {
+	    fillSidebarYearOptions();
 	    const q = sidebarQuery || '';
-	    const { searchField, filter, sort } = getSidebarControls();
+	    const { searchField, filter, year, sort } = getSidebarControls();
+	    const yf = year === 'all' ? 'all' : Number(year);
 	    const records = [...(allBookings || [])]
 	      .filter(b => matchesSidebarFilter(b, filter))
+	      .filter(b => yf === 'all' || bookingYear(b) === yf)
 	      .filter(b => matchesSidebarQuery(b, q, searchField))
 	      .sort((a, b) => {
 	        const res = compareSidebarBookings(a, b, sort);
@@ -4374,6 +4401,8 @@
 	    if (sf) sf.value = 'any';
 	    const f = el('sidebarFilter');
 	    if (f) f.value = 'all';
+	    const y = el('sidebarYear');
+	    if (y) y.value = 'all';
 	    const s = el('sidebarSort');
 	    if (s) s.value = 'arrival_desc';
 	    applySidebarList();

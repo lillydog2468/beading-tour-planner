@@ -558,6 +558,34 @@
     .stack { display: flex; flex-direction: column; gap: 8px; }
     .hidden { display: none !important; }
     select.group-select { min-width: 180px; max-width: 280px; }
+    select.year-select { min-width: 110px; max-width: 140px; }
+    .year-filter-wrap {
+      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    }
+    .year-filter-wrap .field-label { margin: 0; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-secondary); }
+    .place-visit-banner {
+      margin: 10px 0 4px; padding: 12px 14px; border-radius: 12px;
+      background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+      display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+    }
+    .place-visit-banner .visit-big {
+      font-size: 20px; font-weight: 800; color: var(--accent); letter-spacing: -0.01em;
+    }
+    .place-visit-banner .visit-hint { font-size: 12px; color: var(--text-secondary); }
+    .travelled-with {
+      margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+    }
+    .travelled-with .tw-label {
+      font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-right: 2px;
+    }
+    .travelled-with .tw-chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--accent); font: inherit; font-size: 13px; font-weight: 700;
+      cursor: pointer;
+    }
+    .travelled-with .tw-chip:hover { background: var(--accent-soft); border-color: var(--accent); }
+    .travelled-with .tw-empty { font-size: 13px; color: var(--text-secondary); }
 
     /* Trip summary */
     .trip-summary {
@@ -1710,6 +1738,10 @@
         <span class="autosave-status" id="autosaveStatus"></span>
         <button type="button" class="btn btn-outline btn-sm" id="btnForceCloudSave" title="Upload the plan open on this device to Supabase now">Force save to cloud</button>
         <button type="button" class="btn btn-outline btn-sm" id="btnExportPlan" title="Download current plan as JSON backup">Export JSON</button>
+        <div class="year-filter-wrap">
+          <label class="field-label" for="yearFilter">Year</label>
+          <select id="yearFilter" class="year-select" aria-label="Filter tours by year"></select>
+        </div>
         <select id="groupSelect" class="group-select" aria-label="Tour group"></select>
         <div class="view-nav" role="group" aria-label="Planner view">
           <button type="button" id="btnPhoneView">Phone</button>
@@ -1763,6 +1795,14 @@
   const state = {
     viewPref: localStorage.getItem('planner_view') || 'auto',
     bookingKey: DEMO_ID,
+    yearFilter: (function () {
+      try {
+        const y = localStorage.getItem('planner_year_filter');
+        if (y === 'all' || y == null || y === '') return 'all';
+        const n = Number(y);
+        return (n >= 1990 && n <= 2100) ? n : 'all';
+      } catch (_) { return 'all'; }
+    })(),
     bookings: [],
     sessionEmail: '',
     catalogue: [],
@@ -2202,6 +2242,8 @@
     }));
     if (g.email == null) g.email = '';
     else g.email = String(g.email).trim();
+    if (g.personId == null) g.personId = '';
+    else g.personId = String(g.personId || '').trim();
     return g;
   }
   function guestPaidBack(g) {
@@ -2293,6 +2335,25 @@
     if (p.nickname == null) p.nickname = '';
     if (p.icon == null) p.icon = '';
     p.type = p.type || 'other';
+    // Visit history — Archivist backfills; never invent counts
+    if (p.firstVisited == null) p.firstVisited = '';
+    else p.firstVisited = String(p.firstVisited || '').slice(0, 10);
+    if (typeof p.visitCount !== 'number' || Number.isNaN(p.visitCount)) {
+      p.visitCount = Number(p.visitCount) || 0;
+    }
+    if (p.visitCount < 0) p.visitCount = 0;
+    if (!Array.isArray(p.visitYears)) {
+      try {
+        p.visitYears = typeof p.visitYears === 'string' ? JSON.parse(p.visitYears || '[]') : [];
+      } catch (_) { p.visitYears = []; }
+      if (!Array.isArray(p.visitYears)) p.visitYears = [];
+    }
+    p.visitYears = p.visitYears.map(y => {
+      const n = Number(y);
+      return (n >= 1990 && n <= 2100) ? n : null;
+    }).filter(y => y != null);
+    // unique sorted ascending
+    p.visitYears = [...new Set(p.visitYears)].sort((a, b) => a - b);
     if (!String(p.nickname).trim()) {
       const seeded = (p.id && DEFAULT_NICKNAMES[p.id]) || inventShortNickname(p.name);
       if (seeded) p.nickname = seeded;
@@ -3429,8 +3490,10 @@
     toast('Plan JSON downloaded');
   }
 
-  function placeToRow(p, index) {
-    return {
+  function placeToRow(p, index, opts) {
+    ensurePlace(p);
+    const options = (opts && typeof opts === 'object') ? opts : {};
+    const row = {
       client_id: String(p.id),
       name: p.name || 'Untitled place',
       place_type: p.type || 'other',
@@ -3443,6 +3506,13 @@
       sort_order: typeof p.sortOrder === 'number' ? p.sortOrder : (index + 1),
       updated_at: new Date().toISOString(),
     };
+    // Seed uploads must not wipe Archivist visit stats with zeros
+    if (!options.omitVisitStats) {
+      row.first_visited = p.firstVisited ? String(p.firstVisited).slice(0, 10) : null;
+      row.visit_count = Number(p.visitCount) || 0;
+      row.visit_years = Array.isArray(p.visitYears) ? p.visitYears : [];
+    }
+    return row;
   }
 
   function rowToPlace(r) {
@@ -3457,6 +3527,9 @@
       nickname: r.nickname || '',
       icon: r.icon || '',
       sortOrder: r.sort_order == null ? 0 : Number(r.sort_order),
+      firstVisited: r.first_visited || '',
+      visitCount: r.visit_count == null ? 0 : Number(r.visit_count),
+      visitYears: r.visit_years || [],
     });
   }
 
@@ -3489,6 +3562,13 @@
       label: r.label || null,
     })).filter(r => r.booking_id != null || r.date || r.label);
     if (p.visitCount < p.visitRefs.length) p.visitCount = p.visitRefs.length;
+    if (!Array.isArray(p.travelledWith)) {
+      try {
+        p.travelledWith = typeof p.travelledWith === 'string' ? JSON.parse(p.travelledWith || '[]') : [];
+      } catch (_) { p.travelledWith = []; }
+      if (!Array.isArray(p.travelledWith)) p.travelledWith = [];
+    }
+    p.travelledWith = [...new Set(p.travelledWith.map(id => String(id || '').trim()).filter(Boolean))];
     return p;
   }
   function personToRow(p) {
@@ -3500,6 +3580,7 @@
       notes: p.notes || null,
       visit_count: Number(p.visitCount) || 0,
       visit_refs: Array.isArray(p.visitRefs) ? p.visitRefs : [],
+      travelled_with: Array.isArray(p.travelledWith) ? p.travelledWith : [],
       updated_at: new Date().toISOString(),
     };
   }
@@ -3511,6 +3592,7 @@
       notes: r.notes || '',
       visitCount: r.visit_count == null ? 0 : Number(r.visit_count),
       visitRefs: r.visit_refs || [],
+      travelledWith: r.travelled_with || [],
     });
   }
   function dedupePeopleByEmail() {
@@ -3717,7 +3799,9 @@
           }
         }
       }
-      // Guests stay as ladies in the directory; visit_refs stay on the organiser for this booking.
+      if (g.personId !== person.id) { g.personId = person.id; changed = true; }
+      // Guests stay as ladies in the directory; visit_refs stay on the organiser for this booking
+      // (Archivist may attach visits to guests separately — used for Travelled with).
     });
     if (dedupePeopleByEmail()) changed = true;
     return changed;
@@ -3828,7 +3912,17 @@
         if (!p.id) p.id = uid('p');
         const nk = placeNameKey(p.name);
         if (byId.has(p.id)) {
-          if (!preferExisting) byId.set(p.id, { ...byId.get(p.id), ...p, id: p.id });
+          if (!preferExisting) {
+            const prev = byId.get(p.id);
+            const merged = { ...prev, ...p, id: p.id };
+            // Keep prior visit stats when incoming has empty/zero placeholders
+            if (!p.firstVisited && prev.firstVisited) merged.firstVisited = prev.firstVisited;
+            if (!(Number(p.visitCount) > 0) && Number(prev.visitCount) > 0) merged.visitCount = prev.visitCount;
+            if (!(p.visitYears && p.visitYears.length) && prev.visitYears && prev.visitYears.length) {
+              merged.visitYears = prev.visitYears;
+            }
+            byId.set(p.id, merged);
+          }
           return;
         }
         if (nk && byName.has(nk)) {
@@ -3870,7 +3964,7 @@
     if (!state.supabasePlacesTable) return false;
     const seed = defaultCatalogue();
     try {
-      const rows = seed.map((p, i) => placeToRow(p, i));
+      const rows = seed.map((p, i) => placeToRow(p, i, { omitVisitStats: true }));
       const { error } = await sb.from('planner_places').upsert(rows, { onConflict: 'client_id' });
       if (error) throw error;
       return true;
@@ -4178,15 +4272,80 @@
     fixExternalNavLinks();
   }
 
+  function yearFromIso(iso) {
+    if (!iso) return null;
+    const y = Number(String(iso).slice(0, 4));
+    return (y >= 1990 && y <= 2100) ? y : null;
+  }
+  function planYear(plan, booking) {
+    if (plan && plan.year != null && plan.year !== '') {
+      const y = Number(plan.year);
+      if (y >= 1990 && y <= 2100) return y;
+    }
+    return (
+      yearFromIso(booking?.tour_arrival_date) ||
+      yearFromIso(booking?.departure_date) ||
+      yearFromIso(plan?.arrivalDate) ||
+      yearFromIso(plan?.departureDate) ||
+      null
+    );
+  }
+  function availablePlanYears() {
+    const years = new Set();
+    (state.bookings || []).forEach(b => {
+      const plan = state.plans?.[String(b.id)] || null;
+      const y = planYear(plan, b);
+      if (y) years.add(y);
+    });
+    Object.values(state.plans || {}).forEach(p => {
+      if (!p || String(p.bookingKey) === DEMO_ID) return;
+      const y = planYear(p, null);
+      if (y) years.add(y);
+    });
+    return [...years].sort((a, b) => b - a);
+  }
+  function fillYearFilter() {
+    const sel = document.getElementById('yearFilter');
+    if (!sel) return;
+    const years = availablePlanYears();
+    const cur = state.yearFilter;
+    const opts = [`<option value="all">All years</option>`]
+      .concat(years.map(y => `<option value="${y}">${y}</option>`));
+    sel.innerHTML = opts.join('');
+    if (cur !== 'all' && !years.includes(Number(cur))) {
+      state.yearFilter = 'all';
+      try { localStorage.setItem('planner_year_filter', 'all'); } catch (_) {}
+    }
+    sel.value = String(state.yearFilter === 'all' ? 'all' : state.yearFilter);
+  }
   function fillGroupSelect() {
     const sel = document.getElementById('groupSelect');
+    if (!sel) return;
+    fillYearFilter();
+    const yf = state.yearFilter;
     const opts = [`<option value="${DEMO_ID}">Sample tour (demo)</option>`];
-    state.bookings.forEach(b => {
+    (state.bookings || []).forEach(b => {
+      const plan = state.plans?.[String(b.id)] || null;
+      const y = planYear(plan, b);
+      if (yf !== 'all' && y !== Number(yf)) return;
       const label = (b.group_name || ('Booking #' + b.id)) + (b.tour_arrival_date ? ' — ' + formatDateDMY(b.tour_arrival_date) : '');
       opts.push(`<option value="${b.id}">${escapeHtml(label)}</option>`);
     });
+    // Unbound plans with dates for the selected year
+    Object.values(state.plans || {}).forEach(p => {
+      if (!p) return;
+      const key = String(p.bookingKey || '');
+      if (key === DEMO_ID || /^[0-9]+$/.test(key)) return;
+      const y = planYear(p, null);
+      if (yf !== 'all' && y !== Number(yf)) return;
+      if (opts.some(o => o.includes(`value="${escapeHtml(key)}"`) || o.includes(`value="${key}"`))) return;
+      const label = (p.groupName || key) + (p.arrivalDate ? ' — ' + formatDateDMY(p.arrivalDate) : '');
+      opts.push(`<option value="${escapeHtml(key)}">${escapeHtml(label)}</option>`);
+    });
     sel.innerHTML = opts.join('');
-    sel.value = state.bookingKey;
+    const keys = new Set([...sel.querySelectorAll('option')].map(o => o.value));
+    if (keys.has(String(state.bookingKey))) sel.value = String(state.bookingKey);
+    else sel.value = DEMO_ID;
   }
 
   function currentDay() {
@@ -4640,10 +4799,14 @@
       ? list.map(p => {
           ensurePlace(p);
           const sel = state.selectedPlaceId === p.id ? ' selected' : '';
+          const visits = Number(p.visitCount) || 0;
+          const badge = visits > 0
+            ? `<span class="pvisits" title="${visits === 1 ? 'Visited 1 time' : ('Visited ' + visits + ' times')}">${visits}</span>`
+            : `<span class="ptype">${escapeHtml(typeLabel(p.type))}</span>`;
           return `
         <button type="button" class="place-name-item${sel}" data-select-place="${p.id}" aria-pressed="${state.selectedPlaceId === p.id ? 'true' : 'false'}">
           <span class="pname">${p.icon ? escapeHtml(p.icon) + ' ' : ''}${escapeHtml(p.name || 'Unnamed place')}${p.nickname && String(p.nickname).trim() && p.nickname !== p.name ? (' <span class="muted">(' + escapeHtml(p.nickname) + ')</span>') : ''}</span>
-          <span class="ptype">${escapeHtml(typeLabel(p.type))}</span>
+          ${badge}
         </button>`;
         }).join('')
       : `<p class="place-name-empty">No places match this search or filter.</p>`;
@@ -4653,6 +4816,14 @@
     if (selected) {
       ensurePlace(selected);
       const p = selected;
+      const visitsN = Number(p.visitCount) || 0;
+      const visitWord = visitsN === 1 ? 'time' : 'times';
+      const yearsLabel = (p.visitYears || []).length
+        ? ('Years: ' + p.visitYears.join(', '))
+        : 'Years: not recorded yet';
+      const firstLabel = p.firstVisited
+        ? formatDateDMY(p.firstVisited)
+        : 'Not recorded yet';
       detailHtml = `
       <div class="place-dir-item" data-place-id="${p.id}">
         <div class="row-between">
@@ -4662,7 +4833,25 @@
           </div>
           <button type="button" class="icon-btn" data-remove-place="${p.id}" aria-label="Remove place">×</button>
         </div>
+        <div class="place-visit-banner" role="status">
+          <div class="visit-big">Visited ${visitsN} ${visitWord}</div>
+          <div class="visit-hint">First visited: ${escapeHtml(firstLabel)} · ${escapeHtml(yearsLabel)}</div>
+        </div>
         <div class="dir-grid">
+          <div>
+            <label class="field-label">First visited</label>
+            <input type="text" data-place-first-visited="${p.id}" value="${escapeHtml(p.firstVisited ? formatDateDMY(p.firstVisited) : '')}" placeholder="DD/MM/YYYY" title="Earliest known tour date — Archivist backfills; correct if needed">
+          </div>
+          <div>
+            <label class="field-label">Visit count</label>
+            <input type="number" min="0" step="1" data-place-visit-count="${p.id}" value="${escapeHtml(String(p.visitCount ?? 0))}" title="Total times used across all years">
+          </div>
+          <div style="grid-column:1/-1;">
+            <label class="field-label">Years visited</label>
+            <input type="text" data-place-visit-years="${p.id}" value="${escapeHtml((p.visitYears || []).join(', '))}" placeholder="e.g. 2023, 2026" title="Comma-separated years — optional">
+          </div>
+        </div>
+        <div class="dir-grid" style="margin-top:8px;">
           <div>
             <label class="field-label">Subcategory</label>
             <select data-place-type="${p.id}">
@@ -6713,6 +6902,78 @@ function renderDayTabs() {
     });
     return refs;
   }
+
+  /* ── Travelled with (companions on shared tours) ── */
+  function personBookingIdSet(person) {
+    const ids = new Set();
+    (person?.visitRefs || []).forEach(r => {
+      if (r && r.booking_id != null && r.booking_id !== '') {
+        const n = Number(r.booking_id);
+        if (!Number.isNaN(n)) ids.add(n);
+      }
+    });
+    return ids;
+  }
+  function personVisitDateSet(person) {
+    const dates = new Set();
+    (person?.visitRefs || []).forEach(r => {
+      const d = String(r?.date || '').slice(0, 10);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(d)) dates.add(d);
+    });
+    return dates;
+  }
+  /** Real companions only — shared booking_id, same visit date, same plan personIds, or manual travelled_with. */
+  function companionsForPerson(person) {
+    if (!person) return [];
+    ensurePerson(person);
+    const byId = new Map();
+    function addOther(other) {
+      if (!other || other.id === person.id) return;
+      ensurePerson(other);
+      byId.set(other.id, other);
+    }
+    (person.travelledWith || []).forEach(id => addOther(findPersonById(id)));
+    const myBids = personBookingIdSet(person);
+    const myDates = personVisitDateSet(person);
+    (state.people || []).forEach(other => {
+      if (!other || other.id === person.id) return;
+      ensurePerson(other);
+      if (myBids.size) {
+        for (const bid of personBookingIdSet(other)) {
+          if (myBids.has(bid)) { addOther(other); return; }
+        }
+      }
+      if (myDates.size) {
+        for (const d of personVisitDateSet(other)) {
+          if (myDates.has(d)) { addOther(other); return; }
+        }
+      }
+    });
+    Object.values(state.plans || {}).forEach(plan => {
+      if (!plan) return;
+      const onPlan = new Set();
+      if (plan.organiserPersonId) onPlan.add(String(plan.organiserPersonId));
+      (plan.guests || []).forEach(g => {
+        if (g && g.personId) onPlan.add(String(g.personId));
+      });
+      if (!onPlan.has(String(person.id)) || onPlan.size < 2) return;
+      onPlan.forEach(id => addOther(findPersonById(id)));
+    });
+    return [...byId.values()].sort((a, b) =>
+      String(a.name || '').localeCompare(String(b.name || ''), 'en', { sensitivity: 'base' })
+    );
+  }
+  function renderTravelledWith(person) {
+    const companions = companionsForPerson(person);
+    if (!companions.length) {
+      return `<div class="travelled-with"><span class="tw-label">Travelled with</span><span class="tw-empty">No shared tours recorded yet</span></div>`;
+    }
+    const chips = companions.map(c =>
+      `<button type="button" class="tw-chip" data-select-person="${escapeHtml(c.id)}" title="Open ${escapeHtml(c.name || 'person')}">${escapeHtml(c.name || 'Unnamed')}</button>`
+    ).join('');
+    return `<div class="travelled-with"><span class="tw-label">Travelled with</span>${chips}</div>`;
+  }
+
   function sortVisitRefs(refs) {
     return [...(refs || [])].sort((a, b) => {
       const da = String(a.date || '');
@@ -6784,6 +7045,7 @@ function renderDayTabs() {
           <div class="visit-big">Visited ${visitsN} ${visitWord}</div>
           <div class="visit-hint">Tour / group names are visit labels — keep one People row per person.</div>
         </div>
+        ${renderTravelledWith(p)}
         <div class="dir-grid">
           <div>
             <label class="field-label">Email</label>
@@ -7139,6 +7401,42 @@ function renderDayTabs() {
         if (p) { p.icon = inp.value; scheduleAutoSave(); render(); }
       });
     });
+    root.querySelectorAll('[data-place-first-visited]').forEach(inp => {
+      inp.addEventListener('change', () => {
+        const p = state.catalogue.find(x => x.id === inp.getAttribute('data-place-first-visited'));
+        if (!p) return;
+        const parsed = parseEnteredDate(inp.value);
+        p.firstVisited = parsed || '';
+        inp.value = p.firstVisited ? formatDateDMY(p.firstVisited) : inp.value;
+        scheduleAutoSave();
+        render();
+      });
+    });
+    root.querySelectorAll('[data-place-visit-count]').forEach(inp => {
+      inp.addEventListener('change', () => {
+        const p = state.catalogue.find(x => x.id === inp.getAttribute('data-place-visit-count'));
+        if (!p) return;
+        p.visitCount = Math.max(0, Number(inp.value) || 0);
+        scheduleAutoSave();
+        const badge = root.querySelector(`[data-select-place="${CSS.escape(p.id)}"] .pvisits`);
+        if (badge) badge.textContent = String(p.visitCount);
+        else render();
+      });
+    });
+    root.querySelectorAll('[data-place-visit-years]').forEach(inp => {
+      inp.addEventListener('change', () => {
+        const p = state.catalogue.find(x => x.id === inp.getAttribute('data-place-visit-years'));
+        if (!p) return;
+        p.visitYears = String(inp.value || '')
+          .split(/[,;\s]+/)
+          .map(s => Number(String(s).trim()))
+          .filter(n => n >= 1990 && n <= 2100);
+        p.visitYears = [...new Set(p.visitYears)].sort((a, b) => a - b);
+        inp.value = p.visitYears.join(', ');
+        scheduleAutoSave();
+        render();
+      });
+    });
     root.querySelectorAll('[data-place-notes]').forEach(inp => {
       inp.addEventListener('input', () => {
         const p = state.catalogue.find(x => x.id === inp.getAttribute('data-place-notes'));
@@ -7439,6 +7737,16 @@ function renderDayTabs() {
     }
   }
 
+  document.getElementById('yearFilter')?.addEventListener('change', e => {
+    const v = e.target.value;
+    state.yearFilter = (v === 'all') ? 'all' : Number(v);
+    try { localStorage.setItem('planner_year_filter', String(state.yearFilter)); } catch (_) {}
+    fillGroupSelect();
+    const sel = document.getElementById('groupSelect');
+    if (sel && sel.value !== String(state.bookingKey)) {
+      selectPlan(sel.value);
+    }
+  });
   document.getElementById('groupSelect').addEventListener('change', e => selectPlan(e.target.value));
   document.getElementById('btnForceCloudSave').addEventListener('click', () => forceSaveToCloud());
   document.getElementById('btnExportPlan').addEventListener('click', () => exportPlanJson());
