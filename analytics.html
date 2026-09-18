@@ -730,6 +730,68 @@
       </div>
     </div>
 
+    <div class="panel">
+      <div class="chart-card" style="min-height:auto;">
+        <div class="chart-title">
+          <h3>By year</h3>
+          <div class="hint">Year from tour arrival (or plan year) · follows filters above · tip: set Date range to All time</div>
+        </div>
+        <div class="grid" style="margin-top:4px;">
+          <div class="chart-wrap" style="min-height:240px;"><canvas id="chartToursByYear"></canvas></div>
+          <div class="table-card" style="box-shadow:none; padding:0; background:transparent; border:none;">
+            <div class="table-scroll" style="overflow:auto; max-height: 280px;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Year</th>
+                    <th class="num">Tours</th>
+                    <th class="num">Guests</th>
+                    <th class="num">Avg size</th>
+                    <th class="num">1–4</th>
+                    <th class="num">5–8</th>
+                    <th class="num">9+</th>
+                  </tr>
+                </thead>
+                <tbody id="yearStatsBody"></tbody>
+              </table>
+              <div class="empty" id="yearStatsEmpty" style="display:none;">No tours in the selected filters.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="grid">
+        <div class="chart-card">
+          <div class="chart-title">
+            <h3>Group size by year</h3>
+            <div class="hint">How many tours fall in each size band</div>
+          </div>
+          <div class="chart-wrap"><canvas id="chartSizeByYear"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">
+            <h3>Repeat organisers</h3>
+            <div class="hint">People linked to more than one visit</div>
+          </div>
+          <div class="table-scroll" style="overflow:auto; max-height: 280px;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Organiser</th>
+                  <th class="num">Visits</th>
+                  <th>Years</th>
+                </tr>
+              </thead>
+              <tbody id="repeatOrgsBody"></tbody>
+            </table>
+            <div class="empty" id="repeatOrgsEmpty" style="display:none;">No repeat organisers in People data yet.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <details class="details">
       <summary>Tour details</summary>
       <div class="details-body">
@@ -866,7 +928,8 @@
 
 	    let allBookings = [];
 	    let allExpenses = [];
-	    let charts = { trend: null, topTours: null };
+	    let charts = { trend: null, topTours: null, byYear: null, sizeByYear: null };
+	    let allPeople = [];
 	    let selectedTourIds = new Set(); // empty = "All tours"
 
 	    const FILTERS_STORAGE_KEY = 'analyticsFiltersV2';
@@ -1102,6 +1165,138 @@
       return `${(n * 100).toFixed(1)}%`;
     }
 
+    function bookingYear(b) {
+      // Prefer explicit plan/booking year, then tour dates.
+      const fromPayload = Number(b?.payload?.year ?? b?.year);
+      if (Number.isFinite(fromPayload) && fromPayload >= 1990 && fromPayload <= 2100) return fromPayload;
+      const iso = b?.tour_arrival_date || b?.departure_date || '';
+      const y = Number(String(iso).slice(0, 4));
+      return (Number.isFinite(y) && y >= 1990 && y <= 2100) ? y : null;
+    }
+
+    function peopleCount(b) {
+      const n = Number(b?.no_people);
+      return (Number.isFinite(n) && n > 0) ? n : null;
+    }
+
+    function sizeBand(n) {
+      if (n == null) return 'unknown';
+      if (n <= 4) return '1–4';
+      if (n <= 8) return '5–8';
+      return '9+';
+    }
+
+    function computeYearStats(bookings) {
+      const map = new Map();
+      for (const b of bookings) {
+        const year = bookingYear(b);
+        if (!year) continue;
+        if (!map.has(year)) {
+          map.set(year, {
+            year,
+            tours: 0,
+            guests: 0,
+            sized: 0,
+            bands: { '1–4': 0, '5–8': 0, '9+': 0, unknown: 0 },
+          });
+        }
+        const row = map.get(year);
+        row.tours += 1;
+        const n = peopleCount(b);
+        if (n != null) {
+          row.guests += n;
+          row.sized += 1;
+        }
+        row.bands[sizeBand(n)] += 1;
+      }
+      return [...map.values()]
+        .map(r => ({
+          ...r,
+          avgSize: r.sized ? (r.guests / r.sized) : null,
+        }))
+        .sort((a, b) => a.year - b.year);
+    }
+
+    function visitYearFromRef(ref) {
+      if (!ref) return null;
+      if (typeof ref === 'number' && ref >= 1990 && ref <= 2100) return ref;
+      if (typeof ref === 'string') {
+        const y = Number(String(ref).slice(0, 4));
+        return (y >= 1990 && y <= 2100) ? y : null;
+      }
+      if (typeof ref === 'object') {
+        const y1 = Number(ref.year);
+        if (y1 >= 1990 && y1 <= 2100) return y1;
+        const d = String(ref.date || '');
+        const y2 = Number(d.slice(0, 4));
+        return (y2 >= 1990 && y2 <= 2100) ? y2 : null;
+      }
+      return null;
+    }
+
+    function computeRepeatOrganisers(people) {
+      const rows = [];
+      for (const p of people || []) {
+        const visits = Number(p.visit_count) || 0;
+        const refs = Array.isArray(p.visit_refs) ? p.visit_refs : [];
+        const count = Math.max(visits, refs.length);
+        if (count < 2) continue;
+        const years = [...new Set(refs.map(visitYearFromRef).filter(Boolean))].sort((a, b) => a - b);
+        rows.push({
+          name: p.name || '—',
+          visits: count,
+          years,
+        });
+      }
+      return rows.sort((a, b) => b.visits - a.visits || a.name.localeCompare(b.name)).slice(0, 12);
+    }
+
+    function renderYearStats(rawBookings) {
+      const stats = computeYearStats(rawBookings);
+      const body = document.getElementById('yearStatsBody');
+      const empty = document.getElementById('yearStatsEmpty');
+      if (!body || !empty) return stats;
+
+      if (!stats.length) {
+        body.innerHTML = '';
+        empty.style.display = 'block';
+        return stats;
+      }
+      empty.style.display = 'none';
+      body.innerHTML = stats.map(r => `
+        <tr>
+          <td><strong>${r.year}</strong></td>
+          <td class="num">${r.tours}</td>
+          <td class="num">${r.guests || '—'}</td>
+          <td class="num">${r.avgSize != null ? r.avgSize.toFixed(1) : '—'}</td>
+          <td class="num">${r.bands['1–4'] || 0}</td>
+          <td class="num">${r.bands['5–8'] || 0}</td>
+          <td class="num">${r.bands['9+'] || 0}</td>
+        </tr>
+      `).join('');
+      return stats;
+    }
+
+    function renderRepeatOrganisers() {
+      const body = document.getElementById('repeatOrgsBody');
+      const empty = document.getElementById('repeatOrgsEmpty');
+      if (!body || !empty) return;
+      const rows = computeRepeatOrganisers(allPeople);
+      if (!rows.length) {
+        body.innerHTML = '';
+        empty.style.display = 'block';
+        return;
+      }
+      empty.style.display = 'none';
+      body.innerHTML = rows.map(r => `
+        <tr>
+          <td>${r.name}</td>
+          <td class="num">${r.visits}</td>
+          <td>${r.years.length ? r.years.join(', ') : '—'}</td>
+        </tr>
+      `).join('');
+    }
+
     function renderInsights(paidBookings, outstandingBookings) {
       const list = document.getElementById('insightsList');
       const empty = document.getElementById('insightsEmpty');
@@ -1152,6 +1347,17 @@
         items.push(`<strong>Payments:</strong> No outstanding balances`);
       }
       items.push(`<strong>Expense mix:</strong> Hotels are ${formatPercent(hotelShare)} of tracked expenses`);
+      {
+        const yearStats = computeYearStats(paidBookings.length ? paidBookings : outstandingBookings);
+        if (yearStats.length >= 2) {
+          const busiest = [...yearStats].sort((a, b) => b.tours - a.tours || b.guests - a.guests)[0];
+          const latest = yearStats[yearStats.length - 1];
+          items.push(`<strong>Years in view:</strong> ${yearStats[0].year}–${latest.year} · busiest ${busiest.year} (${busiest.tours} tours, ${busiest.guests || 0} guests)`);
+        } else if (yearStats.length === 1) {
+          const y = yearStats[0];
+          items.push(`<strong>${y.year}:</strong> ${y.tours} tours · ${y.guests || 0} guests · avg group ${y.avgSize != null ? y.avgSize.toFixed(1) : '—'}`);
+        }
+      }
       if (outstandingTours.length) {
         const topDue = dueTours.slice(0, 3).map(x => {
           const name = x.b.group_name || ('Booking #' + x.b.id);
@@ -1288,6 +1494,67 @@
           }
         }),
       });
+
+      const yearStats = computeYearStats(rawBookings);
+      const yearLabels = yearStats.map(r => String(r.year));
+
+      const canvasYear = document.getElementById('chartToursByYear');
+      if (charts.byYear) charts.byYear.destroy();
+      if (canvasYear) {
+        charts.byYear = new Chart(canvasYear, {
+          type: 'bar',
+          data: {
+            labels: yearLabels,
+            datasets: [
+              { label: 'Tours', data: yearStats.map(r => r.tours), backgroundColor: 'rgba(79,70,229,.70)', yAxisID: 'y' },
+              { label: 'Guests', data: yearStats.map(r => r.guests), type: 'line', borderColor: '#16a34a', backgroundColor: 'rgba(22,163,74,.12)', tension: .25, fill: true, yAxisID: 'y1' },
+            ]
+          },
+          options: Object.assign({}, opts, {
+            scales: {
+              x: opts.scales.x,
+              y: Object.assign({}, opts.scales.y, { position: 'left', title: { display: true, text: 'Tours', color: opts.scales.y.ticks.color }, ticks: Object.assign({}, opts.scales.y.ticks, { precision: 0 }) }),
+              y1: Object.assign({}, opts.scales.y, { position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Guests', color: opts.scales.y.ticks.color }, ticks: Object.assign({}, opts.scales.y.ticks, { precision: 0 }) }),
+            },
+            plugins: Object.assign({}, opts.plugins || {}, {
+              tooltip: {
+                callbacks: {
+                  label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y ?? 0}`
+                }
+              }
+            })
+          }),
+        });
+      }
+
+      const canvasSize = document.getElementById('chartSizeByYear');
+      if (charts.sizeByYear) charts.sizeByYear.destroy();
+      if (canvasSize) {
+        charts.sizeByYear = new Chart(canvasSize, {
+          type: 'bar',
+          data: {
+            labels: yearLabels,
+            datasets: [
+              { label: '1–4 people', data: yearStats.map(r => r.bands['1–4'] || 0), backgroundColor: 'rgba(79,70,229,.75)', stack: 'size' },
+              { label: '5–8 people', data: yearStats.map(r => r.bands['5–8'] || 0), backgroundColor: 'rgba(16,185,129,.75)', stack: 'size' },
+              { label: '9+ people', data: yearStats.map(r => r.bands['9+'] || 0), backgroundColor: 'rgba(245,158,11,.80)', stack: 'size' },
+            ]
+          },
+          options: Object.assign({}, opts, {
+            scales: {
+              x: Object.assign({}, opts.scales.x, { stacked: true }),
+              y: Object.assign({}, opts.scales.y, { stacked: true, ticks: Object.assign({}, opts.scales.y.ticks, { precision: 0 }) }),
+            },
+            plugins: Object.assign({}, opts.plugins || {}, {
+              tooltip: {
+                callbacks: {
+                  label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y ?? 0}`
+                }
+              }
+            })
+          }),
+        });
+      }
     }
 
     function renderTable() {
@@ -1340,6 +1607,8 @@
       renderKPIs(paid, outstanding);
       renderInsights(paid, outstanding);
       renderCharts(paid, raw);
+      renderYearStats(raw);
+      renderRepeatOrganisers();
       renderTable();
       updatePrintSummary();
     }
@@ -1400,15 +1669,19 @@
         const ok = await requireSession();
         if (!ok) return;
 
-        const [bookingsRes, expensesRes] = await Promise.all([
+        const [bookingsRes, expensesRes, peopleRes] = await Promise.all([
           sb.from('bookings').select('*').order('tour_arrival_date', { ascending: true }),
           sb.from('booking_expenses').select('*'),
+          sb.from('planner_people').select('name, visit_count, visit_refs').order('visit_count', { ascending: false }),
         ]);
         if (bookingsRes.error) throw bookingsRes.error;
         if (expensesRes.error) throw expensesRes.error;
+        // People is optional — analytics still works if the table is missing.
+        if (peopleRes.error) console.warn('People load skipped:', peopleRes.error.message || peopleRes.error);
 
 	        allBookings = bookingsRes.data || [];
 	        allExpenses = expensesRes.data || [];
+	        allPeople = peopleRes.error ? [] : (peopleRes.data || []);
 	        populateTourPicker();
 
 	        const presetEl = document.getElementById('datePreset');
