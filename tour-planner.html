@@ -45,6 +45,10 @@
       --hotel: #b45309;
       --travel: #6b7280;
       --pickup: #4f46e5;
+      --missing-marker: #f59e0b;
+      --missing-marker-bg: rgba(245, 158, 11, 0.20);
+      --missing-marker-text: #92400e;
+      --missing-marker-ring: rgba(245, 158, 11, 0.45);
     }
     [data-theme="dark"] {
       --bg: #111318;
@@ -72,6 +76,10 @@
       --hotel: #fbbf24;
       --travel: #9ca3af;
       --pickup: #a5b4fc;
+      --missing-marker: #fb923c;
+      --missing-marker-bg: rgba(251, 146, 60, 0.24);
+      --missing-marker-text: #fdba74;
+      --missing-marker-ring: rgba(251, 146, 60, 0.55);
     }
 
     html, body { min-height: 100%; }
@@ -808,6 +816,75 @@
       border: 1px solid var(--border); border-radius: 12px;
       padding: 10px; margin-bottom: 10px; background: var(--surface-alt);
     }
+
+    /* Empty / FLAG markers — bold amber for archive & thin past plans (Keith / Tour Archivist) */
+    .field-missing,
+    input.field-missing,
+    select.field-missing,
+    textarea.field-missing {
+      outline: 2px solid var(--missing-marker) !important;
+      outline-offset: 1px;
+      background: var(--missing-marker-bg) !important;
+      border-color: var(--missing-marker) !important;
+      box-shadow: 0 0 0 3px var(--missing-marker-ring);
+    }
+    .missing-marker {
+      border: 2px solid var(--missing-marker) !important;
+      background: var(--missing-marker-bg) !important;
+      box-shadow: inset 0 0 0 1px var(--missing-marker-ring);
+      border-radius: var(--radius);
+    }
+    .stop.missing-marker,
+    .guest-block.missing-marker,
+    .day-glance-item.missing-marker,
+    .rough-stop.missing-marker {
+      padding: 10px 8px;
+      margin: 4px 0;
+    }
+    .missing-marker-badge {
+      display: inline-block;
+      vertical-align: middle;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .02em;
+      color: var(--missing-marker-text);
+      background: var(--missing-marker-bg);
+      border: 1.5px solid var(--missing-marker);
+      border-radius: 999px;
+      padding: 2px 8px;
+      margin-left: 6px;
+      line-height: 1.3;
+    }
+    .stop-notes input.field-flagged,
+    input.field-flagged {
+      outline: 2px solid var(--missing-marker) !important;
+      outline-offset: 1px;
+      background: var(--missing-marker-bg) !important;
+      border: 1px solid var(--missing-marker) !important;
+      box-shadow: 0 0 0 3px var(--missing-marker-ring);
+      font-weight: 700;
+    }
+    .empty-markers-banner {
+      margin-top: 10px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 2px solid var(--missing-marker);
+      background: var(--missing-marker-bg);
+      color: var(--missing-marker-text);
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .trip-meta span.meta-missing {
+      outline: 2px solid var(--missing-marker);
+      outline-offset: 1px;
+      background: var(--missing-marker-bg);
+      border-radius: 6px;
+      font-weight: 800;
+    }
+    .day-origin.missing-marker {
+      border-style: solid;
+    }
+
     .guest-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
     .guest-row input { flex: 1; }
     .debt-grid {
@@ -3330,6 +3407,67 @@
     return localPlan;
   }
 
+
+  /** Notes marked FLAG or GAP — draw Keith’s eye on archive enrichment gaps. */
+  function notesAreFlagged(text) {
+    return /\b(FLAG|GAP)\b/i.test(String(text || ''));
+  }
+
+  function guestNameIsMissing(name) {
+    const n = String(name || '').trim();
+    if (!n) return true;
+    return /^(unnamed(\s+guest)?|guest(\s*\d+)?|lady|unknown|n\/?a|-+|\.+)$/i.test(n);
+  }
+
+  function tourHotelIsMissing(plan) {
+    if (!plan) return true;
+    return !String(plan.tourHotelPlaceId || '').trim() && !String(plan.tourHotelName || '').trim();
+  }
+
+  function organiserPersonIsMissing(plan) {
+    if (!plan) return true;
+    return !String(plan.organiserPersonId || '').trim();
+  }
+
+  /** Substantive day blocks that should link to Places (skip travel/pickup skeletons). */
+  function stopNeedsPlaceLink(stop) {
+    if (!stop) return false;
+    if (isSkeletonStop(stop) || isRoughSystemStop(stop)) return false;
+    return !String(stop.placeId || stop.place_id || '').trim();
+  }
+
+  /**
+   * Show bold amber empty-field markers for archive plans and thin past
+   * booking-linked plans. Future bookings stay quieter while Keith fills them in.
+   */
+  function planShowsEmptyMarkers(plan) {
+    if (!plan) return false;
+    const src = String(plan.source || '');
+    const key = String(plan.bookingKey || '');
+    if (src === 'archive' || key.indexOf('archive:') === 0) return true;
+    const linked = src === 'booking'
+      || key.indexOf('booking:') === 0
+      || (/^\d+$/.test(key) && key !== String(DEMO_ID));
+    if (!linked) return false;
+    const end = String(plan.departureDate || plan.arrivalDate || '').trim();
+    if (!end) return true;
+    if (end >= todayISO()) return false;
+    return planRichnessScore(plan) < 160;
+  }
+
+  function missingFieldClass(isMissing) {
+    return isMissing ? ' field-missing' : '';
+  }
+
+  function missingMarkerClass(isMissing) {
+    return isMissing ? ' missing-marker' : '';
+  }
+
+  function missingBadgeHtml(label) {
+    if (!label) return '';
+    return `<span class="missing-marker-badge">${escapeHtml(label)}</span>`;
+  }
+
   function countPlanBlocks(plan) {
     if (!plan || !Array.isArray(plan.days)) return 0;
     return plan.days.reduce((n, d) => n + ((d && d.blocks) ? d.blocks.length : 0), 0);
@@ -4711,10 +4849,13 @@
   }
 
     function renderGuests() {
+    const markEmpties = planShowsEmptyMarkers(state.plan);
     return (state.plan.guests || []).map(g => {
       ensureGuestDebt(g);
       const paid = guestPaidBack(g);
       const owes = guestOwes(g);
+      const nameMissing = markEmpties && guestNameIsMissing(g.name);
+      const emailMissing = markEmpties && !String(g.email || '').trim();
       const repayRows = (g.repayments || []).map(r => `
         <div class="repay-row">
           <input type="date" data-repay-date="${g.id}" data-repay-id="${r.id}" value="${escapeHtml(r.date || '')}" aria-label="Repayment date">
@@ -4723,13 +4864,15 @@
         </div>
       `).join('') || `<p class="muted">No daily repayments yet.</p>`;
       return `
-      <div class="guest-block">
+      <div class="guest-block${missingMarkerClass(nameMissing || emailMissing)}">
         <div class="guest-row">
-          <input type="text" data-guest-name="${g.id}" value="${escapeHtml(g.name)}" placeholder="Lady / guest name">
+          <input type="text" class="${missingFieldClass(nameMissing).trim()}" data-guest-name="${g.id}" value="${escapeHtml(g.name)}" placeholder="Lady / guest name" aria-invalid="${nameMissing ? 'true' : 'false'}">
+          ${nameMissing ? missingBadgeHtml('Name missing') : ''}
           <button type="button" class="icon-btn" data-remove-guest="${g.id}" aria-label="Remove guest">×</button>
         </div>
         <div class="guest-row">
-          <input type="email" data-guest-email="${g.id}" value="${escapeHtml(g.email || '')}" placeholder="Email (optional — feeds People)">
+          <input type="email" class="${missingFieldClass(emailMissing).trim()}" data-guest-email="${g.id}" value="${escapeHtml(g.email || '')}" placeholder="Email (optional — feeds People)" aria-invalid="${emailMissing ? 'true' : 'false'}">
+          ${emailMissing ? missingBadgeHtml('Email missing') : ''}
         </div>
         <div class="debt-grid">
           <div class="debt-field">
@@ -5751,7 +5894,10 @@
       const againBtn = (!system && placeId && !food)
         ? `<button type="button" class="rough-again" data-rough-again="${escapeHtml(placeId)}" title="Return visit — choose which day" aria-label="Return visit for ${escapeHtml(label)} — choose which day">Again</button>`
         : '';
-      return `<li class="rough-stop${system ? ' system' : ''}" data-rough-stop-id="${escapeHtml(s.id)}" title="${escapeHtml(String(s.title || label))}">
+      const markEmpties = planShowsEmptyMarkers(state.plan);
+      const noPlace = markEmpties && !system && stopNeedsPlaceLink(s);
+      const flagged = notesAreFlagged(s.notes);
+      return `<li class="rough-stop${system ? ' system' : ''}${missingMarkerClass(noPlace || flagged)}" data-rough-stop-id="${escapeHtml(s.id)}" title="${escapeHtml(String(s.title || label))}">
         <div class="rough-stop-top">
           ${renderTimeWheelControl(s, 'rough', 'Time for ' + label)}
           <span class="rough-stop-icon" aria-hidden="true">${icon}</span>
@@ -5762,7 +5908,7 @@
             ${removeBtn}
           </div>
         </div>
-        <span class="rough-stop-nick">${escapeHtml(label)}</span>
+        <span class="rough-stop-nick">${escapeHtml(label)}${noPlace ? missingBadgeHtml('No placeId') : ''}${flagged ? missingBadgeHtml('FLAG') : ''}</span>
         ${noteSnip ? `<span class="rough-stop-note">${escapeHtml(noteSnip)}</span>` : ''}
       </li>`;
     }).join('');
@@ -6000,6 +6146,7 @@
         <p class="day-glance-empty">No stops yet — add places below.</p>
       </div>`;
     }
+    const markEmpties = planShowsEmptyMarkers(state.plan);
     const rows = stops.map((s, idx) => {
       const time = String(s.time || '').trim();
       const label = glanceLabelForStop(s);
@@ -6008,12 +6155,15 @@
       const tip = fullTitle && fullTitle !== label ? (fullTitle + ' — jump to this stop') : 'Jump to this stop';
       const upDis = idx === 0 ? ' disabled' : '';
       const downDis = idx === stops.length - 1 ? ' disabled' : '';
-      return `<li class="day-glance-item" draggable="true" data-glance-index="${idx}" data-glance-stop-id="${escapeHtml(s.id)}">
+      const noPlace = markEmpties && stopNeedsPlaceLink(s);
+      const flagged = notesAreFlagged(s.notes);
+      const mark = noPlace || flagged;
+      return `<li class="day-glance-item${missingMarkerClass(mark)}" draggable="true" data-glance-index="${idx}" data-glance-stop-id="${escapeHtml(s.id)}">
         <span class="day-glance-handle" title="Drag to reorder on desktop" aria-hidden="true">⠿</span>
         ${renderTimeWheelControl(s, 'glance', 'Time for ' + label)}
         <span class="day-glance-icon" aria-hidden="true">${icon}</span>
         <button type="button" class="day-glance-row" data-glance-stop="${escapeHtml(s.id)}" title="${escapeHtml(tip)}">
-          <span class="day-glance-title"><span class="glance-nick">${escapeHtml(label)}</span></span>
+          <span class="day-glance-title"><span class="glance-nick">${escapeHtml(label)}</span>${noPlace ? missingBadgeHtml('No placeId') : ''}${flagged ? missingBadgeHtml('FLAG') : ''}</span>
         </button>
         <div class="day-glance-moves">
           <button type="button" class="day-glance-move" data-move="${escapeHtml(s.id)}" data-dir="-1" aria-label="Move up"${upDis}>↑</button>
@@ -6047,6 +6197,7 @@
     if (!day) return '<p class="muted">No days yet.</p>';
     sortDayBlocks(day);
     const blocks = day.blocks || [];
+    const markEmpties = planShowsEmptyMarkers(state.plan);
     let html = '<div class="timeline">';
     blocks.forEach((s, i) => {
       ensureStopTicks(s);
@@ -6054,21 +6205,27 @@
       if (hydrateStopAddressFromPlace(s)) scheduleAutoSave();
       seedTravelMinutes(day, i);
       const next = blocks[i + 1];
+      const noPlace = markEmpties && stopNeedsPlaceLink(s);
+      const flagged = notesAreFlagged(s.notes);
+      const stopMark = noPlace || flagged;
+      const placeHint = (s.placeId || s.place_id)
+        ? '<p class="muted address-places-hint">Saved to Places directory too</p>'
+        : (noPlace ? ('<p class="muted address-places-hint">' + missingBadgeHtml('No placeId') + ' Link this stop to Places when you know which one.</p>') : '');
       html += `
-        <article class="stop" id="stop-block-${escapeHtml(s.id)}">
+        <article class="stop${missingMarkerClass(stopMark)}" id="stop-block-${escapeHtml(s.id)}">
           <div class="stop-time">
             <input type="time" data-stop-time="${s.id}" data-time-src="timeline" value="${escapeHtml(s.time || '')}" aria-label="Time">
           </div>
           <div class="rail"><div class="dot ${escapeHtml(s.type || '')}"></div></div>
           <div>
-            <div><span class="badge">${escapeHtml(s.period || periodForTime(s.time))}</span><span class="badge">${escapeHtml(typeLabel(s.type))}</span></div>
+            <div><span class="badge">${escapeHtml(s.period || periodForTime(s.time))}</span><span class="badge">${escapeHtml(typeLabel(s.type))}</span>${flagged ? missingBadgeHtml('FLAG / GAP') : ''}${noPlace ? missingBadgeHtml('No placeId') : ''}</div>
             <div class="stop-title"><input type="text" data-stop-title="${s.id}" value="${escapeHtml(s.title || '')}"></div>
-            <div class="stop-notes"><input type="text" data-stop-notes="${s.id}" value="${escapeHtml(s.notes || '')}" placeholder="Notes"></div>
+            <div class="stop-notes"><input type="text" class="${flagged ? 'field-flagged' : ''}" data-stop-notes="${s.id}" value="${escapeHtml(s.notes || '')}" placeholder="Notes" aria-invalid="${flagged ? 'true' : 'false'}"></div>
             <div class="stop-notes address-row">
               <input type="text" data-stop-address="${s.id}" value="${escapeHtml(resolveStopAddress(s))}" placeholder="Address (village/town or street) or Apple Maps link" aria-label="Address">
               ${stopMapsButtonHtml(s, 'Open in Apple Maps')}
             </div>
-            ${(s.placeId || s.place_id) ? '<p class="muted address-places-hint">Saved to Places directory too</p>' : ''}
+            ${placeHint}
             ${stopNeedsBookingTicks(s) ? `
             <div class="booking-ticks" role="group" aria-label="Booking status">
               <label class="tick ${s.messageSent ? 'on-message' : ''}">
@@ -6148,9 +6305,10 @@ function renderDayTabs() {
     }
     const place = getTourHotelPlace();
     const maps = place ? tourHotelMapsButtonHtml(place.name, place.address || knownTourHotelAddress(place.name), 'Open in Apple Maps') : '';
+    const hotelMissing = planShowsEmptyMarkers(state.plan) && tourHotelIsMissing(state.plan);
     return `
-      <label class="field-label" for="tourHotel">Staying at</label>
-      <select id="tourHotel" aria-label="Tour hotel — overnight base in the beading area">
+      <label class="field-label" for="tourHotel">Staying at${hotelMissing ? missingBadgeHtml('Hotel missing') : ''}</label>
+      <select id="tourHotel" class="${missingFieldClass(hotelMissing).trim()}" aria-label="Tour hotel — overnight base in the beading area" aria-invalid="${hotelMissing ? 'true' : 'false'}">
         ${opts.join('')}
       </select>
       <p class="muted" style="margin-top:6px;">Beading-area tour hotel (overnight base). Used as the <strong>day starting point from the day after arrival</strong> — not on day 1 before the Prague pick-up. Add or edit hotels on the Places tab (Hotels category).${maps ? ' ' + maps : ''}</p>
@@ -6195,7 +6353,8 @@ function renderDayTabs() {
     const place = getTourHotelPlace();
     const name = (place && place.name) || state.plan.tourHotelName || '';
     if (!name) {
-      return `<div class="day-origin warn"><div class="muted">Day starting point</div><div class="name">No tour hotel selected</div><div class="meta">Choose <strong>Staying at</strong> above (Places → Hotels). We do not add a duplicate “arrive hotel” stop each day.</div></div>`;
+      const mark = planShowsEmptyMarkers(state.plan);
+      return `<div class="day-origin warn${missingMarkerClass(mark)}"><div class="muted">Day starting point${mark ? missingBadgeHtml('Hotel missing') : ''}</div><div class="name">No tour hotel selected</div><div class="meta">Choose <strong>Staying at</strong> above (Places → Hotels). We do not add a duplicate “arrive hotel” stop each day.</div></div>`;
     }
     const addr = (place && String(place.address || '').trim()) || knownTourHotelAddress(name) || '';
     return `
@@ -6393,26 +6552,31 @@ function renderDayTabs() {
       ? `<button type="button" class="btn btn-outline btn-sm" id="btnResetDemo">Reset sample tour</button>`
       : '';
 
+    const markEmpties = planShowsEmptyMarkers(state.plan);
     const organiserDisplay = (state.plan.organiserName || (findPersonById(state.plan.organiserPersonId) || {}).name || '');
+    const orgPersonMissing = markEmpties && organiserPersonIsMissing(state.plan);
+    const arrivalMissing = markEmpties && !String(state.plan.arrivalDate || '').trim();
+    const departureMissing = markEmpties && !String(state.plan.departureDate || '').trim();
+    const hotelMissingMeta = markEmpties && tourHotelIsMissing(state.plan);
     const datesRow = `
       <div class="stack">
-        <label class="field-label">Organiser</label>
-        <input type="text" id="organiserName" list="organiserPeopleList" value="${escapeHtml(organiserDisplay)}" placeholder="Search People or type a name" autocomplete="off">
+        <label class="field-label">Organiser${orgPersonMissing ? missingBadgeHtml('People link missing') : ''}</label>
+        <input type="text" id="organiserName" class="${missingFieldClass(orgPersonMissing).trim()}" list="organiserPeopleList" value="${escapeHtml(organiserDisplay)}" placeholder="Search People or type a name" autocomplete="off" aria-invalid="${orgPersonMissing ? 'true' : 'false'}">
         <datalist id="organiserPeopleList">
           ${(state.people || []).map(p => '<option value="' + escapeHtml(p.name || '') + '"></option>').join('')}
         </datalist>
-        <p class="muted" style="margin:0 0 8px;">Contact person in People — not the tour label. Typing a new name adds or links a person.</p>
+        <p class="muted" style="margin:0 0 8px;">Contact person in People — not the tour label. Typing a new name adds or links a person.${orgPersonMissing ? ' <strong>No organiserPersonId linked yet.</strong>' : ''}</p>
         <label class="field-label">Group name</label>
         <input type="text" id="groupName" value="${escapeHtml(state.plan.groupName || '')}" placeholder="e.g. Angela Clark Boutique week 1">
         <p class="muted" style="margin:0 0 8px;">Tour / booking label only. Keep this even when it matches the organiser’s name.</p>
         <div class="row-between">
           <div style="flex:1;min-width:140px;">
-            <label class="field-label">Arrival</label>
-            <input type="text" id="arrivalDate" value="${escapeHtml(state.plan.arrivalDate ? formatDateDMY(state.plan.arrivalDate) : '')}" placeholder="DD/MM/YYYY">
+            <label class="field-label">Arrival${arrivalMissing ? missingBadgeHtml('Date missing') : ''}</label>
+            <input type="text" id="arrivalDate" class="${missingFieldClass(arrivalMissing).trim()}" value="${escapeHtml(state.plan.arrivalDate ? formatDateDMY(state.plan.arrivalDate) : '')}" placeholder="DD/MM/YYYY" aria-invalid="${arrivalMissing ? 'true' : 'false'}">
           </div>
           <div style="flex:1;min-width:140px;">
-            <label class="field-label">Departure</label>
-            <input type="text" id="departureDate" value="${escapeHtml(state.plan.departureDate ? formatDateDMY(state.plan.departureDate) : '')}" placeholder="DD/MM/YYYY">
+            <label class="field-label">Departure${departureMissing ? missingBadgeHtml('Date missing') : ''}</label>
+            <input type="text" id="departureDate" class="${missingFieldClass(departureMissing).trim()}" value="${escapeHtml(state.plan.departureDate ? formatDateDMY(state.plan.departureDate) : '')}" placeholder="DD/MM/YYYY" aria-invalid="${departureMissing ? 'true' : 'false'}">
           </div>
         </div>
         ${renderTourHotelSelect()}
@@ -6422,15 +6586,19 @@ function renderDayTabs() {
     `;
 
     const tripOrgName = state.plan.organiserName || (findPersonById(state.plan.organiserPersonId) || {}).name || '';
+    const emptyBanner = markEmpties
+      ? `<div class="empty-markers-banner" role="status">Archive / thin past plan — empty fields and FLAG/GAP notes are highlighted in amber so gaps are easy to spot.</div>`
+      : '';
     const tripSummary = `
       <div class="trip-summary">
         <div class="trip-title">${escapeHtml(state.plan.groupName || 'Tour group')}</div>
         <div class="trip-meta">
-          <span>👤 Organiser: ${escapeHtml(tripOrgName || 'Not set')}</span>
-          <span>📅 ${state.plan.arrivalDate ? formatDateDMY(state.plan.arrivalDate) : '—'} – ${state.plan.departureDate ? formatDateDMY(state.plan.departureDate) : '—'}</span>
-          <span>🏨 Staying at: ${escapeHtml(state.plan.tourHotelName || 'Not set')}</span>
+          <span class="${orgPersonMissing ? 'meta-missing' : ''}">👤 Organiser: ${escapeHtml(tripOrgName || 'Not set')}</span>
+          <span class="${(arrivalMissing || departureMissing) ? 'meta-missing' : ''}">📅 ${state.plan.arrivalDate ? formatDateDMY(state.plan.arrivalDate) : '—'} – ${state.plan.departureDate ? formatDateDMY(state.plan.departureDate) : '—'}</span>
+          <span class="${hotelMissingMeta ? 'meta-missing' : ''}">🏨 Staying at: ${escapeHtml(state.plan.tourHotelName || 'Not set')}</span>
           <span>🗺 Day 1 start: ${escapeHtml(effectiveDay1OriginType() === 'airport' ? PRAGUE_AIRPORT_NAME : (state.plan.pragueHotel?.name || 'Prague hotel pick-up'))}</span>
         </div>
+        ${emptyBanner}
         ${state.plan.roughDraft ? '<div class="rough-draft-banner">Rough draft week — times and stops are a starting point only. Edit freely.</div>' : ''}
       </div>
     `;
