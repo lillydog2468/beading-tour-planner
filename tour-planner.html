@@ -1162,6 +1162,99 @@
     }
     .main-tab.active .tab-sub { color: inherit; opacity: .85; }
 
+    .main-tab .tab-badge {
+      display: inline-block;
+      min-width: 1.4em;
+      margin-left: 6px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.4;
+      vertical-align: middle;
+      color: var(--missing-marker-text);
+      background: var(--missing-marker-bg);
+      border: 1.5px solid var(--missing-marker);
+    }
+    .main-tab.active .tab-badge {
+      color: var(--missing-marker-text);
+      background: var(--missing-marker-bg);
+      border-color: var(--missing-marker);
+    }
+    .issues-panel { display: flex; flex-direction: column; gap: 12px; }
+    .issues-intro {
+      margin: 0;
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+    .issues-empty {
+      padding: 18px 16px;
+      border-radius: 12px;
+      border: 1px dashed var(--border);
+      background: var(--surface);
+      color: var(--text-secondary);
+      font-weight: 600;
+    }
+    .issues-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .issue-item {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 10px 12px;
+      align-items: start;
+      width: 100%;
+      text-align: left;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1.5px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      font: inherit;
+    }
+    .issue-item:hover, .issue-item:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+      border-color: var(--accent);
+    }
+    .issue-item.kind-missing {
+      border-color: var(--missing-marker);
+      background: var(--missing-marker-bg);
+    }
+    .issue-item.kind-conflict {
+      border-color: #dc2626;
+      background: rgba(220, 38, 38, 0.10);
+    }
+    .issue-kind {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .03em;
+      text-transform: uppercase;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid currentColor;
+      white-space: nowrap;
+    }
+    .issue-item.kind-missing .issue-kind { color: var(--missing-marker-text); }
+    .issue-item.kind-conflict .issue-kind { color: #b91c1c; }
+    .issue-body { min-width: 0; }
+    .issue-message { font-weight: 700; font-size: 14px; margin: 0 0 4px; }
+    .issue-meta { margin: 0; font-size: 12px; color: var(--text-secondary); }
+    .issue-jump {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent);
+      white-space: nowrap;
+      align-self: center;
+    }
+
     /* Rough plan — Places tray + week day lanes */
     .rough-layout {
       display: grid;
@@ -1894,7 +1987,7 @@
     selectedPersonId: null,
     mainTab: (function () {
       const t = localStorage.getItem('planner_main_tab');
-      return (t === 'places' || t === 'rough' || t === 'people') ? t : 'planner';
+      return (t === 'places' || t === 'rough' || t === 'people' || t === 'issues') ? t : 'planner';
     })(),
     roughTrayFilter: 'all',
     roughTraySearch: '',
@@ -2472,6 +2565,21 @@
       plan.day1OriginType = 'prague';
     }
     plan.guests = (plan.guests || []).map(g => ensureGuestDebt(g));
+    if (!Array.isArray(plan.issues)) plan.issues = [];
+    else {
+      plan.issues = plan.issues.map((iss, i) => {
+        if (!iss || typeof iss !== 'object') return null;
+        const id = String(iss.id || ('issue_' + i));
+        const kind = iss.kind === 'conflict' ? 'conflict' : 'missing';
+        return {
+          id,
+          kind,
+          field: iss.field != null ? String(iss.field) : '',
+          message: iss.message != null ? String(iss.message) : '',
+          resolved: !!iss.resolved,
+        };
+      }).filter(Boolean);
+    }
     (plan.days || []).forEach((d, dayIndex) => {
       if (!Array.isArray(d.blocks)) d.blocks = [];
       // Drop default “Leave hotel at 09:00” skeletons on Day 2+ (kept only if Keith linked a place or wrote notes).
@@ -3466,6 +3574,403 @@
   function missingBadgeHtml(label) {
     if (!label) return '';
     return `<span class="missing-marker-badge">${escapeHtml(label)}</span>`;
+  }
+
+  /**
+   * Work queue of gaps + contradictions for the Issues tab (Keith / Tour Archivist).
+   * Reuses amber empty-field rules on archive / thin past plans, FLAG/GAP notes,
+   * time/hotel clashes, and optional payload.issues[] (drops when resolved or filled).
+   */
+  function syncPayloadIssues(plan) {
+    if (!plan || !Array.isArray(plan.issues)) return false;
+    let changed = false;
+    plan.issues.forEach(iss => {
+      if (!iss || iss.resolved) return;
+      const field = String(iss.field || '');
+      let filled = false;
+      if (field === 'organiser' || field === 'organiserPersonId' || field === 'organiserName') {
+        filled = !organiserPersonIsMissing(plan) && !!String(plan.organiserName || '').trim();
+      } else if (field === 'arrivalDate') {
+        filled = !!String(plan.arrivalDate || '').trim();
+      } else if (field === 'departureDate') {
+        filled = !!String(plan.departureDate || '').trim();
+      } else if (field === 'tourHotel' || field === 'tourHotelName' || field === 'tourHotelPlaceId') {
+        filled = !tourHotelIsMissing(plan);
+      } else if (field.indexOf('guest:') === 0) {
+        const parts = field.split(':');
+        const gid = parts[1] || '';
+        const which = parts[2] || 'name';
+        const g = (plan.guests || []).find(x => String(x.id) === gid);
+        if (g) {
+          if (which === 'email') filled = !!String(g.email || '').trim();
+          else filled = !guestNameIsMissing(g.name);
+        }
+      } else if (field.indexOf('stop:') === 0) {
+        const parts = field.split(':');
+        const sid = parts[1] || '';
+        let stop = null;
+        (plan.days || []).forEach(d => {
+          (d.blocks || []).forEach(s => { if (String(s.id) === sid) stop = s; });
+        });
+        if (stop) {
+          if (parts[2] === 'notes') filled = !notesAreFlagged(stop.notes);
+          else if (parts[2] === 'placeId' || parts[2] === 'place') filled = !stopNeedsPlaceLink(stop);
+          else filled = !notesAreFlagged(stop.notes) && !stopNeedsPlaceLink(stop);
+        }
+      }
+      if (filled) {
+        iss.resolved = true;
+        changed = true;
+      }
+    });
+    return changed;
+  }
+
+  function collectPlanIssues(plan) {
+    const out = [];
+    if (!plan) return out;
+    syncPayloadIssues(plan);
+    const markEmpties = planShowsEmptyMarkers(plan);
+    const push = (item) => {
+      if (!item || !item.message) return;
+      out.push({
+        id: item.id || uid('iss'),
+        kind: item.kind === 'conflict' ? 'conflict' : 'missing',
+        field: item.field || '',
+        message: item.message,
+        meta: item.meta || '',
+        dayIndex: item.dayIndex != null ? item.dayIndex : null,
+        stopId: item.stopId || '',
+        source: item.source || 'detected',
+      });
+    };
+
+    if (markEmpties) {
+      if (organiserPersonIsMissing(plan)) {
+        push({
+          id: 'missing-organiser',
+          kind: 'missing',
+          field: 'organiser',
+          message: 'Organiser is blank or not linked to People',
+          meta: 'Group card · Organiser',
+        });
+      }
+      if (!String(plan.arrivalDate || '').trim()) {
+        push({
+          id: 'missing-arrival',
+          kind: 'missing',
+          field: 'arrivalDate',
+          message: 'Arrival date is missing',
+          meta: 'Group card · Dates',
+        });
+      }
+      if (!String(plan.departureDate || '').trim()) {
+        push({
+          id: 'missing-departure',
+          kind: 'missing',
+          field: 'departureDate',
+          message: 'Departure date is missing',
+          meta: 'Group card · Dates',
+        });
+      }
+      if (tourHotelIsMissing(plan)) {
+        push({
+          id: 'missing-hotel',
+          kind: 'missing',
+          field: 'tourHotel',
+          message: 'Tour hotel (Staying at) is not set',
+          meta: 'Overnight base in the beading area',
+        });
+      }
+      (plan.guests || []).forEach((g, gi) => {
+        if (!g) return;
+        if (guestNameIsMissing(g.name)) {
+          push({
+            id: 'missing-guest-name-' + (g.id || gi),
+            kind: 'missing',
+            field: 'guest:' + (g.id || gi) + ':name',
+            message: 'Guest name is blank or unnamed',
+            meta: 'Guests · row ' + (gi + 1),
+          });
+        }
+        if (!String(g.email || '').trim()) {
+          push({
+            id: 'missing-guest-email-' + (g.id || gi),
+            kind: 'missing',
+            field: 'guest:' + (g.id || gi) + ':email',
+            message: 'Guest email is blank' + (guestNameIsMissing(g.name) ? '' : (' (' + String(g.name).trim() + ')')),
+            meta: 'Guests · feeds People directory',
+          });
+        }
+      });
+    }
+
+    const arrival = String(plan.arrivalDate || '').trim();
+    const departure = String(plan.departureDate || '').trim();
+    const tourHotelKey = placeNameKey(plan.tourHotelName || '');
+    const hotelNamesSeen = new Map(); // key -> {label, dayIndex, stopId}
+
+    (plan.days || []).forEach((day, dayIndex) => {
+      const dayLabel = 'Day ' + (dayIndex + 1) + (day && day.date ? (' · ' + formatDateDMY(day.date)) : '');
+      const dayDate = String(day && day.date || '').trim();
+      if (arrival && dayDate && dayDate < arrival) {
+        push({
+          id: 'conflict-day-before-' + dayIndex,
+          kind: 'conflict',
+          field: 'day:' + dayIndex,
+          message: dayLabel + ' is before the arrival date',
+          meta: 'Arrival ' + formatDateDMY(arrival),
+          dayIndex,
+        });
+      }
+      if (departure && dayDate && dayDate > departure) {
+        push({
+          id: 'conflict-day-after-' + dayIndex,
+          kind: 'conflict',
+          field: 'day:' + dayIndex,
+          message: dayLabel + ' is after the departure date',
+          meta: 'Departure ' + formatDateDMY(departure),
+          dayIndex,
+        });
+      }
+
+      const timed = {};
+      (day && day.blocks || []).forEach(s => {
+        if (!s) return;
+        const title = String(s.title || s.name || 'Stop').trim() || 'Stop';
+        if (notesAreFlagged(s.notes)) {
+          const flagKind = /\bFLAG\b/i.test(String(s.notes || '')) && /\bGAP\b/i.test(String(s.notes || ''))
+            ? 'FLAG / GAP'
+            : (/\bFLAG\b/i.test(String(s.notes || '')) ? 'FLAG' : 'GAP');
+          push({
+            id: 'flag-' + (s.id || dayIndex + '-' + title),
+            kind: 'missing',
+            field: 'stop:' + (s.id || '') + ':notes',
+            message: flagKind + ' note on “' + title + '”',
+            meta: dayLabel + ' · ' + String(s.notes || '').slice(0, 120),
+            dayIndex,
+            stopId: s.id || '',
+          });
+        }
+        if (markEmpties && stopNeedsPlaceLink(s)) {
+          push({
+            id: 'missing-place-' + (s.id || dayIndex + '-' + title),
+            kind: 'missing',
+            field: 'stop:' + (s.id || '') + ':placeId',
+            message: '“' + title + '” is not linked to Places',
+            meta: dayLabel,
+            dayIndex,
+            stopId: s.id || '',
+          });
+        }
+        const mins = timeToMinutes(s.time);
+        if (mins != null && !isSkeletonStop(s) && !isRoughSystemStop(s)) {
+          const key = String(mins);
+          if (timed[key]) {
+            push({
+              id: 'conflict-time-' + dayIndex + '-' + key,
+              kind: 'conflict',
+              field: 'stop:' + (s.id || '') + ':time',
+              message: 'Two stops share ' + String(s.time || '') + ' on ' + dayLabel,
+              meta: '“' + timed[key].title + '” and “' + title + '”',
+              dayIndex,
+              stopId: s.id || '',
+            });
+          } else {
+            timed[key] = { title, stopId: s.id || '' };
+          }
+        }
+        // Hotel name clashes: hotel-type stops or explicit overnight hotel names
+        let named = '';
+        if (s.type === 'hotel') {
+          named = String(s.title || s.name || '').trim();
+        } else {
+          const overnightMatch = String(s.notes || '').match(
+            /\b(?:overnight(?:\s+at)?|staying at|stay at)\s*[:\-]?\s*([A-Za-zÀ-ž0-9][^.;\n]{1,50})/i
+          );
+          if (overnightMatch) {
+            named = overnightMatch[1].trim().replace(/\s+/g, ' ');
+            // Skip times, generic words, and pure travel phrases
+            if (/^\d/.test(named) || /^(the\s+)?(hotel|same|there|home|base)\b/i.test(named) || named.length < 3) {
+              named = '';
+            }
+          }
+        }
+        if (named) {
+          const key = placeNameKey(named);
+          if (key && key.length > 2) {
+            if (!hotelNamesSeen.has(key)) {
+              hotelNamesSeen.set(key, { label: named, dayIndex, stopId: s.id || '' });
+            }
+            if (tourHotelKey && key !== tourHotelKey
+                && key.indexOf(tourHotelKey) < 0 && tourHotelKey.indexOf(key) < 0) {
+              push({
+                id: 'conflict-hotel-' + key + '-' + dayIndex,
+                kind: 'conflict',
+                field: 'tourHotel',
+                message: 'Hotel “' + named + '” differs from Staying at “' + (plan.tourHotelName || 'not set') + '”',
+                meta: dayLabel,
+                dayIndex,
+                stopId: s.id || '',
+              });
+            }
+          }
+        }
+      });
+    });
+
+    // Distinct overnight hotels named across the week
+    if (hotelNamesSeen.size > 1) {
+      const labels = Array.from(hotelNamesSeen.values()).map(v => v.label);
+      push({
+        id: 'conflict-hotels-multi',
+        kind: 'conflict',
+        field: 'tourHotel',
+        message: 'More than one hotel named in the plan',
+        meta: labels.slice(0, 4).join(' · '),
+      });
+    }
+
+    (plan.issues || []).forEach(iss => {
+      if (!iss || iss.resolved) return;
+      const msg = String(iss.message || '').trim();
+      if (!msg) return;
+      push({
+        id: 'payload-' + iss.id,
+        kind: iss.kind === 'conflict' ? 'conflict' : 'missing',
+        field: iss.field || '',
+        message: msg,
+        meta: 'Saved issue' + (iss.field ? (' · ' + iss.field) : ''),
+        source: 'payload',
+      });
+    });
+
+    // De-dupe by id (first wins)
+    const seen = new Set();
+    return out.filter(it => {
+      if (seen.has(it.id)) return false;
+      seen.add(it.id);
+      return true;
+    });
+  }
+
+  function openIssuesCount(plan) {
+    return collectPlanIssues(plan).length;
+  }
+
+  function focusPlanIssue(issue) {
+    if (!issue) return;
+    const field = String(issue.field || '');
+    const goPlanner = () => {
+      if (state.mainTab !== 'planner') {
+        state.mainTab = 'planner';
+        localStorage.setItem('planner_main_tab', 'planner');
+      }
+      if (issue.dayIndex != null && state.plan && state.plan.days && state.plan.days[issue.dayIndex]) {
+        state.selectedDay = issue.dayIndex;
+      } else if (issue.stopId && state.plan) {
+        const idx = (state.plan.days || []).findIndex(d =>
+          (d.blocks || []).some(s => String(s.id) === String(issue.stopId))
+        );
+        if (idx >= 0) state.selectedDay = idx;
+      }
+      render({ resetScroll: false });
+      requestAnimationFrame(() => {
+        let el = null;
+        if (field === 'organiser' || field === 'organiserPersonId' || field === 'organiserName') {
+          el = document.getElementById('organiserName');
+        } else if (field === 'arrivalDate') {
+          el = document.getElementById('arrivalDate');
+        } else if (field === 'departureDate') {
+          el = document.getElementById('departureDate');
+        } else if (field === 'tourHotel' || field === 'tourHotelName' || field === 'tourHotelPlaceId') {
+          el = document.getElementById('tourHotel');
+        } else if (field.indexOf('guest:') === 0) {
+          const parts = field.split(':');
+          const gid = parts[1] || '';
+          const which = parts[2] || 'name';
+          el = document.querySelector(which === 'email'
+            ? '[data-guest-email="' + gid + '"]'
+            : '[data-guest-name="' + gid + '"]');
+        } else if (field.indexOf('stop:') === 0 || issue.stopId) {
+          const sid = issue.stopId || field.split(':')[1] || '';
+          const block = document.getElementById('stop-block-' + sid);
+          if (block) {
+            const sub = field.split(':')[2];
+            if (sub === 'notes') el = block.querySelector('[data-stop-notes]');
+            else if (sub === 'time') el = block.querySelector('[data-stop-time]');
+            else if (sub === 'placeId' || sub === 'place') el = block.querySelector('[data-stop-place], [data-place-select], select');
+            if (!el) el = block.querySelector('[data-stop-title]') || block;
+            try { block.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+            catch { block.scrollIntoView(true); }
+            block.classList.add('glance-flash');
+            setTimeout(() => block.classList.remove('glance-flash'), 1400);
+          }
+        } else if (field.indexOf('day:') === 0) {
+          const di = Number(field.split(':')[1]);
+          if (!Number.isNaN(di)) {
+            const tab = document.querySelector('[data-day="' + di + '"]');
+            el = tab;
+          }
+        }
+        if (el) {
+          try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+          catch { el.scrollIntoView(true); }
+          if (typeof el.focus === 'function') {
+            try { el.focus({ preventScroll: true }); }
+            catch { el.focus(); }
+          }
+          if (el.classList) {
+            el.classList.add('glance-flash');
+            setTimeout(() => el.classList.remove('glance-flash'), 1400);
+          }
+        }
+      });
+    };
+    goPlanner();
+  }
+
+  function renderIssuesPanel() {
+    const issues = collectPlanIssues(state.plan);
+    const n = issues.length;
+    const archiveHint = planShowsEmptyMarkers(state.plan)
+      ? 'This archive / thin past plan highlights empty fields as well as FLAG/GAP notes and clashes.'
+      : 'Empty-field checks stay quiet on future bookings; FLAG/GAP notes, clashes, and saved issues still appear here.';
+    const list = n
+      ? `<ul class="issues-list" role="list">${issues.map(iss => {
+          const kindLabel = iss.kind === 'conflict' ? 'Conflict' : 'Missing';
+          return `<li>
+            <button type="button" class="issue-item kind-${escapeHtml(iss.kind)}" data-issue-id="${escapeHtml(iss.id)}" title="Jump to field">
+              <span class="issue-kind">${kindLabel}</span>
+              <span class="issue-body">
+                <p class="issue-message">${escapeHtml(iss.message)}</p>
+                ${iss.meta ? `<p class="issue-meta">${escapeHtml(iss.meta)}</p>` : ''}
+              </span>
+              <span class="issue-jump">Open →</span>
+            </button>
+          </li>`;
+        }).join('')}</ul>`
+      : `<div class="issues-empty" role="status">Nothing outstanding — gaps and contradictions drop off once the plan is updated.</div>`;
+    return `
+      <div class="card issues-panel">
+        <div class="row-between">
+          <h2>Issues${n ? ` <span class="missing-marker-badge">${n}</span>` : ''}</h2>
+          <button type="button" class="btn btn-outline btn-sm" id="btnBackPlanner">Back to Planner</button>
+        </div>
+        <p class="issues-intro">Work queue of missing or contradicting information. Tap an item to jump to the field. Once sorted and saved in the plan, it leaves this list. ${archiveHint}</p>
+        ${list}
+      </div>
+    `;
+  }
+
+  function bindIssuesPanel() {
+    document.querySelectorAll('[data-issue-id]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-issue-id');
+        const issue = collectPlanIssues(state.plan).find(x => x.id === id);
+        focusPlanIssue(issue);
+      });
+    });
   }
 
   function countPlanBlocks(plan) {
@@ -6639,6 +7144,11 @@ function renderDayTabs() {
       </div>
     `;
 
+    if (state.plan && syncPayloadIssues(state.plan)) scheduleAutoSave();
+    const issuesCount = openIssuesCount(state.plan);
+    const issuesBadge = issuesCount
+      ? `<span class="tab-badge" aria-label="${issuesCount} open issue${issuesCount === 1 ? '' : 's'}">${issuesCount}</span>`
+      : '';
     const mainTabs = `
       <div class="main-tabs" role="tablist" aria-label="Planner sections">
         <button type="button" class="main-tab ${state.mainTab === 'planner' ? 'active' : ''}" data-main-tab="planner" role="tab" aria-selected="${state.mainTab === 'planner'}">
@@ -6656,6 +7166,10 @@ function renderDayTabs() {
         <button type="button" class="main-tab ${state.mainTab === 'people' ? 'active' : ''}" data-main-tab="people" role="tab" aria-selected="${state.mainTab === 'people'}">
           People
           <span class="tab-sub">Guests, emails, visit history</span>
+        </button>
+        <button type="button" class="main-tab ${state.mainTab === 'issues' ? 'active' : ''}" data-main-tab="issues" role="tab" aria-selected="${state.mainTab === 'issues'}">
+          Issues${issuesBadge}
+          <span class="tab-sub">Gaps and contradictions</span>
         </button>
       </div>
     `;
@@ -6730,6 +7244,12 @@ function renderDayTabs() {
       ${peoplePanel}
     `;
 
+    const issuesView = `
+      <div class="status-row">${live}${auth}${resetDemo}</div>
+      ${mainTabs}
+      ${renderIssuesPanel()}
+    `;
+
     const roughView = `
       <div class="status-row">${live}${auth}${resetDemo}</div>
       ${mainTabs}
@@ -6741,6 +7261,8 @@ function renderDayTabs() {
       app.innerHTML = placesView;
     } else if (state.mainTab === 'people') {
       app.innerHTML = peopleView;
+    } else if (state.mainTab === 'issues') {
+      app.innerHTML = issuesView;
     } else if (state.mainTab === 'rough') {
       app.innerHTML = roughView;
     } else if (view === 'phone') {
@@ -6751,6 +7273,7 @@ function renderDayTabs() {
     bindDynamic();
     if (state.mainTab === 'rough') bindRoughPlan();
     if (state.mainTab === 'people') bindPeopleDirectory();
+    if (state.mainTab === 'issues') bindIssuesPanel();
     if (resetScroll) {
       try { window.scrollTo({ top: 0, behavior: 'smooth' }); }
       catch { window.scrollTo(0, 0); }
@@ -6762,6 +7285,7 @@ function renderDayTabs() {
   function setMainTab(tab) {
     if (tab === 'places') state.mainTab = 'places';
     else if (tab === 'people') state.mainTab = 'people';
+    else if (tab === 'issues') state.mainTab = 'issues';
     else if (tab === 'rough') state.mainTab = 'rough';
     else state.mainTab = 'planner';
     localStorage.setItem('planner_main_tab', state.mainTab);
@@ -7818,7 +8342,7 @@ function renderDayTabs() {
     const viewParam = params.get('view');
     if (viewParam === 'phone' || viewParam === 'detailed') state.viewPref = viewParam;
     const tabParam = (params.get('tab') || '').toLowerCase();
-    if (tabParam === 'people' || tabParam === 'places' || tabParam === 'rough' || tabParam === 'planner') {
+    if (tabParam === 'people' || tabParam === 'places' || tabParam === 'issues' || tabParam === 'rough' || tabParam === 'planner') {
       state.mainTab = tabParam;
       localStorage.setItem('planner_main_tab', state.mainTab);
     }
