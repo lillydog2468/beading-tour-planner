@@ -1851,8 +1851,31 @@
       || /snack\s+at\s+supermarket/.test(hay);
   }
 
+  /**
+   * Button pressing in old pressing house (seed kf13) — Keith usually goes
+   * before breakfast (~07:30). Not Button factory (kf12).
+   * Match by client_id / place id or name.
+   */
+  function isButtonPressingHousePlace(placeOrStop) {
+    if (!placeOrStop) return false;
+    const id = String(
+      placeOrStop.id || placeOrStop.placeId || placeOrStop.place_id || placeOrStop.client_id || ''
+    ).trim().toLowerCase();
+    if (id === 'kf13') return true;
+    const name = String(placeOrStop.name || placeOrStop.title || '').trim().toLowerCase();
+    if (!name) return false;
+    // Never apply to Button factory
+    if (name === 'button factory' || /^button\s+factory\b/.test(name)) return false;
+    if (name === 'button pressing in old pressing house') return true;
+    if (/\bpressing\s+house\b/.test(name)) return true;
+    if (/\bbutton\s+pressing\b/.test(name) && !/\bfactory\b/.test(name)) return true;
+    return false;
+  }
+
   /** Auto-spacing when Keith leaves time blank on add-to-day. */
   function suggestAutoStopTime(day, place) {
+    // Habitual early visit — always suggest 07:30 (addPlaceToDay also forces this)
+    if (isButtonPressingHousePlace(place)) return '07:30';
     const gapMins = isLunchLikePlace(place) ? 30 : 90; // lunch-like ~30m; else ~1h30
     const timed = (day && day.blocks || [])
       .filter(b => timeToMinutes(b.time) != null)
@@ -3760,7 +3783,11 @@
     const rawChosen = String(chosenTime == null ? '' : chosenTime).trim();
     let time = '';
     let timeApprox = false;
-    if (rawChosen) {
+    if (isButtonPressingHousePlace(place)) {
+      // Initial add always 07:30 (before breakfast). Manual tweak afterwards is fine.
+      time = '07:30';
+      timeApprox = true;
+    } else if (rawChosen) {
       // Keith set a time on the picker — use it as-is (not approximate)
       time = normaliseStopTime(rawChosen, '');
     } else {
