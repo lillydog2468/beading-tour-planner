@@ -1242,7 +1242,7 @@
       display: flex;
       flex-direction: column;
       align-items: stretch;
-      /* Row 1: time | icon | ↑↓×  — Row 2: place name (nickname) full width */
+      /* Row 1: time | icon | ↑↓×  — Row 2: fuller place name (+ optional soft note) */
       gap: 4px;
       padding: 8px 10px;
       border-radius: 10px;
@@ -1292,6 +1292,19 @@
       display: -webkit-box;
       -webkit-box-orient: vertical;
       -webkit-line-clamp: 2;
+      white-space: normal;
+      word-break: break-word;
+      min-width: 0;
+      padding: 0 2px;
+    }
+    .rough-stop-note {
+      font-weight: 500; font-size: 11px;
+      line-height: 1.25;
+      color: var(--text-secondary);
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 1;
       white-space: normal;
       word-break: break-word;
       min-width: 0;
@@ -1588,6 +1601,11 @@
       font-size: 18px;
       line-height: 1.35;
       -webkit-line-clamp: 3;
+    }
+    .rough-day.rough-focus-day .rough-stop-note {
+      font-size: 13px;
+      line-height: 1.3;
+      -webkit-line-clamp: 2;
     }
     .rough-day.rough-focus-day .rough-stop-icon .type-icon-badge {
       width: 2em; height: 2em; min-width: 2em;
@@ -2245,8 +2263,13 @@
       plan.day1OriginType = 'prague';
     }
     plan.guests = (plan.guests || []).map(g => ensureGuestDebt(g));
-    (plan.days || []).forEach(d => {
-      (d.blocks || []).forEach(s => {
+    (plan.days || []).forEach((d, dayIndex) => {
+      if (!Array.isArray(d.blocks)) d.blocks = [];
+      // Drop default “Leave hotel at 09:00” skeletons on Day 2+ (kept only if Keith linked a place or wrote notes).
+      if (dayIndex > 0) {
+        d.blocks = d.blocks.filter(s => !isDefaultLeaveHotelStop(s));
+      }
+      d.blocks.forEach(s => {
         // Stable id required so data-stop-time survives re-render mid-edit
         if (!s.id) s.id = uid('s');
         ensureStopTicks(s);
@@ -2350,7 +2373,7 @@
     if (!stop || stop.type !== 'pickup') return false;
     const t = String(stop.title || '');
     // Day-1 origin pick-ups are titled “Airport pick-up — …” or “Hotel pick-up — {Prague hotel}”.
-    // Day-2+ morning start is “Leave hotel at 09:00” (no em dash) and must not match here.
+    // Generic Day-2+ “Leave hotel at …” (no em dash) must not match here.
     if (/airport pick-up/i.test(t)) return true;
     if (/hotel pick-up\s*[—–-]/i.test(t)) return true;
     return false;
@@ -2827,10 +2850,9 @@
         { id: uid('s'), time: addMinutes(pickup, 15), type: 'travel', title: 'Drive to the beading area (Jablonec nad Nisou)', notes: PRAGUE_DRIVE, address: 'Jablonec nad Nisou, Czech Republic', period: 'Morning', messageSent: false, booked: false, travelMinutes: null, travelMode: null },
       ];
     }
-    // Days after arrival: no hotel breakfast on the schedule — morning starts with leaving the tour hotel.
-    return [
-      { id: uid('s'), time: '09:00', type: 'pickup', title: 'Leave hotel at 09:00', notes: '', address: '', period: 'Morning', messageSent: false, booked: false, travelMinutes: null },
-    ];
+    // Days after arrival: no default Leave-hotel / breakfast — Keith already knows that.
+    // Day 1 alone carries the important start (Prague hotel ~08:00 or airport).
+    return [];
   }
 
 
@@ -2853,6 +2875,18 @@
       if (hit) return hit;
     }
     return null;
+  }
+
+  /** Generic Day-2+ “Leave hotel at 09:00” skeleton — not a real Places stop. */
+  function isDefaultLeaveHotelStop(stop) {
+    if (!stop) return false;
+    if (String(stop.type || '') !== 'pickup') return false;
+    if (stop.placeId || stop.place_id) return false;
+    const title = String(stop.title || '').trim();
+    if (!/^leave hotel( at \d{2}:\d{2})?$/i.test(title)) return false;
+    const notes = String(stop.notes || '').trim();
+    if (notes && !/^rough draft\b/i.test(notes)) return false;
+    return true;
   }
 
   function isSkeletonStop(stop) {
@@ -4368,6 +4402,62 @@
     return abbreviateTitle(stop.title || '');
   }
 
+  /**
+   * Cryptic ultra-short nick codes (RUT / Mat / GB) vs readable short forms
+   * (“Park hotel”, “Vlad antik”, “Clever fam”). Rough chips prefer fuller names
+   * when the nick is only an invented abbreviation.
+   */
+  function isCrypticRoughNickname(nick, fullName) {
+    const n = String(nick || '').trim();
+    if (!n) return true;
+    // Multi-word readable short forms
+    if (/\s/.test(n)) return false;
+    // ALL-CAPS ultra-short codes
+    if (n.length <= 4 && n === n.toUpperCase() && /[A-ZÀ-Ž]/.test(n) && /^[A-ZÀ-Ž0-9]+$/.test(n)) return true;
+    // Very short single token (Rut, Mat, Peg, Ral…)
+    if (n.length <= 3) return true;
+    // Short truncation of a much longer first word (Rut←Rutkovsky, Lhot←Lhotský)
+    const full = String(fullName || '').trim();
+    if (full && n.length <= 4) {
+      const firstWord = full.split(/[\s—–-]+/)[0].replace(/[^A-Za-zÀ-ž0-9]/g, '');
+      if (firstWord.length >= n.length + 3 && firstWord.toLowerCase().startsWith(n.toLowerCase())) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** Rough stop chip label: readable nick if useful, else full place / stop title. */
+  function roughStopLabel(stop) {
+    if (!stop) return '';
+    const place = placeById(stop.placeId || stop.place_id);
+    const fullName = (place && String(place.name || '').trim())
+      || String(stop.title || '').trim();
+    const nick = place && String(place.nickname || '').trim();
+    if (nick && !isCrypticRoughNickname(nick, fullName)) return nick;
+    return fullName || 'Stop';
+  }
+
+  /** Optional soft second line — short note snippet only when it stays clean. */
+  function roughStopNoteSnippet(stop) {
+    if (!stop || isRoughSystemStop(stop)) return '';
+    const place = placeById(stop.placeId || stop.place_id);
+    let raw = String(stop.notes || (place && place.notes) || '').trim();
+    if (!raw) return '';
+    raw = raw.replace(/\s*Rough draft — edit times and stops as you like\.?\s*/gi, ' ').trim();
+    if (!raw) return '';
+    if (/^confirm\s*\/?\s*optional\.?$/i.test(raw)) return '';
+    if (/^confirm\b/i.test(raw) && raw.length < 28) return '';
+    let snip = raw.split(/(?<=[.!?])\s+/)[0].trim();
+    if (!snip) return '';
+    if (snip.length > 48) {
+      snip = snip.slice(0, 45).replace(/\s+\S*$/, '').trim() + '…';
+    }
+    if (snip.length < 4) return '';
+    const label = roughStopLabel(stop).toLowerCase();
+    if (label && snip.toLowerCase() === label) return '';
+    return snip;
+  }
 
   /** Place ids already used as stops somewhere in the current week plan. */
   function usedPlaceIdsInWeek() {
@@ -4996,7 +5086,8 @@
     const rows = stops.map((s, idx) => {
       const system = isRoughSystemStop(s);
       const time = String(s.time || '').trim();
-      const label = glanceLabelForStop(s);
+      const label = roughStopLabel(s);
+      const noteSnip = roughStopNoteSnippet(s);
       const icon = renderStopTypeIcon(s);
       const upDis = idx === 0 ? ' disabled' : '';
       const downDis = idx === stops.length - 1 ? ' disabled' : '';
@@ -5022,6 +5113,7 @@
           </div>
         </div>
         <span class="rough-stop-nick">${escapeHtml(label)}</span>
+        ${noteSnip ? `<span class="rough-stop-note">${escapeHtml(noteSnip)}</span>` : ''}
       </li>`;
     }).join('');
     const empty = placeStops.length
