@@ -1913,6 +1913,7 @@
     <p style="text-align:center;margin-top:16px;">
       <a href="tour-planner.html" style="font-size:13px;font-weight:700;color:var(--accent);text-decoration:none;">Tour planner (sample, no login)</a>
       <a href="tour-planner.html?tab=people" style="font-size:13px;font-weight:700;color:var(--accent);text-decoration:none;margin-left:12px;">People</a>
+      <a href="hotels.html" style="font-size:13px;font-weight:700;color:var(--accent);text-decoration:none;margin-left:12px;">Hotels</a>
     </p>
   </div>
 </div>
@@ -1946,6 +1947,10 @@
 	        <a class="view-nav-btn" id="navPlanner" href="tour-planner.html" title="Tour planner" style="text-decoration:none;">
 	          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>
 	          Planner
+	        </a>
+	        <a class="view-nav-btn" id="navHotels" href="hotels.html" title="Hotel stays for the year" style="text-decoration:none;">
+	          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21V12h6v9"/></svg>
+	          Hotels
 	        </a>
 	      </div>
 	    </div>
@@ -1983,6 +1988,10 @@
           <a class="user-menu-item" href="tour-planner.html">
             Tour planner
             <span style="color:var(--text-secondary);font-weight:900;font-size:12px;">WIP</span>
+          </a>
+          <a class="user-menu-item" href="hotels.html">
+            Hotels
+            <span style="color:var(--text-secondary);font-weight:900;font-size:12px;">Year list</span>
           </a>
           <button type="button" class="user-menu-item" onclick="closeUserMenu(); syncFromCalendar();" title="Import future tours from Keith&apos;s calendar (agent-side preferred)">
             Sync from calendar
