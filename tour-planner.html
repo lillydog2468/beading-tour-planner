@@ -189,7 +189,11 @@
       background: var(--input-bg); color: var(--text);
       font-family: inherit; font-size: 14px;
     }
+    #arrivalDate, #departureDate {
+      font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums;
+    }
     .view-phone input, .view-phone select, .view-phone textarea { font-size: 16px; min-height: 44px; }
+    .view-phone #arrivalDate, .view-phone #departureDate { font-size: 18px; }
 
     .place-row, .stop-row {
       display: flex; gap: 8px; align-items: center; margin-bottom: 8px;
@@ -239,8 +243,9 @@
     }
     .day-tab.active { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
     .day-tab .d-label { font-weight: 800; font-size: 13px; }
-    .day-tab .d-date { font-size: 12px; color: var(--text-secondary); }
+    .day-tab .d-date { font-size: 16px; font-weight: 800; color: var(--text); line-height: 1.25; }
     .day-tab.today { background: var(--accent-soft); }
+    .view-phone .day-tab .d-date { font-size: 17px; }
 
     /* Compact day reminder — same day.blocks as the detailed timeline */
     .day-glance {
@@ -614,6 +619,9 @@
       background: var(--surface); border: 1px solid var(--border);
       border-radius: 999px; padding: 6px 12px; min-height: 36px;
     }
+    .trip-summary .trip-meta span.trip-dates {
+      font-size: 17px; font-weight: 800; letter-spacing: -.01em;
+    }
 
     .day-glance-icon {
       font-size: 14px; line-height: 1; text-align: center;
@@ -811,6 +819,7 @@
 
     .view-phone .trip-summary .trip-title { font-size: 20px; }
     .view-phone .trip-summary .trip-meta span { font-size: 15px; min-height: 40px; }
+    .view-phone .trip-summary .trip-meta span.trip-dates { font-size: 18px; }
 
     /* Guest debt */
     .guest-block {
@@ -939,14 +948,35 @@
       display: inline-flex; align-items: center; gap: 8px;
       border: 1px solid var(--border); background: var(--surface);
       border-radius: 10px; padding: 8px 12px; min-height: 44px;
-      font-size: 13px; font-weight: 700; cursor: pointer; user-select: none; color: var(--text);
+      font-size: 16px; font-weight: 800; cursor: pointer; user-select: none; color: var(--text);
     }
-    .tick input { width: 18px; height: 18px; accent-color: var(--accent); flex-shrink: 0; }
+    .tick input { width: 20px; height: 20px; accent-color: var(--accent); flex-shrink: 0; }
     .tick.on-message { border-color: var(--warning); background: #fffbeb; }
     .tick.on-booked { border-color: var(--success); background: #ecfdf5; }
     [data-theme="dark"] .tick.on-message { background: rgba(245,158,11,.14); }
     [data-theme="dark"] .tick.on-booked { background: rgba(34,197,94,.14); }
-    .view-phone .tick { font-size: 15px; min-height: 48px; padding: 10px 14px; }
+    .view-phone .tick { font-size: 17px; min-height: 48px; padding: 10px 14px; }
+    /* Compact ticks — Day at a glance + Rough chips (same messageSent / booked fields) */
+    .booking-ticks.compact {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      margin-top: 2px; min-width: 0;
+    }
+    .tick.compact {
+      padding: 6px 10px; min-height: 44px;
+      font-size: 15px; font-weight: 800; gap: 6px; border-radius: 9px;
+    }
+    .tick.compact input { width: 20px; height: 20px; }
+    .view-phone .tick.compact,
+    .rough-day.rough-focus-day .tick.compact {
+      font-size: 16px; min-height: 46px; padding: 8px 12px;
+    }
+    .day-glance-item .booking-ticks.compact {
+      grid-column: 2 / 5;
+      align-self: start;
+    }
+    .day-glance-item.has-ticks { align-items: start; padding-bottom: 2px; }
+    .day-glance-item.has-ticks .day-glance-handle { align-self: start; }
+    .rough-stop .booking-ticks.compact { margin-top: 2px; }
 
     .address-row {
       display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
@@ -1516,7 +1546,7 @@
       gap: 8px; margin-bottom: 8px;
     }
     .rough-day-title { font-weight: 800; font-size: 14px; }
-    .rough-day-date { font-size: 12px; color: var(--text-secondary); font-weight: 600; }
+    .rough-day-date { font-size: 16px; color: var(--text); font-weight: 800; line-height: 1.25; }
     .rough-day-add {
       flex-shrink: 0;
       font-size: 12px; font-weight: 700;
@@ -1890,7 +1920,7 @@
       border-style: solid;
     }
     .rough-day.rough-focus-day .rough-day-title { font-size: 20px; }
-    .rough-day.rough-focus-day .rough-day-date { font-size: 15px; }
+    .rough-day.rough-focus-day .rough-day-date { font-size: 19px; }
     .rough-day.rough-focus-day .rough-day-load-hint { font-size: 13px; }
     .rough-day.rough-focus-day .rough-day-list { gap: 12px; margin-top: 4px; }
     .rough-day.rough-focus-day .rough-stop {
@@ -1964,6 +1994,7 @@
           <a href="booking-form.html" id="navBookings">Bookings</a>
           <a href="analytics.html" id="navAnalytics">Analytics</a>
           <a href="tour-planner.html" class="active">Planner</a>
+          <a href="hotels.html" id="navHotels">Hotels</a>
           <a href="places-stats.html" id="navPlacesStats">Places stats</a>
         </nav>
       </div>
@@ -2371,6 +2402,24 @@
     const t = (s && s.type) || '';
     return !['pickup', 'hotel', 'meal', 'travel'].includes(t);
   }
+  /** Same messageSent / booked fields everywhere — compact for glance + Rough chips. */
+  function renderBookingTicksHtml(s, opts) {
+    if (!s || !stopNeedsBookingTicks(s)) return '';
+    ensureStopTicks(s);
+    const compact = !!(opts && opts.compact);
+    const id = escapeHtml(s.id);
+    return `
+      <div class="booking-ticks${compact ? ' compact' : ''}" role="group" aria-label="Booking status">
+        <label class="tick${compact ? ' compact' : ''} ${s.messageSent ? 'on-message' : ''}">
+          <input type="checkbox" data-tick-message="${id}" ${s.messageSent ? 'checked' : ''}>
+          ${compact ? 'Messaged' : 'Message sent'}
+        </label>
+        <label class="tick${compact ? ' compact' : ''} ${s.booked ? 'on-booked' : ''}">
+          <input type="checkbox" data-tick-booked="${id}" ${s.booked ? 'checked' : ''}>
+          Booked
+        </label>
+      </div>`;
+  }
   function mapsButtonHtml(name, address, label) {
     const q = (address || '').trim() || mapsQuery(name, address);
     if (!q) return '';
@@ -2531,6 +2580,18 @@
   function normalizeSharedAlbums(list) {
     if (!Array.isArray(list)) return [];
     return list.map((a, i) => normalizeSharedAlbum(a, i));
+  }
+  /** Hotel stay overlay used by hotels.html — booked / paid / notes only; names come from the plan or booking. */
+  function normalizePlanHotels(list) {
+    if (!Array.isArray(list)) return [];
+    return list.map(h => {
+      if (!h || typeof h !== 'object') return null;
+      const hotelName = String(h.hotelName || h.name || '').trim();
+      if (!hotelName) return null;
+      const role = (h.role === 'prague' || h.role === 'extra') ? h.role : 'tour';
+      const paid = (h.paid === 'advance' || h.paid === 'on_day') ? h.paid : '';
+      return { hotelName, role, booked: !!h.booked, paid, notes: String(h.notes || '') };
+    }).filter(Boolean);
   }
   function ensureSharedAlbums(plan) {
     if (!plan) return [];
@@ -2708,6 +2769,7 @@
     }
     plan.guests = (plan.guests || []).map(g => ensureGuestDebt(g));
     plan.sharedAlbums = normalizeSharedAlbums(plan.sharedAlbums);
+    plan.hotels = normalizePlanHotels(plan.hotels);
     if (!Array.isArray(plan.issues)) plan.issues = [];
     else {
       plan.issues = plan.issues.map((iss, i) => {
@@ -5302,7 +5364,7 @@
       h.addEventListener('touchstart', arm, { passive: true });
     });
     // Keep ↑↓ / time taps reliable — do not let the parent li start a drag from controls
-    list.querySelectorAll('.day-glance-move, .day-glance-time-input').forEach(el => {
+    list.querySelectorAll('.day-glance-move, .day-glance-time-input, .booking-ticks').forEach(el => {
       el.addEventListener('mousedown', (e) => { e.stopPropagation(); dragFromHandle = false; });
       el.addEventListener('pointerdown', (e) => { e.stopPropagation(); dragFromHandle = false; });
       el.addEventListener('click', (e) => e.stopPropagation());
@@ -6622,6 +6684,7 @@
         </div>
         <span class="rough-stop-nick">${escapeHtml(label)}${noPlace ? missingBadgeHtml('No placeId') : ''}${flagged ? missingBadgeHtml('FLAG') : ''}</span>
         ${noteSnip ? `<span class="rough-stop-note">${escapeHtml(noteSnip)}</span>` : ''}
+        ${system ? '' : renderBookingTicksHtml(s, { compact: true })}
       </li>`;
     }).join('');
     const empty = placeStops.length
@@ -6870,7 +6933,8 @@
       const noPlace = markEmpties && stopNeedsPlaceLink(s);
       const flagged = notesAreFlagged(s.notes);
       const mark = noPlace || flagged;
-      return `<li class="day-glance-item${missingMarkerClass(mark)}" draggable="true" data-glance-index="${idx}" data-glance-stop-id="${escapeHtml(s.id)}">
+      const ticks = renderBookingTicksHtml(s, { compact: true });
+      return `<li class="day-glance-item${ticks ? ' has-ticks' : ''}${missingMarkerClass(mark)}" draggable="true" data-glance-index="${idx}" data-glance-stop-id="${escapeHtml(s.id)}">
         <span class="day-glance-handle" title="Drag to reorder on desktop" aria-hidden="true">⠿</span>
         ${renderTimeWheelControl(s, 'glance', 'Time for ' + label)}
         <span class="day-glance-icon" aria-hidden="true">${icon}</span>
@@ -6881,11 +6945,12 @@
           <button type="button" class="day-glance-move" data-move="${escapeHtml(s.id)}" data-dir="-1" aria-label="Move up"${upDis}>↑</button>
           <button type="button" class="day-glance-move" data-move="${escapeHtml(s.id)}" data-dir="1" aria-label="Move down"${downDis}>↓</button>
         </div>
+        ${ticks}
       </li>`;
     }).join('');
     return `<div class="day-glance" aria-label="Day at a glance">
       <div class="day-glance-label">Day at a glance</div>
-      <p class="day-glance-hint">Scroll time wheel · tap name to jump · ↑ ↓ to reorder (drag ⠿ on desktop) · ≈ means approximate</p>
+      <p class="day-glance-hint">Scroll time wheel · tap name to jump · Messaged / Booked ticks · ↑ ↓ to reorder (drag ⠿ on desktop) · ≈ means approximate</p>
       <ul class="day-glance-list" id="dayGlanceList">${rows}</ul>
     </div>`;
   }
@@ -6938,17 +7003,7 @@
               ${stopMapsButtonHtml(s, 'Open in Apple Maps')}
             </div>
             ${placeHint}
-            ${stopNeedsBookingTicks(s) ? `
-            <div class="booking-ticks" role="group" aria-label="Booking status">
-              <label class="tick ${s.messageSent ? 'on-message' : ''}">
-                <input type="checkbox" data-tick-message="${s.id}" ${s.messageSent ? 'checked' : ''}>
-                Message sent
-              </label>
-              <label class="tick ${s.booked ? 'on-booked' : ''}">
-                <input type="checkbox" data-tick-booked="${s.id}" ${s.booked ? 'checked' : ''}>
-                Booked
-              </label>
-            </div>` : `<p class="muted tick-skip">No message / booked ticks for ${escapeHtml(typeLabel(s.type).toLowerCase())}.</p>`}
+            ${stopNeedsBookingTicks(s) ? renderBookingTicksHtml(s) : `<p class="muted tick-skip">No message / booked ticks for ${escapeHtml(typeLabel(s.type).toLowerCase())}.</p>`}
           </div>
           <div class="stop-actions">
             <button type="button" class="icon-btn" data-move="${s.id}" data-dir="-1" aria-label="Move up">↑</button>
@@ -7308,7 +7363,7 @@ function renderDayTabs() {
         <div class="trip-title">${escapeHtml(state.plan.groupName || 'Tour group')}</div>
         <div class="trip-meta">
           <span class="${orgPersonMissing ? 'meta-missing' : ''}">👤 Organiser: ${escapeHtml(tripOrgName || 'Not set')}</span>
-          <span class="${(arrivalMissing || departureMissing) ? 'meta-missing' : ''}">📅 ${state.plan.arrivalDate ? formatDateDMY(state.plan.arrivalDate) : '—'} – ${state.plan.departureDate ? formatDateDMY(state.plan.departureDate) : '—'}</span>
+          <span class="trip-dates${(arrivalMissing || departureMissing) ? ' meta-missing' : ''}">📅 ${state.plan.arrivalDate ? formatDateDMY(state.plan.arrivalDate) : '—'} – ${state.plan.departureDate ? formatDateDMY(state.plan.departureDate) : '—'}</span>
           <span class="${hotelMissingMeta ? 'meta-missing' : ''}">🏨 Staying at: ${escapeHtml(state.plan.tourHotelName || 'Not set')}</span>
           <span>🗺 Day 1 start: ${escapeHtml(effectiveDay1OriginType() === 'airport' ? PRAGUE_AIRPORT_NAME : (state.plan.pragueHotel?.name || 'Prague hotel pick-up'))}</span>
         </div>
@@ -8807,30 +8862,35 @@ function renderDayTabs() {
     const bookings = document.getElementById('navBookings');
     const analytics = document.getElementById('navAnalytics');
     const placesStats = document.getElementById('navPlacesStats');
+    const hotelsNav = document.getElementById('navHotels');
     const qs = bookingsQueryForCurrentPlan();
 
     let bookingsHref = 'booking-form.html' + qs;
     let analyticsHref = 'analytics.html';
     let placesHref = 'places-stats.html';
+    let hotelsHref = 'hotels.html';
 
     if (onGithubPages) {
       if (pagesHasBookingForm === null) {
         pagesHasBookingForm = await probeSameOrigin('booking-form.html');
       }
-      const [hasAnalytics, hasPlacesStats] = await Promise.all([
+      const [hasAnalytics, hasPlacesStats, hasHotels] = await Promise.all([
         probeSameOrigin('analytics.html'),
-        probeSameOrigin('places-stats.html')
+        probeSameOrigin('places-stats.html'),
+        probeSameOrigin('hotels.html')
       ]);
       bookingsHref = pagesHasBookingForm
         ? ('booking-form.html' + qs)
         : (LIVE_BOOKINGS_ORIGIN + '/booking-form.html' + qs);
       analyticsHref = hasAnalytics ? 'analytics.html' : (LIVE_BOOKINGS_ORIGIN + '/analytics.html');
       placesHref = hasPlacesStats ? 'places-stats.html' : (LIVE_BOOKINGS_ORIGIN + '/places-stats.html');
+      hotelsHref = hasHotels ? 'hotels.html' : (LIVE_BOOKINGS_ORIGIN + '/hotels.html');
     }
 
     if (bookings) bookings.href = bookingsHref;
     if (analytics) analytics.href = analyticsHref;
     if (placesStats) placesStats.href = placesHref;
+    if (hotelsNav) hotelsNav.href = hotelsHref;
   }
   fixExternalNavLinks();
 
