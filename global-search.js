@@ -162,6 +162,7 @@
   function pageBase() {
     const path = location.pathname || '';
     if (path.includes('tour-planner')) return 'planner';
+    if (path.includes('hotels')) return 'hotels';
     if (path.includes('analytics')) return 'analytics';
     if (path.includes('places-stats')) return 'places-stats';
     if (path.includes('admin')) return 'admin';
