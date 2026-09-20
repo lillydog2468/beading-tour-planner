@@ -131,6 +131,27 @@
     }
     .topbar-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
+    /* Selected tour — large, always visible above the main tabs */
+    .group-heading-bar {
+      padding: 8px 16px 12px;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .group-heading {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+      color: var(--text);
+      max-width: 1280px;
+      margin: 0 auto;
+      word-break: break-word;
+    }
+    @media (max-width: 700px) {
+      .group-heading { font-size: 22px; }
+    }
+    .view-phone .group-heading { font-size: 22px; }
+
     .btn {
       display: inline-flex; align-items: center; justify-content: center; gap: 6px;
       padding: 9px 14px; border: none; border-radius: var(--radius);
@@ -1353,6 +1374,23 @@
       align-self: center;
     }
 
+    /* Rough plan — week notes (top) then Places tray + day lanes */
+    .rough-notes {
+      margin: 12px 0 0;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface-alt);
+    }
+    .rough-notes .field-label { margin-bottom: 6px; }
+    .rough-notes textarea {
+      min-height: 96px;
+      resize: vertical;
+      line-height: 1.45;
+      background: var(--surface);
+    }
+    .view-phone .rough-notes textarea { min-height: 110px; }
+
     /* Rough plan — Places tray + week day lanes */
     .rough-layout {
       display: grid;
@@ -2019,6 +2057,9 @@
         </div>
         <button type="button" class="btn btn-outline btn-sm" id="btnTheme">Theme</button>
       </div>
+    </div>
+    <div class="group-heading-bar" id="groupHeadingBar">
+      <p class="group-heading" id="groupHeading" aria-live="polite">Tour group</p>
     </div>
   </header>
 
@@ -2744,6 +2785,8 @@
     if (plan.organiserPersonId == null) plan.organiserPersonId = '';
     if (plan.organiserName == null) plan.organiserName = '';
     if (plan.groupName == null) plan.groupName = '';
+    if (plan.roughNotes == null) plan.roughNotes = '';
+    else plan.roughNotes = String(plan.roughNotes);
     if (plan.tourHotelPlaceId == null) plan.tourHotelPlaceId = '';
     if (plan.tourHotelName == null) plan.tourHotelName = '';
     if (!plan.pragueHotel || typeof plan.pragueHotel !== 'object') {
@@ -3605,6 +3648,7 @@
     const plan = {
       bookingKey: partial.bookingKey || DEMO_ID,
       groupName: partial.groupName || 'Untitled group',
+      roughNotes: partial.roughNotes != null ? String(partial.roughNotes) : '',
       organiserPersonId: partial.organiserPersonId || '',
       organiserName: partial.organiserName || '',
       guests: (partial.guests || []).map(g => ensureGuestDebt({ ...g, lent: g.lent || 0, repayments: g.repayments || [] })),
@@ -3701,6 +3745,7 @@
     if (plan.pragueHotel && String(plan.pragueHotel.address || '').trim()) score += 10;
     if (plan.tourHotelName && String(plan.tourHotelName).trim()) score += 3;
     if (Array.isArray(plan.sharedAlbums) && plan.sharedAlbums.length) score += Math.min(12, plan.sharedAlbums.length * 3);
+    if (String(plan.roughNotes || '').trim()) score += Math.min(20, 4 + Math.floor(String(plan.roughNotes).trim().length / 40));
     try { score += Math.min(80, Math.floor(JSON.stringify(plan).length / 80)); } catch (_) {}
     return score;
   }
@@ -5215,6 +5260,25 @@
     const keys = new Set([...sel.querySelectorAll('option')].map(o => o.value));
     if (keys.has(String(state.bookingKey))) sel.value = String(state.bookingKey);
     else sel.value = DEMO_ID;
+    updateGroupHeading();
+  }
+
+  function currentGroupHeading() {
+    const name = String(state.plan?.groupName || '').trim();
+    if (name) return name;
+    const sel = document.getElementById('groupSelect');
+    const opt = sel && sel.selectedOptions && sel.selectedOptions[0]
+      ? String(sel.selectedOptions[0].textContent || '').trim()
+      : '';
+    if (opt) return opt;
+    if (String(state.bookingKey || '') === DEMO_ID) return 'Sample tour (demo)';
+    return 'Tour group';
+  }
+
+  function updateGroupHeading() {
+    const el = document.getElementById('groupHeading');
+    if (!el) return;
+    el.textContent = currentGroupHeading();
   }
 
   function currentDay() {
@@ -6775,6 +6839,10 @@
           </div>
           <button type="button" class="btn btn-outline btn-sm" id="btnRoughGotoPlanner">Open Planner</button>
         </div>
+        <div class="rough-notes">
+          <label class="field-label" for="roughNotes">Week notes</label>
+          <textarea id="roughNotes" rows="4" placeholder="Jot thoughts while you sketch the week — saved with this tour.">${escapeHtml(state.plan.roughNotes || '')}</textarea>
+        </div>
         ${selectedBanner}
         <div class="rough-layout" style="margin-top:12px;">
           ${renderRoughTray()}
@@ -6785,6 +6853,14 @@
   }
 
   function bindRoughPlan() {
+    const notesEl = document.getElementById('roughNotes');
+    if (notesEl) {
+      notesEl.addEventListener('input', () => {
+        if (!state.plan) return;
+        state.plan.roughNotes = notesEl.value;
+        scheduleAutoSave();
+      });
+    }
     const searchEl = document.getElementById('roughTraySearch');
     if (searchEl) {
       searchEl.addEventListener('input', () => {
@@ -7264,7 +7340,7 @@ function renderDayTabs() {
       if (!el || typeof el.focus !== 'function') return;
       try { el.focus({ preventScroll: true }); } catch { try { el.focus(); } catch { /* ignore */ } }
       try {
-        if (f.selStart != null && typeof el.setSelectionRange === 'function' && /^(text|search|url|tel|password|email|number)$/i.test(el.type || 'text')) {
+        if (f.selStart != null && typeof el.setSelectionRange === 'function' && (el.tagName === 'TEXTAREA' || /^(text|search|url|tel|password|email|number)$/i.test(el.type || 'text'))) {
           el.setSelectionRange(f.selStart, f.selEnd != null ? f.selEnd : f.selStart);
         }
       } catch { /* ignore */ }
@@ -7305,7 +7381,11 @@ function renderDayTabs() {
     document.body.classList.toggle('view-detailed', view === 'detailed');
     document.getElementById('btnPhoneView').classList.toggle('active', view === 'phone');
     document.getElementById('btnDetailedView').classList.toggle('active', view === 'detailed');
-    if (!state.plan) return;
+    if (!state.plan) {
+      updateGroupHeading();
+      return;
+    }
+    updateGroupHeading();
 
     const today = todayISO();
     const todayIdx = state.plan.days.findIndex(d => d.date === today);
@@ -7647,7 +7727,11 @@ function renderDayTabs() {
 
   function bindDynamic() {
     const q = (sel) => document.querySelector(sel);
-    q('#groupName')?.addEventListener('input', e => { state.plan.groupName = e.target.value; scheduleAutoSave(); });
+    q('#groupName')?.addEventListener('input', e => {
+      state.plan.groupName = e.target.value;
+      updateGroupHeading();
+      scheduleAutoSave();
+    });
     const applyOrganiserFromInput = () => {
       if (!state.plan) return;
       const raw = (q('#organiserName')?.value || '').trim();
