@@ -531,11 +531,29 @@
       transition: background .12s, filter .12s;
       border: 1px solid transparent;
       margin-bottom: 4px;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
     }
     .record-item:hover { background: var(--bg); }
     .record-item.active { background: var(--accent-soft); border-color: var(--accent); }
+    .record-item-body { flex: 1; min-width: 0; }
     .record-item .record-title { font-size: 13px; font-weight: 600; }
     .record-item .record-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+    .record-delete {
+      flex-shrink: 0;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--danger);
+      font: inherit;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      min-height: 32px;
+    }
+    .record-delete:hover { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, transparent); }
 
     /* Year bands: stable soft tint per year so scrolling shows which year you are in */
     .records-year-header {
@@ -891,6 +909,37 @@
     }
     .tab-panel.layout-mode .computed-value { font-size: 18px; padding: 4px 0; }
     .tab-panel.layout-mode .member-add { padding: 8px 10px; font-size: 12px; }
+    /* Layout view guests panel is too narrow for first/surname/email + payments in one row */
+    .tab-panel.layout-mode .member-cols-head { display: none; }
+    .tab-panel.layout-mode .member-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      position: relative;
+      padding: 26px 36px 8px 10px;
+      background: color-mix(in srgb, var(--surface) 70%, transparent);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+    .tab-panel.layout-mode .member-row .member-row-num {
+      position: absolute;
+      top: 6px;
+      left: 10px;
+      width: auto;
+      font-size: 10px;
+      letter-spacing: .4px;
+    }
+    .tab-panel.layout-mode .member-row .member-name,
+    .tab-panel.layout-mode .member-row .member-email { grid-column: 1 / -1; }
+    .tab-panel.layout-mode .member-row input {
+      min-width: 0;
+      width: 100%;
+    }
+    .tab-panel.layout-mode .member-row .member-remove {
+      position: absolute;
+      top: 4px;
+      right: 6px;
+    }
 
     .layout-zoom-controls {
       display: inline-flex;
@@ -1253,13 +1302,29 @@
 
     /* ── Member rows ── */
     .members-list { display: flex; flex-direction: column; gap: 8px; }
+    .member-cols-head {
+      display: grid;
+      grid-template-columns: 24px minmax(5rem, 1fr) minmax(5rem, 1fr) minmax(8rem, 1.4fr) 6.4rem 6.4rem 28px;
+      gap: 8px;
+      align-items: end;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .03em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      padding: 0 0 2px;
+    }
+    .member-cols-head span { min-width: 0; }
     .member-row {
-      display: flex;
+      display: grid;
+      grid-template-columns: 24px minmax(5rem, 1fr) minmax(5rem, 1fr) minmax(8rem, 1.4fr) 6.4rem 6.4rem 28px;
       gap: 8px;
       align-items: center;
     }
     .member-row input {
       flex: 1;
+      min-width: 0;
+      width: 100%;
       padding: 9px 13px;
       border: 1px solid var(--border);
       border-radius: var(--radius);
@@ -1273,6 +1338,45 @@
     .member-row input:focus {
       border-color: var(--accent);
       box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+    .member-row .member-email { flex: 1.35; min-width: 160px; }
+    .field label.req::after { content: " *"; color: var(--danger); }
+    .hint { font-size: 12px; color: var(--text-secondary); margin: 4px 0 8px; line-height: 1.4; }
+    .fold {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+      margin: 10px 0;
+    }
+    .fold > summary {
+      cursor: pointer;
+      font-weight: 700;
+      padding: 12px 14px;
+      list-style: none;
+    }
+    .fold > summary::-webkit-details-marker { display: none; }
+    .fold-body { padding: 0 14px 14px; }
+    .check-grid { display: flex; flex-wrap: wrap; gap: 10px 16px; margin: 6px 0 10px; }
+    .check-grid label { font-size: 14px; font-weight: 600; display: flex; gap: 6px; align-items: center; }
+    .room-warn, .guest-warn {
+      margin-top: 8px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: rgba(245, 158, 11, .16);
+      border: 1px solid rgba(245, 158, 11, .45);
+      font-size: 13px;
+      font-weight: 650;
+      line-height: 1.4;
+    }
+    .side-trip {
+      display: grid;
+      grid-template-columns: minmax(160px, 1fr) 1.4fr 90px;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    @media (max-width: 640px) {
+      .side-trip { grid-template-columns: 1fr; }
     }
     .member-row-num {
       width: 24px;
@@ -1735,7 +1839,9 @@
 
       .computed-value { font-size: 17px; }
 
+      .member-cols-head { display: none; }
       .member-row {
+        grid-template-columns: 1fr 1fr;
         flex-wrap: wrap; gap: 6px; position: relative;
         padding: 28px 12px 12px 12px;
         background: var(--surface-alt); border: 1px solid var(--border);
@@ -1746,10 +1852,13 @@
         width: auto; font-size: 10px; color: var(--accent); font-weight: 700;
         letter-spacing: .5px;
       }
+      .member-row .member-name,
+      .member-row .member-email { grid-column: 1 / -1; }
       .member-row input {
         flex: 1 1 calc(50% - 4px); padding: 10px 12px; font-size: 16px;
         min-height: 44px; -webkit-appearance: none; min-width: 0;
       }
+      .member-row .member-email { flex: 1 1 100%; }
       .member-row .member-remove {
         position: absolute; top: 6px; right: 8px;
         width: 28px; height: 28px; min-width: 28px; font-size: 14px;
@@ -1911,7 +2020,7 @@
       Send Magic Link
     </button>
     <p style="text-align:center;margin-top:16px;">
-      <a href="tour-planner.html" style="font-size:13px;font-weight:700;color:var(--accent);text-decoration:none;">Tour planner (sample, no login)</a>
+      <a href="tour-planner.html" style="font-size:13px;font-weight:700;color:var(--accent);text-decoration:none;">Tour planner</a>
       <a href="tour-planner.html?tab=people" style="font-size:13px;font-weight:700;color:var(--accent);text-decoration:none;margin-left:12px;">People</a>
       <a href="hotels.html" style="font-size:13px;font-weight:700;color:var(--accent);text-decoration:none;margin-left:12px;">Hotels</a>
     </p>
@@ -2137,8 +2246,8 @@
 <!-- ── Delete Confirmation Modal ── -->
 <div class="modal-overlay" id="deleteModal">
   <div class="modal">
-    <h3>Delete Booking</h3>
-    <p>Are you sure you want to delete this booking? This action cannot be undone.</p>
+    <h3>Delete this booking?</h3>
+    <p id="deleteModalMsg">Delete this booking? This can’t be undone.</p>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeDeleteModal()">Cancel</button>
       <button class="btn btn-danger" onclick="deleteBooking()">Delete</button>
@@ -2149,6 +2258,7 @@
 <!-- ── Toast container ── -->
 <div class="toast-container" id="toastContainer"></div>
 
+<script src="booking-extras.js"></script>
 <script>
   // ═══════════════════════════════════════════════════════════════
   //  SUPABASE CONNECTION
@@ -2327,7 +2437,12 @@
       membersList.querySelectorAll('.member-row').forEach(row => {
         state.members.push({
           id: row.dataset.memberId || '',
-          name: row.querySelector('.member-name')?.value ?? ''
+          first: row.querySelector('.member-first')?.value ?? '',
+          last: row.querySelector('.member-last')?.value ?? '',
+          email: row.querySelector('.member-email')?.value ?? '',
+          name: row.querySelector('.member-name')?.value ?? '',
+          deposit: row.querySelector('.member-deposit')?.value ?? '',
+          finalPayment: row.querySelector('.member-final')?.value ?? ''
         });
       });
     }
@@ -2375,8 +2490,15 @@
     }
 
     state.sharedAlbums = getSharedAlbumsData(tabId);
+    state.extras = collectBookingExtras(tabId);
+    state.openFolds = [...panelFolds(tabId)].filter(d => d.open).map(d => d.getAttribute('data-fold'));
 
     return state;
+  }
+
+  function panelFolds(tabId) {
+    const panel = el('tabPanel_' + tabId);
+    return panel ? panel.querySelectorAll('details.fold') : [];
   }
 
   function restoreTabState(tabId, state) {
@@ -2420,7 +2542,7 @@
 
     const membersList = document.getElementById(`t${tabId}_members_list`);
     if (membersList) membersList.innerHTML = '';
-    (state.members || []).forEach(m => addMemberRow(tabId, m.name || '', m.id || ''));
+    (state.members || []).forEach(m => addMemberRow(tabId, m.first || m.name || '', m.id || '', m.last || '', m.email || '', m.deposit, m.finalPayment));
     if ((state.members || []).length === 0) addMemberRow(tabId);
 
     const flightsList = document.getElementById(`t${tabId}_flights_list`);
@@ -2452,6 +2574,12 @@
     (state.addlExpenses || []).forEach(e => addAdditionalExpenseRow(tabId, e));
 
     setSharedAlbumsRows(tabId, state.sharedAlbums || []);
+    fillCompanionSelect(tabId);
+    if (state.extras) applyBookingExtras(tabId, state.extras);
+    (state.openFolds || []).forEach(name => {
+      const fold = document.querySelector(`#tabPanel_${tabId} details.fold[data-fold="${name}"]`);
+      if (fold) fold.open = true;
+    });
 
     recalculateTab(tabId);
   }
@@ -2931,6 +3059,179 @@
   //  FORM HTML TEMPLATE
   // ═══════════════════════════════════════════════════════════════
 
+  function bookingCaptureFolds(t) {
+    const sideRows = (window.BookingExtras ? BookingExtras.SIDE_PLACES : []).map(p => `
+      <div class="side-trip">
+        <label><input type="checkbox" id="t${t}_side_${p.place}" data-fold="side"> ${p.label}</label>
+        <input type="text" id="t${t}_side_${p.place}_hotel" placeholder="Hotel name" data-fold="side">
+        <input type="text" id="t${t}_side_${p.place}_nights" placeholder="Nights" inputmode="numeric" data-fold="side">
+      </div>
+    `).join('');
+    return `
+    <div class="section" id="t${t}_captureFolds">
+      <div class="section-title">More about this booking</div>
+      <p class="hint">Only the organiser’s name and email, the dates and the headcount are required. Open a section when you have the detail. Nothing here needs a new database column — it is saved with the booking notes.</p>
+
+      <details class="fold" data-fold="rooms">
+        <summary>Rooms</summary>
+        <div class="fold-body">
+          <p class="hint">Singles sleep 1 person. Twins and doubles sleep 2. Keith’s own room is extra and is not part of the guest bed count.</p>
+          <div class="grid grid-4">
+            <div class="field"><label>Singles</label><input type="number" min="0" step="1" id="t${t}_rooms_singles" placeholder="0"></div>
+            <div class="field"><label>Twins</label><input type="number" min="0" step="1" id="t${t}_rooms_twins" placeholder="0"></div>
+            <div class="field"><label>Doubles</label><input type="number" min="0" step="1" id="t${t}_rooms_doubles" placeholder="0"></div>
+            <div class="field"><label>Keith’s room</label><label class="hint" style="display:flex;gap:8px;align-items:center;font-weight:650;"><input type="checkbox" id="t${t}_rooms_keith"> Keith has his own room</label></div>
+          </div>
+          <div id="t${t}_roomWarn"></div>
+          <div id="t${t}_guestWarn"></div>
+        </div>
+      </details>
+
+      <details class="fold" data-fold="travel">
+        <summary>Arrival, departure and pick-up</summary>
+        <div class="fold-body">
+          <p class="hint">Dates stay in the tour section above (DD/MM/YYYY). Add the time and the flight here. Pick-up is either the airport or the name of their Prague hotel.</p>
+          <div class="grid grid-4">
+            <div class="field"><label>Arrival time</label><input type="time" id="t${t}_arrival_time"></div>
+            <div class="field"><label>Arrival flight</label><input type="text" id="t${t}_arrival_flight" placeholder="e.g. BA858"></div>
+            <div class="field"><label>Departure time</label><input type="time" id="t${t}_departure_time"></div>
+            <div class="field"><label>Departure flight</label><input type="text" id="t${t}_departure_flight" placeholder="e.g. BA859"></div>
+          </div>
+          <div class="grid grid-3" style="margin-top:10px;">
+            <div class="field"><label>Pick-up point</label>
+              <select id="t${t}_pickup_point">
+                <option value="">Not set</option>
+                <option value="airport">Airport</option>
+                <option value="prague_hotel">Prague hotel</option>
+              </select>
+            </div>
+            <div class="field"><label>Airport or Prague hotel name</label><input type="text" id="t${t}_pickup_place" placeholder="e.g. Prague airport, or Hotel Axa"></div>
+            <div class="field"><label>Pick-up time</label><input type="time" id="t${t}_pickup_time"></div>
+          </div>
+        </div>
+      </details>
+
+      <details class="fold" data-fold="hotel">
+        <summary>Tour hotel, extra nights and side trips</summary>
+        <div class="fold-body">
+          <p class="hint">The hotel name is chosen in the Hotels section. Use this for nights, whether it is booked, and who paid.</p>
+          <div class="grid grid-4">
+            <div class="field"><label>Nights at the tour hotel</label><input type="text" id="t${t}_hotel_nights" placeholder="e.g. 4"></div>
+            <div class="field"><label>Rooms booked</label><input type="text" id="t${t}_hotel_rooms" placeholder="e.g. 2 twins"></div>
+            <div class="field"><label>Booked?</label>
+              <select id="t${t}_hotel_booked">
+                <option value="">Not recorded</option>
+                <option value="yes">Yes, booked</option>
+                <option value="no">Not booked yet</option>
+              </select>
+            </div>
+            <div class="field"><label>Paid</label>
+              <select id="t${t}_hotel_paid">
+                <option value="">Not recorded</option>
+                <option value="advance">Paid in advance</option>
+                <option value="on_day">Paid on the day</option>
+              </select>
+            </div>
+          </div>
+          <div class="field" style="margin-top:8px;"><label>Who paid for the hotel</label><input type="text" id="t${t}_hotel_paid_by" placeholder="e.g. Keith, or the organiser"></div>
+          <div class="section-sub" style="margin-top:12px;">
+            <label class="section-sub-label">Extra Prague or airport nights</label>
+            <div class="grid grid-4">
+              <div class="field"><label>Prague nights</label><input type="text" id="t${t}_prague_nights" placeholder="e.g. 1"></div>
+              <div class="field"><label>Prague hotel</label><input type="text" id="t${t}_prague_hotel" placeholder="Hotel name"></div>
+              <div class="field"><label>Airport nights</label><input type="text" id="t${t}_airport_nights" placeholder="e.g. 1"></div>
+              <div class="field"><label>Airport hotel</label><input type="text" id="t${t}_airport_hotel" placeholder="Hotel name"></div>
+            </div>
+          </div>
+          <div class="section-sub">
+            <label class="section-sub-label">Overnight side trips</label>
+            <p class="hint">Tick a place only when the group stays overnight away from the beading area.</p>
+            ${sideRows}
+          </div>
+        </div>
+      </details>
+
+      <details class="fold" data-fold="money">
+        <summary>How they paid</summary>
+        <div class="fold-body">
+          <p class="hint">Price, deposit and balance stay in Payments (pounds sterling). The usual deposit is £200 per person. Use this section for the method, a Czech crown or euro note, and a balance due date when it is not the usual six weeks before arrival.</p>
+          <div class="grid grid-3">
+            <div class="field"><label>Payment method</label>
+              <select id="t${t}_pay_method">
+                <option value="">Not recorded</option>
+                <option value="cash">Cash</option>
+                <option value="bank">Bank transfer</option>
+                <option value="paypal">PayPal</option>
+                <option value="wise">Wise</option>
+              </select>
+            </div>
+            <div class="field"><label>Balance due date, if different</label><input type="text" class="date-dmy" id="t${t}_balance_due" placeholder="DD/MM/YYYY" inputmode="numeric" autocomplete="off" title="Enter as DD/MM/YYYY"></div>
+            <div class="field"><label>Czech crown or euro note</label><input type="text" id="t${t}_fx_note" placeholder="e.g. hotel 7,700 CZK"></div>
+          </div>
+        </div>
+      </details>
+
+      <details class="fold" data-fold="companion">
+        <summary>Joining another group</summary>
+        <div class="fold-body">
+          <p class="hint">Use this when the people are companions on a week that is already booked, so the week is not counted twice. The organiser is still a person; the group name is only the tour label.</p>
+          <label class="hint" style="display:flex;gap:8px;align-items:center;font-weight:650;color:var(--text);"><input type="checkbox" id="t${t}_companion_joining"> This booking joins another group</label>
+          <div class="grid grid-2" style="margin-top:8px;">
+            <div class="field"><label>Other booking</label><select id="t${t}_companion_id"><option value="">Not joining another group</option></select></div>
+            <div class="field"><label>Or the other group’s name</label><input type="text" id="t${t}_companion_name" placeholder="Group name if it is not in the list"></div>
+          </div>
+        </div>
+      </details>
+
+      <details class="fold" data-fold="interests">
+        <summary>Interests and must-see places</summary>
+        <div class="fold-body">
+          <div class="check-grid">
+            <label><input type="checkbox" id="t${t}_int_buttons"> Buttons</label>
+            <label><input type="checkbox" id="t${t}_int_antique"> Antique beads</label>
+            <label><input type="checkbox" id="t${t}_int_lampwork"> Lampwork</label>
+            <label><input type="checkbox" id="t${t}_int_heritage"> Heritage</label>
+          </div>
+          <div class="field"><label>Anything else they must see</label><textarea id="t${t}_int_other" rows="2" placeholder="Factories, shops, family history, or a place name"></textarea></div>
+        </div>
+      </details>
+
+      <details class="fold" data-fold="needs">
+        <summary>Dietary needs and mobility</summary>
+        <div class="fold-body">
+          <div class="grid grid-2">
+            <div class="field"><label>Dietary needs</label><textarea id="t${t}_dietary" rows="2" placeholder="e.g. vegetarian, gluten-free, nut allergy"></textarea></div>
+            <div class="field"><label>Mobility notes</label><textarea id="t${t}_mobility" rows="2" placeholder="e.g. cannot walk far, needs a seat in the van"></textarea></div>
+          </div>
+        </div>
+      </details>
+
+      <details class="fold" data-fold="consent">
+        <summary>Future group offers</summary>
+        <div class="fold-body">
+          <div class="grid grid-2">
+            <div class="field"><label>Consent to hear about future groups</label>
+              <select id="t${t}_consent">
+                <option value="">Not asked</option>
+                <option value="yes">Yes, they are happy to be contacted</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+            <div class="field"><label>Preferred contact method</label>
+              <select id="t${t}_contact_method">
+                <option value="">Not set</option>
+                <option value="email">Email</option>
+                <option value="phone">Phone</option>
+                <option value="whatsapp">WhatsApp</option>
+                <option value="post">Post</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </details>
+    </div>`;
+  }
+
   function buildFormHTML(tabId) {
     const t = tabId;
     return `
@@ -2947,7 +3248,7 @@
         <button type="button" class="btn btn-primary" onclick="openTourPlanner('${t}')" title="Open the day planner for this group — dates, hotel and guest names">Start planning</button>
         <button class="btn btn-danger btn-sm" id="t${t}_deleteBtn" style="display:none;" onclick="confirmDelete()">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-          Delete
+          Delete this booking
         </button>
         <button class="btn btn-success" onclick="saveBooking('${t}', false)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
@@ -2969,20 +3270,30 @@
       <div class="section">
         <div class="section-title">Tour Details</div>
         <div class="grid grid-4">
-          <div class="field"><label>Tour Arrival Date</label><input type="text" class="date-dmy" id="t${t}_tour_arrival_date" placeholder="DD/MM/YYYY" inputmode="numeric" autocomplete="off" title="Enter as DD/MM/YYYY"></div>
-          <div class="field"><label>Departure Date</label><input type="text" class="date-dmy" id="t${t}_departure_date" placeholder="DD/MM/YYYY" inputmode="numeric" autocomplete="off" title="Enter as DD/MM/YYYY"></div>
-          <div class="field"><label>Group Name</label><input type="text" id="t${t}_group_name" placeholder="Enter group name"></div>
-          <div class="field"><label>No. People</label><input type="number" id="t${t}_no_people" min="0" step="1" placeholder="e.g. 5"></div>
+          <div class="field"><label class="req">Tour arrival date</label><input type="text" class="date-dmy" id="t${t}_tour_arrival_date" placeholder="DD/MM/YYYY" inputmode="numeric" autocomplete="off" title="Enter as DD/MM/YYYY"></div>
+          <div class="field"><label class="req">Departure date</label><input type="text" class="date-dmy" id="t${t}_departure_date" placeholder="DD/MM/YYYY" inputmode="numeric" autocomplete="off" title="Enter as DD/MM/YYYY"></div>
+          <div class="field"><label>Group name</label><input type="text" id="t${t}_group_name" placeholder="Tour label, not the person’s name"></div>
+          <div class="field"><label class="req">Headcount</label><input type="number" id="t${t}_no_people" min="1" step="1" placeholder="e.g. 3"></div>
+        </div>
+        <p class="hint">The group name is the tour label. The organiser is a person and is kept separate, even when the words match.</p>
+        <div class="grid grid-3">
+          <div class="field"><label class="req">Organiser’s first name</label><input type="text" id="t${t}_org_first" placeholder="First name" autocomplete="given-name"></div>
+          <div class="field"><label class="req">Organiser’s surname</label><input type="text" id="t${t}_org_last" placeholder="Surname" autocomplete="family-name"></div>
+          <div class="field"><label class="req">Organiser’s email</label><input type="email" id="t${t}_org_email" placeholder="name@example.com" autocomplete="email"></div>
         </div>
         <div class="section-sub">
-          <label class="section-sub-label">Members</label>
+          <label class="section-sub-label">Guests</label>
+          <p class="hint">Every person who is coming, including the organiser if they are travelling. First name, surname and email for each.</p>
+          <div class="member-cols-head" aria-hidden="true"><span></span><span>First</span><span>Surname</span><span>Email</span><span>Deposit</span><span>Final payment</span><span></span></div>
           <div class="members-list" id="t${t}_members_list"></div>
+          <p class="muted" style="margin:4px 0 0;font-size:12px;">Per-guest deposit and final payment are optional. Filled amounts add up into the group Deposit Made / Final Payment Made totals. You can still type a group total instead — nothing is invented.</p>
           <button type="button" class="member-add" onclick="addMemberRow('${t}')">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Add Member
+            Add guest
           </button>
         </div>
       </div>
+      ${bookingCaptureFolds(t)}
       <div class="section">
         <div class="section-title">Hotels</div>
         <div class="grid grid-2">
@@ -3009,6 +3320,8 @@
           <div class="field-with-currency"><div class="field"><label>Final Payment Made</label><input type="number" id="t${t}_finalpayment" step="0.01" placeholder="0.00"></div>${currencySelectHTML('t'+t+'_finalpayment_cur')}</div>
           <div class="field"><label>Final Payment Date</label><input type="text" class="date-dmy" id="t${t}_final_payment_date" placeholder="DD/MM/YYYY" inputmode="numeric" autocomplete="off" title="Enter as DD/MM/YYYY"></div>
         </div>
+        <p class="hint" id="t${t}_depositHint">Suggested deposit: £200 per person.</p>
+        <button type="button" class="btn btn-outline btn-sm" onclick="applySuggestedDeposit('${t}')">Use suggested deposit (£200 each)</button>
         <div class="grid grid-2" style="margin-top:16px;">
           <div class="field"><label>Final Payment Due Date (6 weeks before)</label><div class="computed-value" id="t${t}_cv_final_payment_due_date">—</div></div>
           <div class="field"><label>Left to Pay</label><div class="computed-value" id="t${t}_cv_left_to_pay">0</div></div>
@@ -3100,7 +3413,7 @@
         <button type="button" class="btn btn-primary" onclick="openTourPlanner('${t}')" title="Open the day planner for this group — dates, hotel and guest names">Start planning</button>
         <button class="btn btn-danger btn-sm" id="t${t}_deleteBtn" style="display:none;" onclick="confirmDelete()">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-          Delete
+          Delete this booking
         </button>
         <button class="btn btn-success" onclick="saveBooking('${t}', false)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
@@ -3157,21 +3470,29 @@
           <div class="layout-panel lp-tour">
             <div class="layout-panel-title">Tour</div>
             <div class="grid grid-2">
-              <div class="field"><label>Tour Arrival Date</label><input type="text" class="date-dmy" id="t${t}_tour_arrival_date" placeholder="DD/MM/YYYY" inputmode="numeric" autocomplete="off" title="Enter as DD/MM/YYYY"></div>
-              <div class="field"><label>Departure Date</label><input type="text" class="date-dmy" id="t${t}_departure_date" placeholder="DD/MM/YYYY" inputmode="numeric" autocomplete="off" title="Enter as DD/MM/YYYY"></div>
-              <div class="field"><label>Group Name</label><input type="text" id="t${t}_group_name" placeholder="Enter group name"></div>
-              <div class="field"><label>No. People</label><input type="number" id="t${t}_no_people" min="0" step="1" placeholder="e.g. 5"></div>
+              <div class="field"><label class="req">Tour arrival date</label><input type="text" class="date-dmy" id="t${t}_tour_arrival_date" placeholder="DD/MM/YYYY" inputmode="numeric" autocomplete="off" title="Enter as DD/MM/YYYY"></div>
+              <div class="field"><label class="req">Departure date</label><input type="text" class="date-dmy" id="t${t}_departure_date" placeholder="DD/MM/YYYY" inputmode="numeric" autocomplete="off" title="Enter as DD/MM/YYYY"></div>
+              <div class="field"><label>Group name</label><input type="text" id="t${t}_group_name" placeholder="Tour label, not the person’s name"></div>
+              <div class="field"><label class="req">Headcount</label><input type="number" id="t${t}_no_people" min="1" step="1" placeholder="e.g. 3"></div>
+              <div class="field"><label class="req">Organiser’s first name</label><input type="text" id="t${t}_org_first" placeholder="First name" autocomplete="given-name"></div>
+              <div class="field"><label class="req">Organiser’s surname</label><input type="text" id="t${t}_org_last" placeholder="Surname" autocomplete="family-name"></div>
+              <div class="field" style="grid-column:1/-1;"><label class="req">Organiser’s email</label><input type="email" id="t${t}_org_email" placeholder="name@example.com" autocomplete="email"></div>
             </div>
+            <p class="hint">Group name is the tour label. The organiser is a separate person.</p>
           </div>
 
           <div class="layout-panel lp-members">
-            <div class="layout-panel-title">Members</div>
+            <div class="layout-panel-title">Guests</div>
+            <p class="hint">First name, surname and email for every person coming, including the organiser if they are travelling.</p>
+            <div class="member-cols-head" aria-hidden="true"><span></span><span>First</span><span>Surname</span><span>Email</span><span>Deposit</span><span>Final payment</span><span></span></div>
             <div class="members-list resizable-box" id="t${t}_members_list"></div>
+            <p class="muted" style="margin:4px 0 0;font-size:12px;">Per-guest amounts are optional and add up into the group totals. Type a group total instead if they paid together.</p>
             <button type="button" class="member-add" onclick="addMemberRow('${t}')">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Add Member
+              Add guest
             </button>
           </div>
+          ${bookingCaptureFolds(t)}
 
           <div class="layout-panel lp-flights">
             <div class="layout-panel-title">Flight Details</div>
@@ -3231,6 +3552,8 @@
               <div class="field-with-currency"><div class="field"><label>Final Payment Made</label><input type="number" id="t${t}_finalpayment" step="0.01" placeholder="0.00"></div>${currencySelectHTML('t'+t+'_finalpayment_cur')}</div>
               <div class="field"><label>Final Payment Date</label><input type="text" class="date-dmy" id="t${t}_final_payment_date" placeholder="DD/MM/YYYY" inputmode="numeric" autocomplete="off" title="Enter as DD/MM/YYYY"></div>
           </div>
+          <p class="hint" id="t${t}_depositHint">Suggested deposit: £200 per person.</p>
+          <button type="button" class="btn btn-outline btn-sm" onclick="applySuggestedDeposit('${t}')">Use suggested deposit (£200 each)</button>
           <div class="grid grid-2" style="margin-top:12px;">
               <div class="field"><label>Final Payment Due Date (6 weeks before)</label><div class="computed-value" id="t${t}_cv_final_payment_due_date">—</div></div>
               <div class="field"><label>Left to Pay</label><div class="computed-value" id="t${t}_cv_left_to_pay">0</div></div>
@@ -3553,28 +3876,47 @@
   //  MEMBER ROWS
   // ═══════════════════════════════════════════════════════════════
 
-  function addMemberRow(tabId, name = '', memberId = '') {
+  function moneyFieldValue(raw) {
+    const s = String(raw ?? '').trim();
+    if (s === '') return '';
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? String(n) : '';
+  }
+
+  function addMemberRow(tabId, firstName = '', memberId = '', lastName = '', email = '', deposit = '', finalPayment = '') {
     const list = document.getElementById(`t${tabId}_members_list`);
     if (!list) return;
     const idx = list.children.length + 1;
+    const depVal = moneyFieldValue(deposit);
+    const finVal = moneyFieldValue(finalPayment);
 
     const row = document.createElement('div');
     row.className = 'member-row';
     row.dataset.memberId = memberId;
     row.innerHTML = `
       <span class="member-row-num">${idx}</span>
-      <input type="text" placeholder="Name" value="${name}" class="member-name">
+      <input type="text" placeholder="First name" value="${escapeAttr(firstName)}" class="member-first" autocomplete="given-name" aria-label="First name">
+      <input type="text" placeholder="Surname" value="${escapeAttr(lastName)}" class="member-last" autocomplete="family-name" aria-label="Surname">
+      <input type="email" placeholder="Email" value="${escapeAttr(email)}" class="member-email" autocomplete="email" aria-label="Email">
+      <input type="number" inputmode="decimal" step="0.01" min="0" placeholder="Deposit" value="${depVal}" class="member-deposit" aria-label="Deposit">
+      <input type="number" inputmode="decimal" step="0.01" min="0" placeholder="Final" value="${finVal}" class="member-final" aria-label="Final payment">
       <button type="button" class="member-remove" onclick="removeMemberRow(this, '${tabId}')" title="Remove">&times;</button>
     `;
 
     row.querySelectorAll('input').forEach(inp => {
-      inp.addEventListener('input', () => onTabInput(tabId));
+      inp.addEventListener('input', () => {
+        if (inp.classList.contains('member-deposit') || inp.classList.contains('member-final')) {
+          syncGroupPaymentsFromMembers(tabId);
+        }
+        onTabInput(tabId);
+      });
     });
 
     list.appendChild(row);
 
-    if (name === '') {
-      row.querySelector('.member-name').focus();
+    if (firstName === '' && lastName === '' && email === '') {
+      const focusEl = row.querySelector('.member-first');
+      if (focusEl && document.activeElement && document.activeElement.tagName === 'BUTTON') focusEl.focus();
     }
   }
 
@@ -3592,16 +3934,293 @@
     });
   }
 
+  function tabPaymentFlags(tabId) {
+    const t = tabs.get(tabId);
+    if (!t) return { deposit: false, final: false };
+    if (!t.groupPaymentManual) t.groupPaymentManual = { deposit: false, final: false };
+    return t.groupPaymentManual;
+  }
+
+  function parseMemberMoney(raw) {
+    const s = String(raw ?? '').trim();
+    if (s === '') return null;
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function sumMemberPayments(tabId) {
+    const list = document.getElementById(`t${tabId}_members_list`);
+    let deposit = 0;
+    let finalP = 0;
+    let hasD = false;
+    let hasF = false;
+    if (list) {
+      list.querySelectorAll('.member-row').forEach(row => {
+        const d = parseMemberMoney(row.querySelector('.member-deposit')?.value);
+        const f = parseMemberMoney(row.querySelector('.member-final')?.value);
+        if (d != null) { deposit += d; hasD = true; }
+        if (f != null) { finalP += f; hasF = true; }
+      });
+    }
+    return { deposit, finalP, hasD, hasF };
+  }
+
+  function syncGroupPaymentsFromMembers(tabId) {
+    const flags = tabPaymentFlags(tabId);
+    const sums = sumMemberPayments(tabId);
+    const depEl = tEl(tabId, 'depositmade');
+    const finEl = tEl(tabId, 'finalpayment');
+    if (depEl && sums.hasD && !flags.deposit) {
+      depEl.value = sums.deposit ? sums.deposit.toFixed(2) : '';
+    }
+    if (finEl && sums.hasF && !flags.final) {
+      finEl.value = sums.finalP ? sums.finalP.toFixed(2) : '';
+    }
+  }
+
+  function memberRowForSave(m, bookingId) {
+    return {
+      first_name: m.first_name || '',
+      last_name: m.last_name || '',
+      booking_id: bookingId,
+      deposit: m.deposit != null ? m.deposit : null,
+      final_payment: m.final_payment != null ? m.final_payment : null,
+    };
+  }
+
   function getMembersData(tabId) {
     const list = document.getElementById(`t${tabId}_members_list`);
     if (!list) return [];
     const members = [];
     list.querySelectorAll('.member-row').forEach(row => {
-      const fullName = row.querySelector('.member-name').value.trim();
+      const first = row.querySelector('.member-first')?.value.trim() || '';
+      const last = row.querySelector('.member-last')?.value.trim() || '';
+      const email = row.querySelector('.member-email')?.value.trim() || '';
+      const legacy = row.querySelector('.member-name')?.value.trim() || '';
       const id = row.dataset.memberId || null;
-      if (fullName) members.push({ id: id ? parseInt(id) : null, first_name: fullName, last_name: '' });
+      const deposit = parseMemberMoney(row.querySelector('.member-deposit')?.value);
+      const finalPayment = parseMemberMoney(row.querySelector('.member-final')?.value);
+      const firstName = first || (last || email ? '' : legacy);
+      if (firstName || last || email || deposit != null || finalPayment != null) {
+        members.push({
+          id: id ? parseInt(id) : null,
+          first_name: firstName,
+          last_name: last,
+          email,
+          deposit,
+          final_payment: finalPayment,
+        });
+      }
     });
     return members;
+  }
+
+  function setField(tabId, key, value) {
+    const input = tEl(tabId, key);
+    if (input) input.value = value == null ? '' : value;
+  }
+  function fieldVal(tabId, key) {
+    return tEl(tabId, key)?.value?.trim() || '';
+  }
+  function setCheck(tabId, key, on) {
+    const input = tEl(tabId, key);
+    if (input) input.checked = !!on;
+  }
+  function checkVal(tabId, key) {
+    return !!tEl(tabId, key)?.checked;
+  }
+
+  function collectBookingExtras(tabId) {
+    const BE = window.BookingExtras;
+    const x = BE ? BE.empty() : {};
+    if (!BE) return x;
+    x.organiser.firstName = fieldVal(tabId, 'org_first');
+    x.organiser.lastName = fieldVal(tabId, 'org_last');
+    x.organiser.email = fieldVal(tabId, 'org_email');
+    x.headcount = fieldVal(tabId, 'no_people');
+    x.guests = getMembersData(tabId).map(m => ({
+      firstName: m.first_name || '',
+      lastName: m.last_name || '',
+      email: m.email || '',
+      personId: '',
+    }));
+    x.rooms.singles = fieldVal(tabId, 'rooms_singles');
+    x.rooms.twins = fieldVal(tabId, 'rooms_twins');
+    x.rooms.doubles = fieldVal(tabId, 'rooms_doubles');
+    x.rooms.keithRoom = checkVal(tabId, 'rooms_keith');
+    x.travel.arrivalTime = tEl(tabId, 'arrival_time')?.value || '';
+    x.travel.departureTime = tEl(tabId, 'departure_time')?.value || '';
+    x.travel.arrivalFlight = fieldVal(tabId, 'arrival_flight');
+    x.travel.departureFlight = fieldVal(tabId, 'departure_flight');
+    x.travel.pickupPoint = tEl(tabId, 'pickup_point')?.value || '';
+    x.travel.pickupPlace = fieldVal(tabId, 'pickup_place');
+    x.travel.pickupTime = tEl(tabId, 'pickup_time')?.value || '';
+    x.tourHotel.nights = fieldVal(tabId, 'hotel_nights');
+    x.tourHotel.rooms = fieldVal(tabId, 'hotel_rooms');
+    x.tourHotel.booked = tEl(tabId, 'hotel_booked')?.value || '';
+    x.tourHotel.paid = tEl(tabId, 'hotel_paid')?.value || '';
+    x.tourHotel.paidBy = fieldVal(tabId, 'hotel_paid_by');
+    x.extraStays.pragueNights = fieldVal(tabId, 'prague_nights');
+    x.extraStays.pragueHotel = fieldVal(tabId, 'prague_hotel');
+    x.extraStays.airportNights = fieldVal(tabId, 'airport_nights');
+    x.extraStays.airportHotel = fieldVal(tabId, 'airport_hotel');
+    x.sideTrips = (BE.SIDE_PLACES || []).map(p => ({
+      place: p.place,
+      include: checkVal(tabId, 'side_' + p.place),
+      hotel: fieldVal(tabId, 'side_' + p.place + '_hotel'),
+      nights: fieldVal(tabId, 'side_' + p.place + '_nights'),
+    }));
+    x.money.pricePerPerson = fieldVal(tabId, 'price_per_person');
+    x.money.total = fieldVal(tabId, 'beading_tour_price');
+    x.money.depositAmount = fieldVal(tabId, 'depositmade');
+    x.money.depositDate = toStorageISO(fieldVal(tabId, 'deposit_paid_date')) || '';
+    x.money.method = tEl(tabId, 'pay_method')?.value || '';
+    x.money.balanceDueDate = toStorageISO(fieldVal(tabId, 'balance_due')) || '';
+    x.money.fxNote = fieldVal(tabId, 'fx_note');
+    const people = Number(x.headcount) || 0;
+    const price = Number(x.money.pricePerPerson) || 0;
+    const deposit = Number(x.money.depositAmount) || 0;
+    const finalPay = Number(fieldVal(tabId, 'finalpayment')) || 0;
+    if (people && price) x.money.balance = String(Math.round((people * price - deposit - finalPay) * 100) / 100);
+    x.companion.joining = checkVal(tabId, 'companion_joining');
+    x.companion.otherBookingId = tEl(tabId, 'companion_id')?.value || '';
+    x.companion.otherGroup = fieldVal(tabId, 'companion_name');
+    x.interests.buttons = checkVal(tabId, 'int_buttons');
+    x.interests.antique = checkVal(tabId, 'int_antique');
+    x.interests.lampwork = checkVal(tabId, 'int_lampwork');
+    x.interests.heritage = checkVal(tabId, 'int_heritage');
+    x.interests.other = tEl(tabId, 'int_other')?.value?.trim() || '';
+    x.needs.dietary = tEl(tabId, 'dietary')?.value?.trim() || '';
+    x.needs.mobility = tEl(tabId, 'mobility')?.value?.trim() || '';
+    x.consent.futureOffers = tEl(tabId, 'consent')?.value || '';
+    x.consent.contactMethod = tEl(tabId, 'contact_method')?.value || '';
+    return BE.merge(x);
+  }
+
+  function applyBookingExtras(tabId, raw) {
+    const BE = window.BookingExtras;
+    if (!BE) return;
+    const x = BE.merge(raw);
+    setField(tabId, 'org_first', x.organiser.firstName);
+    setField(tabId, 'org_last', x.organiser.lastName);
+    setField(tabId, 'org_email', x.organiser.email);
+    setField(tabId, 'rooms_singles', x.rooms.singles);
+    setField(tabId, 'rooms_twins', x.rooms.twins);
+    setField(tabId, 'rooms_doubles', x.rooms.doubles);
+    setCheck(tabId, 'rooms_keith', x.rooms.keithRoom);
+    setField(tabId, 'arrival_time', x.travel.arrivalTime);
+    setField(tabId, 'departure_time', x.travel.departureTime);
+    setField(tabId, 'arrival_flight', x.travel.arrivalFlight);
+    setField(tabId, 'departure_flight', x.travel.departureFlight);
+    setField(tabId, 'pickup_point', x.travel.pickupPoint);
+    setField(tabId, 'pickup_place', x.travel.pickupPlace);
+    setField(tabId, 'pickup_time', x.travel.pickupTime);
+    setField(tabId, 'hotel_nights', x.tourHotel.nights);
+    setField(tabId, 'hotel_rooms', x.tourHotel.rooms);
+    setField(tabId, 'hotel_booked', x.tourHotel.booked);
+    setField(tabId, 'hotel_paid', x.tourHotel.paid);
+    setField(tabId, 'hotel_paid_by', x.tourHotel.paidBy);
+    setField(tabId, 'prague_nights', x.extraStays.pragueNights);
+    setField(tabId, 'prague_hotel', x.extraStays.pragueHotel);
+    setField(tabId, 'airport_nights', x.extraStays.airportNights);
+    setField(tabId, 'airport_hotel', x.extraStays.airportHotel);
+    (x.sideTrips || []).forEach(s => {
+      setCheck(tabId, 'side_' + s.place, s.include);
+      setField(tabId, 'side_' + s.place + '_hotel', s.hotel);
+      setField(tabId, 'side_' + s.place + '_nights', s.nights);
+    });
+    setField(tabId, 'pay_method', x.money.method);
+    setField(tabId, 'balance_due', x.money.balanceDueDate ? toDisplayDMY(x.money.balanceDueDate) : '');
+    setField(tabId, 'fx_note', x.money.fxNote);
+    setCheck(tabId, 'companion_joining', x.companion.joining);
+    fillCompanionSelect(tabId);
+    setField(tabId, 'companion_id', x.companion.otherBookingId);
+    setField(tabId, 'companion_name', x.companion.otherGroup);
+    setCheck(tabId, 'int_buttons', x.interests.buttons);
+    setCheck(tabId, 'int_antique', x.interests.antique);
+    setCheck(tabId, 'int_lampwork', x.interests.lampwork);
+    setCheck(tabId, 'int_heritage', x.interests.heritage);
+    setField(tabId, 'int_other', x.interests.other);
+    setField(tabId, 'dietary', x.needs.dietary);
+    setField(tabId, 'mobility', x.needs.mobility);
+    setField(tabId, 'consent', x.consent.futureOffers);
+    setField(tabId, 'contact_method', x.consent.contactMethod);
+    if (!fieldVal(tabId, 'price_per_person') && x.money.pricePerPerson) setField(tabId, 'price_per_person', x.money.pricePerPerson);
+    if (!fieldVal(tabId, 'depositmade') && x.money.depositAmount) setField(tabId, 'depositmade', x.money.depositAmount);
+    if (!fieldVal(tabId, 'deposit_paid_date') && x.money.depositDate) setField(tabId, 'deposit_paid_date', toDisplayDMY(x.money.depositDate));
+    updateRoomWarning(tabId);
+    updateDepositHint(tabId);
+  }
+
+  function fillCompanionSelect(tabId) {
+    const sel = tEl(tabId, 'companion_id');
+    if (!sel) return;
+    const current = sel.value;
+    const selfId = tEl(tabId, 'id')?.value;
+    const opts = ['<option value="">Not joining another group</option>'];
+    (allBookings || []).forEach(b => {
+      if (selfId && String(b.id) === String(selfId)) return;
+      const label = (b.group_name || ('Booking #' + b.id)) + (b.tour_arrival_date ? (' · ' + formatDateDMY(b.tour_arrival_date)) : '');
+      opts.push('<option value="' + escapeAttr(String(b.id)) + '">' + escapeHtml(label) + '</option>');
+    });
+    sel.innerHTML = opts.join('');
+    if (current) sel.value = current;
+  }
+
+  function updateRoomWarning(tabId) {
+    const BE = window.BookingExtras;
+    const roomEl = document.getElementById(`t${tabId}_roomWarn`);
+    const guestEl = document.getElementById(`t${tabId}_guestWarn`);
+    if (!BE) return;
+    const head = fieldVal(tabId, 'no_people');
+    const rooms = {
+      singles: fieldVal(tabId, 'rooms_singles'),
+      twins: fieldVal(tabId, 'rooms_twins'),
+      doubles: fieldVal(tabId, 'rooms_doubles'),
+      keithRoom: checkVal(tabId, 'rooms_keith'),
+    };
+    const roomMsg = BE.roomWarning(head, rooms);
+    const named = getMembersData(tabId).filter(m => (m.first_name || m.last_name)).length;
+    const guestMsg = BE.guestCountWarning(head, named);
+    if (roomEl) roomEl.innerHTML = roomMsg ? '<div class="room-warn" role="status">' + escapeHtml(roomMsg) + '</div>' : '';
+    if (guestEl) guestEl.innerHTML = guestMsg ? '<div class="guest-warn" role="status">' + escapeHtml(guestMsg) + '</div>' : '';
+  }
+
+  function updateDepositHint(tabId) {
+    const hint = document.getElementById(`t${tabId}_depositHint`);
+    if (!hint || !window.BookingExtras) return;
+    const people = Number(fieldVal(tabId, 'no_people'));
+    const suggested = BookingExtras.suggestedDepositGbp(people);
+    hint.textContent = suggested == null
+      ? 'Suggested deposit: £200 per person. Enter the headcount to see a total.'
+      : ('Suggested deposit: £200 per person (£' + suggested.toFixed(2) + ' for ' + people + ').');
+  }
+
+  function applySuggestedDeposit(tabId) {
+    const people = Number(fieldVal(tabId, 'no_people'));
+    const suggested = window.BookingExtras ? BookingExtras.suggestedDepositGbp(people) : null;
+    if (suggested == null) {
+      toast('Enter the headcount first', 'error');
+      tEl(tabId, 'no_people')?.focus();
+      return;
+    }
+    const input = tEl(tabId, 'depositmade');
+    if (input) input.value = suggested.toFixed(2);
+    const cur = tEl(tabId, 'depositmade_cur');
+    if (cur) cur.value = 'GBP';
+    onTabInput(tabId, input ? input.id : '');
+    toast('Deposit set to £' + suggested.toFixed(2) + ' (£200 × ' + people + ')', 'success');
+  }
+
+  function annotateBookingExtras(b) {
+    if (!b || !window.BookingExtras) return b;
+    const split = BookingExtras.splitNotesAndExtras(b.extra_notes);
+    b._human_notes = split.notes;
+    b._extras = split.extras;
+    b.organiser_display = BookingExtras.organiserFullName(split.extras) || '';
+    b.payment_method_display = BookingExtras.methodLabel(split.extras.money && split.extras.money.method) || '';
+    b.room_plan_display = BookingExtras.roomSummary(split.extras.rooms) || '';
+    return b;
   }
 
   function albumIdFromICloudUrl(url) {
@@ -3755,6 +4374,30 @@
       if (tabData) tabData.sharedAlbumsLoaded = true;
     } catch (err) {
       console.warn('Could not save shared albums on the plan:', err);
+    }
+  }
+  async function saveBookingExtrasForBooking(tabId, bookingId, extras) {
+    if (!bookingId || !window.BookingExtras) return;
+    const packed = BookingExtras.merge(extras || collectBookingExtras(tabId));
+    if (!BookingExtras.hasContent(packed)) return;
+    try {
+      const { data, error } = await sb.from('planner_plans').select('payload').eq('booking_id', Number(bookingId)).maybeSingle();
+      if (error) throw error;
+      const payload = (data && data.payload && typeof data.payload === 'object') ? { ...data.payload } : {};
+      payload.bookingDetails = packed;
+      payload.bookingKey = payload.bookingKey || String(bookingId);
+      if (packed.organiser && BookingExtras.organiserFullName(packed)) {
+        payload.organiserName = payload.organiserName || BookingExtras.organiserFullName(packed);
+      }
+      const { error: upErr } = await sb.from('planner_plans').upsert({
+        booking_id: Number(bookingId),
+        client_key: 'booking:' + bookingId,
+        payload,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'booking_id' });
+      if (upErr) throw upErr;
+    } catch (err) {
+      console.warn('Booking details kept on the booking notes. Plan copy was not updated:', err);
     }
   }
 
@@ -4238,6 +4881,8 @@
     } else {
       addMemberRow(tabId);
       applyTabYearTint(tabId);
+      fillCompanionSelect(tabId);
+      updateDepositHint(tabId);
     }
     updateGlobalAnalytics();
     applyLayoutZoomToOpenTabs();
@@ -4321,6 +4966,8 @@
   }
 
 	  function onTabInput(tabId, changedId = '') {
+	    if (changedId.endsWith('_depositmade')) tabPaymentFlags(tabId).deposit = true;
+	    if (changedId.endsWith('_finalpayment')) tabPaymentFlags(tabId).final = true;
 	    recalculateTab(tabId);
 	    markTabDirty(tabId, true);
 
@@ -4349,7 +4996,7 @@
 	        }
 	      }
 	    }
-	    if (changedId.endsWith('_departure_date') || changedId.endsWith('_deposit_paid_date') || changedId.endsWith('_final_payment_date')) {
+	    if (changedId.endsWith('_departure_date') || changedId.endsWith('_deposit_paid_date') || changedId.endsWith('_final_payment_date') || changedId.endsWith('_balance_due')) {
 	      const elChanged = changedId ? document.getElementById(changedId) : null;
 	      if (elChanged) {
 	        const parsed = parseFlexibleDateUTC(elChanged.value || '');
@@ -4420,10 +5067,14 @@
 
     // Final Payment Due Date = 6 weeks before Tour Arrival Date
     if (cvDue) {
+      const override = toStorageISO(tEl(tabId, 'balance_due')?.value || '');
       const startDate = parseFlexibleDateUTC(tEl(tabId, 'tour_arrival_date')?.value || '');
-      cvDue.textContent = startDate ? formatDateDMY(toISODateUTC(addDaysUTC(startDate, -42))) : '—';
+      const computed = startDate ? formatDateDMY(toISODateUTC(addDaysUTC(startDate, -42))) : '';
+      cvDue.textContent = override ? formatDateDMY(override) : (computed || '—');
       cvDue.className = 'computed-value';
     }
+    updateDepositHint(tabId);
+    updateRoomWarning(tabId);
   }
 
   // ── Form data ──
@@ -4472,7 +5123,19 @@
 
     // Child data
     data._members = getMembersData(tabId);
-    data._flights = getFlightsData(tabId);
+    const extras = collectBookingExtras(tabId);
+    data._extras = extras;
+    if (window.BookingExtras) {
+      data.extra_notes = BookingExtras.joinNotesAndExtras(data.extra_notes, extras);
+      data._flights = BookingExtras.mergeTravelIntoFlights(
+        getFlightsData(tabId),
+        extras,
+        data.tour_arrival_date,
+        data.departure_date
+      );
+    } else {
+      data._flights = getFlightsData(tabId);
+    }
     data._hotel_stays = getHotelStaysData(tabId);
     data._expenses = getExpensesData(tabId);
     data._additional_expenses = getAdditionalExpensesData(tabId);
@@ -4481,9 +5144,16 @@
   }
 
   function populateTab(tabId, record) {
+    const splitNotes = window.BookingExtras
+      ? BookingExtras.splitNotesAndExtras(record.extra_notes)
+      : { notes: record.extra_notes || '', extras: null };
     FIELDS.forEach(f => {
       const input = tEl(tabId, f);
       if (!input) return;
+      if (f === 'extra_notes') {
+        input.value = splitNotes.notes || '';
+        return;
+      }
       if (FORM_DATE_KEYS.has(f)) input.value = toDisplayDMY(record[f] ?? '');
       else input.value = record[f] ?? '';
     });
@@ -4514,11 +5184,28 @@
     // Members
     const membersList = document.getElementById(`t${tabId}_members_list`);
     if (membersList) membersList.innerHTML = '';
+    const guestExtras = (splitNotes.extras && splitNotes.extras.guests) || [];
     if (record._members && record._members.length) {
-      record._members.forEach(m => {
-        const name = [m.first_name, m.last_name].filter(Boolean).join(' ').trim();
-        addMemberRow(tabId, name, m.id || '');
+      record._members.forEach((m, i) => {
+        const g = guestExtras[i] || {};
+        const first = m.first_name || g.firstName || '';
+        const last = m.last_name || g.lastName || '';
+        addMemberRow(tabId, first, m.id || '', last, g.email || m.email || '', m.deposit, m.final_payment);
       });
+      const flags = tabPaymentFlags(tabId);
+      const sums = sumMemberPayments(tabId);
+      const depEl = tEl(tabId, 'depositmade');
+      const finEl = tEl(tabId, 'finalpayment');
+      if (depEl && sums.hasD && !String(depEl.value || '').trim()) {
+        depEl.value = sums.deposit ? sums.deposit.toFixed(2) : '';
+        flags.deposit = false;
+      }
+      if (finEl && sums.hasF && !String(finEl.value || '').trim()) {
+        finEl.value = sums.finalP ? sums.finalP.toFixed(2) : '';
+        flags.final = false;
+      }
+    } else if (guestExtras.length) {
+      guestExtras.forEach(g => addMemberRow(tabId, g.firstName || '', '', g.lastName || '', g.email || ''));
     } else {
       addMemberRow(tabId);
     }
@@ -4552,6 +5239,8 @@
     updateTabTitle(tabId, 'Edit: ' + title);
     const deleteBtn = tEl(tabId, 'deleteBtn');
     if (deleteBtn) deleteBtn.style.display = 'inline-flex';
+    fillCompanionSelect(tabId);
+    if (splitNotes.extras) applyBookingExtras(tabId, splitNotes.extras);
     recalculateTab(tabId);
     applyTabYearTint(tabId);
     loadSharedAlbumsForBooking(tabId, record.id);
@@ -4593,6 +5282,9 @@
     const addlExpensesList = document.getElementById(`t${tabId}_addl_expenses_list`);
     if (addlExpensesList) addlExpensesList.innerHTML = '';
     setSharedAlbumsRows(tabId, []);
+    applyBookingExtras(tabId, window.BookingExtras ? BookingExtras.empty() : {});
+    updateDepositHint(tabId);
+    updateRoomWarning(tabId);
     const otherWrap = document.getElementById(`t${tabId}_other_hotel_wrap`);
     if (otherWrap) otherWrap.style.display = 'none';
     markTabDirty(tabId, false);
@@ -4660,7 +5352,8 @@
 
 	    const group = (b.group_name || '');
 	    const id = String(b.id || '');
-	    const notes = (b.extra_notes || '');
+	    const notes = (b._human_notes != null ? b._human_notes : (b.extra_notes || ''));
+	    const extraHay = b._extras ? JSON.stringify(b._extras) : '';
 	    const members = (b._members || []).map(m => [m.first_name, m.last_name].filter(Boolean).join(' ')).filter(Boolean);
 	    const memberMatch = members.some(n => includesText(n, needle));
 	    const hotelNames = [
@@ -4677,11 +5370,11 @@
 	    const dateMatch = [aIso, dIso, aDmy, dDmy].some(x => includesText(x, needle));
 
 	    if (field === 'group') return includesText(group, needle);
-	    if (field === 'member') return memberMatch;
+	    if (field === 'member') return memberMatch || includesText(extraHay, needle) || includesText(b.organiser_display, needle);
 	    if (field === 'id') return includesText(id, needle);
 	    if (field === 'hotel') return hotelMatch;
 	    if (field === 'date') return dateMatch;
-	    if (field === 'notes') return includesText(notes, needle);
+	    if (field === 'notes') return includesText(notes, needle) || includesText(extraHay, needle);
 
 	    // any
 	    return (
@@ -4690,7 +5383,9 @@
 	      memberMatch ||
 	      hotelMatch ||
 	      dateMatch ||
-	      includesText(notes, needle)
+	      includesText(notes, needle) ||
+	      includesText(extraHay, needle) ||
+	      includesText(b.organiser_display, needle)
 	    );
 	  }
 
@@ -4812,6 +5507,7 @@
 	      }
 	      parts.push(`
 	      <div class="record-item year-band year-band-${band} ${r.id === activeBookingId ? 'active' : ''}" onclick="openBookingInTab(${r.id})">
+	        <div class="record-item-body">
 	        <div class="record-title">${openIds.has(r.id) ? '<span style="color:var(--accent);margin-right:4px;">●</span>' : ''}${r.group_name || 'Booking #' + r.id}</div>
 	        <div class="record-sub">${
 	          r.tour_arrival_date ? formatDateDMY(r.tour_arrival_date) : 'No date'
@@ -4820,6 +5516,8 @@
 	            ? ` · ${formatMoney(Number(r.left_to_pay) || 0, normalizeCurrency(r.beading_tour_price_currency || DEFAULT_CURRENCY))} left`
 	            : ''
 	        }</div>
+	        </div>
+	        <button type="button" class="record-delete" title="Delete this booking" onclick="confirmDeleteBooking(event, ${r.id})">Delete</button>
 	      </div>`);
 	    }
 	    list.innerHTML = parts.join('');
@@ -4855,8 +5553,75 @@
   }
 
   // ── Delete modal ──
-  function confirmDelete() { el('deleteModal').classList.add('visible'); }
-  function closeDeleteModal() { el('deleteModal').classList.remove('visible'); }
+  let pendingDeleteBookingId = null;
+
+  function bookingDeleteLabel(record) {
+    const group = String((record && record.group_name) || (record && record.id != null ? ('Booking #' + record.id) : 'this booking')).trim();
+    const a = record && record.tour_arrival_date ? formatDateDMY(record.tour_arrival_date) : '';
+    const d = record && record.departure_date ? formatDateDMY(record.departure_date) : '';
+    const dates = (a && d) ? (a + '–' + d) : (a || d || '');
+    const named = dates ? (group + ' ' + dates) : group;
+    return 'Delete this plan for ' + named + '? This can’t be undone.';
+  }
+
+  function setDeleteModalMessage(text) {
+    const p = el('deleteModalMsg');
+    if (p) p.textContent = text;
+  }
+
+  function confirmDelete() {
+    pendingDeleteBookingId = null;
+    const tabData = activeTabId ? tabs.get(activeTabId) : null;
+    const id = tabData && tabData.bookingId;
+    const record = id != null ? allBookings.find(r => Number(r.id) === Number(id)) : null;
+    if (!id || !record) {
+      toast('Open a saved booking first', 'error');
+      return;
+    }
+    pendingDeleteBookingId = id;
+    setDeleteModalMessage(bookingDeleteLabel(record));
+    el('deleteModal').classList.add('visible');
+  }
+
+  function confirmDeleteBooking(event, id) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    const record = allBookings.find(r => Number(r.id) === Number(id));
+    if (!record) {
+      toast('That booking was not found', 'error');
+      return;
+    }
+    pendingDeleteBookingId = id;
+    setDeleteModalMessage(bookingDeleteLabel(record));
+    el('deleteModal').classList.add('visible');
+  }
+
+  function closeDeleteModal() {
+    el('deleteModal').classList.remove('visible');
+    pendingDeleteBookingId = null;
+  }
+
+  function removePlannerLocalPlan(bookingId) {
+    const key = String(bookingId || '');
+    if (!key) return;
+    try {
+      const raw = localStorage.getItem('keith_tour_planner_v1');
+      if (!raw) return;
+      const store = JSON.parse(raw) || {};
+      if (store.plans) {
+        delete store.plans[key];
+        Object.keys(store.plans).forEach(k => {
+          const p = store.plans[k];
+          const src = String((p && p.source) || '').toLowerCase();
+          const ck = String((p && (p.client_key || p.clientKey || p.bookingKey)) || k).toLowerCase();
+          if (ck === 'demo' || ck === 'sample' || src === 'demo' || src === 'sample') delete store.plans[k];
+        });
+        localStorage.setItem('keith_tour_planner_v1', JSON.stringify(store));
+      }
+    } catch (_) { /* ignore */ }
+  }
 
   // ── Auto-save ──
 
@@ -4956,7 +5721,7 @@
         ]);
         const hotelExps = (expenses.data || []).filter(e => e.hotel_id || e.custom_hotel_name);
         const addlExps = (expenses.data || []).filter(e => e.description && !e.hotel_id && !e.custom_hotel_name);
-        return {
+        return annotateBookingExtras({
           ...b,
           hotel_name: b.hotels?.name,
           _members: members.data || [],
@@ -4964,7 +5729,7 @@
           _hotel_stays: stays.data || [],
           _expenses: hotelExps,
           _additional_expenses: addlExps,
-        };
+        });
 	      }));
 	      allBookings = enriched;
 	      if (globalSearchApi) globalSearchApi.refresh();
@@ -4974,6 +5739,7 @@
 	      updateGlobalAnalytics();
 	      refreshAllYearCalendars();
 	      applyPendingDeepLinkBooking();
+      for (const [tabId] of tabs) fillCompanionSelect(tabId);
 	    } catch (err) { toast('Failed to load bookings: ' + err.message, 'error'); }
 	  }
 
@@ -5004,9 +5770,43 @@
     if (!tabData) return;
     const data = await getTabFormData(tabId);
 
-    if (!data.group_name) {
-      if (!silent) { toast('Group name is required', 'error'); tEl(tabId, 'group_name')?.focus(); }
-      return;
+    const extras = data._extras || collectBookingExtras(tabId);
+    const orgName = window.BookingExtras ? BookingExtras.organiserFullName(extras) : '';
+    const isNew = !tabData.bookingId;
+    if (isNew) {
+      if (!extras.organiser.firstName || !extras.organiser.lastName) {
+        if (!silent) { toast('Please enter the organiser’s first name and surname', 'error'); tEl(tabId, 'org_first')?.focus(); }
+        return;
+      }
+      if (!extras.organiser.email || !extras.organiser.email.includes('@')) {
+        if (!silent) { toast('Please enter the organiser’s email address', 'error'); tEl(tabId, 'org_email')?.focus(); }
+        return;
+      }
+      if (!data.tour_arrival_date) {
+        if (!silent) { toast('Please enter the arrival date as DD/MM/YYYY', 'error'); tEl(tabId, 'tour_arrival_date')?.focus(); }
+        return;
+      }
+      if (!data.departure_date) {
+        if (!silent) { toast('Please enter the departure date as DD/MM/YYYY', 'error'); tEl(tabId, 'departure_date')?.focus(); }
+        return;
+      }
+      if (!data.no_people || Number(data.no_people) <= 0) {
+        if (!silent) { toast('Please enter the headcount', 'error'); tEl(tabId, 'no_people')?.focus(); }
+        return;
+      }
+      if (!data.group_name) {
+        data.group_name = orgName;
+        setField(tabId, 'group_name', orgName);
+      }
+    } else if (!data.group_name) {
+      if (orgName) {
+        data.group_name = orgName;
+        setField(tabId, 'group_name', orgName);
+      }
+      else {
+        if (!silent) { toast('Group name or the organiser’s name is required', 'error'); tEl(tabId, 'group_name')?.focus(); }
+        return;
+      }
     }
 
     // Auto-add "Other" hotels from expenses to the admin list
@@ -5024,7 +5824,7 @@
     }
 
     try {
-      const { _members, _flights, _hotel_stays, _expenses, _additional_expenses, ...bookingData } = data;
+      const { _members, _flights, _hotel_stays, _expenses, _additional_expenses, _extras, ...bookingData } = data;
       const bid = tabData.bookingId;
 
       if (bid) {
@@ -5032,7 +5832,7 @@
         if (error) throw error;
 
         await sb.from('members').delete().eq('booking_id', bid);
-        if (_members.length) await sb.from('members').insert(_members.map(m => ({ first_name: m.first_name, last_name: m.last_name, booking_id: bid })));
+        if (_members.length) await sb.from('members').insert(_members.map(m => memberRowForSave(m, bid)));
 
         await sb.from('flights').delete().eq('booking_id', bid);
         if (_flights.length) await sb.from('flights').insert(_flights.map(f => ({ flight_number: f.flight_number, arrival_date: f.arrival_date, arrival_time: f.arrival_time, departure_date: f.departure_date, departure_time: f.departure_time, comments: f.comments, booking_id: bid })));
@@ -5045,6 +5845,7 @@
         if (_additional_expenses.length) await sb.from('booking_expenses').insert(_additional_expenses.map(e => ({ description: e.description, cost: e.cost, currency: e.currency, comments: e.comments, booking_id: bid })));
 
         await saveSharedAlbumsForBooking(tabId, bid);
+        await saveBookingExtrasForBooking(tabId, bid, _extras || extras);
 
         if (!silent) toast('Booking updated', 'success');
       } else {
@@ -5060,13 +5861,14 @@
         if (delBtn) delBtn.style.display = 'inline-flex';
         applyTabYearTint(tabId);
 
-        if (_members.length) await sb.from('members').insert(_members.map(m => ({ first_name: m.first_name, last_name: m.last_name, booking_id: newId })));
+        if (_members.length) await sb.from('members').insert(_members.map(m => memberRowForSave(m, newId)));
         if (_flights.length) await sb.from('flights').insert(_flights.map(f => ({ flight_number: f.flight_number, arrival_date: f.arrival_date, arrival_time: f.arrival_time, departure_date: f.departure_date, departure_time: f.departure_time, comments: f.comments, booking_id: newId })));
         if (_hotel_stays.length) await sb.from('booking_hotels').insert(_hotel_stays.map(s => ({ hotel_id: s.hotel_id, custom_hotel_name: s.custom_hotel_name, nights: s.nights, sort_order: s.sort_order, booking_id: newId })));
         if (_expenses.length) await sb.from('booking_expenses').insert(_expenses.map(e => ({ hotel_id: e.hotel_id, custom_hotel_name: e.custom_hotel_name, cost: e.cost, currency: e.currency, comments: e.comments, booking_id: newId })));
         if (_additional_expenses.length) await sb.from('booking_expenses').insert(_additional_expenses.map(e => ({ description: e.description, cost: e.cost, currency: e.currency, comments: e.comments, booking_id: newId })));
 
         await saveSharedAlbumsForBooking(tabId, newId);
+        await saveBookingExtrasForBooking(tabId, newId, _extras || extras);
 
         if (!silent) toast('Booking created', 'success');
       }
@@ -5077,16 +5879,24 @@
   }
 
   async function deleteBooking() {
+    const id = pendingDeleteBookingId != null
+      ? pendingDeleteBookingId
+      : (activeTabId && tabs.get(activeTabId) ? tabs.get(activeTabId).bookingId : null);
     closeDeleteModal();
-    if (!activeTabId) return;
-    const tabData = tabs.get(activeTabId);
-    if (!tabData || !tabData.bookingId) return;
+    if (id == null) return;
     try {
-      const { error } = await sb.from(TABLE).delete().eq('id', tabData.bookingId);
+      const planDel = await sb.from('planner_plans').delete().eq('booking_id', Number(id));
+      if (planDel.error) console.warn('planner_plans delete:', planDel.error);
+      const { error } = await sb.from(TABLE).delete().eq('id', Number(id));
       if (error) throw error;
 
+      removePlannerLocalPlan(id);
+      allBookings = (allBookings || []).filter(b => Number(b.id) !== Number(id));
+      saveLocalBookings();
       toast('Booking deleted', 'success');
-      closeTab(activeTabId);
+      for (const [tabId, td] of tabs) {
+        if (td && Number(td.bookingId) === Number(id)) closeTab(tabId);
+      }
       await loadBookings();
     } catch (err) { toast('Delete failed: ' + err.message, 'error'); }
   }
@@ -5112,7 +5922,10 @@
   const TABLE_COLUMNS = [
     { key: 'id', label: 'ID', type: 'num' },
     { key: 'group_name', label: 'Group Name' },
+    { key: 'organiser_display', label: 'Organiser' },
     { key: 'no_people', label: 'People' },
+    { key: 'room_plan_display', label: 'Rooms' },
+    { key: 'payment_method_display', label: 'Payment' },
     { key: 'tour_arrival_date', label: 'Arrival' },
     { key: 'departure_date', label: 'Departure' },
     { key: 'hotel_name', label: 'Hotel' },
@@ -5254,8 +6067,14 @@
       parts.push(
         `<tr class="${bandCls}" onclick="tableRowClick(${r.id})">` +
         activeColumns.map(col => {
-          const val = r[col.key];
-          let display = val != null ? val : '—';
+          let val = r[col.key];
+          if (col.key === 'extra_notes') {
+            val = r._human_notes != null ? r._human_notes : (window.BookingExtras ? BookingExtras.splitNotesAndExtras(r.extra_notes).notes : r.extra_notes);
+          }
+          let display = val != null && val !== '' ? val : '—';
+          if (col.key === 'extra_notes' || col.key === 'organiser_display' || col.key === 'room_plan_display' || col.key === 'payment_method_display') {
+            display = val ? escapeHtml(String(val)) : '—';
+          }
           if (val && isDateKey(col.key)) display = formatDateDMY(val);
           if (col.curKey && val != null) {
             const cur = normalizeCurrency(r[col.curKey] || DEFAULT_CURRENCY);
