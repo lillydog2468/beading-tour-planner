@@ -318,6 +318,9 @@
         const { data, error } = await sb.from('planner_plans').select('booking_id, client_key, payload').limit(250);
         if (!error) {
           (data || []).forEach(row => {
+            const ck = String(row.client_key || '').toLowerCase();
+            if (ck === 'demo' || ck === 'sample') return;
+            if (row.payload && String(row.payload.source || '').toLowerCase() === 'demo') return;
             if (row.booking_id != null) cloudPlans.set(String(row.booking_id), row.payload || {});
             if (row.client_key) cloudPlans.set(String(row.client_key), row.payload || {});
           });
@@ -361,9 +364,12 @@
 
       Object.keys(localPlans).forEach(key => {
         if (bookings.some(b => String(b.id) === String(key))) return;
+        if (String(key).toLowerCase() === 'demo' || String(key).toLowerCase() === 'sample') return;
         const plan = localPlans[key] || {};
+        if (String(plan.source || '').toLowerCase() === 'demo') return;
+        if (/\(\s*(sample|demo)\s*\)/i.test(String(plan.groupName || ''))) return;
         const planHotels = (plan.hotels || []).map(normalizeHotelRow).filter(Boolean);
-        const groupName = plan.groupName || (key === 'demo' ? 'Sample tour' : 'Local plan');
+        const groupName = plan.groupName || 'Local plan';
         addStay(list, {
           bookingKey: key, bookingId: /^\d+$/.test(key) ? key : '', groupName,
           hotelName: plan.tourHotelName || '', role: 'tour',
