@@ -16,6 +16,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="global-search.js"></script>
+  <script src="auth-gate.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -625,7 +626,7 @@
     document.getElementById('typeFilter').addEventListener('change', renderTable);
 
     fixExternalNavLinks();
-    loadData().catch(err => {
+    AuthGate.require(sb, { title: 'Place statistics' }).then(() => loadData()).catch(err => {
       console.error(err);
       setStatus(err.message || 'Failed to load', 'err');
       document.getElementById('typeChips').innerHTML = '<div class="muted">Could not load type breakdown.</div>';

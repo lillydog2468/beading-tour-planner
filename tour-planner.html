@@ -16,6 +16,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="global-search.js"></script>
+  <script src="auth-gate.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -7395,7 +7396,7 @@ function renderDayTabs() {
       : `<span class="pill warn">Sample / local plan — bookings will appear here when Supabase is reachable</span>`;
     const auth = state.sessionEmail
       ? `<span class="pill">${escapeHtml(state.sessionEmail)}</span>`
-      : `<span class="muted">No login required for the sample tour</span>`;
+      : `<span class="muted">Not signed in</span>`;
     const resetDemo = state.plan.bookingKey === DEMO_ID
       ? `<button type="button" class="btn btn-outline btn-sm" id="btnResetDemo">Reset sample tour</button>`
       : '';
@@ -9143,7 +9144,8 @@ function renderDayTabs() {
     document.body.classList.toggle('view-detailed', effectiveView() === 'detailed');
   });
 
-  init();
+  // Sign-in required: data is only available to Keith's signed-in account.
+  AuthGate.require(sb, { title: 'Tour planner' }).then(() => init());
 </script>
 </body>
 </html>
