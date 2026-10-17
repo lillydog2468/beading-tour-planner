@@ -2172,6 +2172,7 @@
         <select id="groupSelect" class="group-select" aria-label="Tour group"></select>
         <div class="view-nav" role="group" aria-label="Planner view">
           <button type="button" id="btnPhoneView">Phone</button>
+          <button type="button" id="btnSimplePlan" title="Big, read-only list of each day's places and times">Simple plan</button>
           <button type="button" id="btnDetailedView">Detailed</button>
         </div>
         <button type="button" class="btn btn-outline btn-sm" id="btnTheme">Theme</button>
@@ -9818,6 +9819,7 @@ function renderDayTabs() {
           <div class="visit-big">Visited ${visitsN} ${visitWord}</div>
           <div class="visit-hint">Tour / group names are visit labels — keep one People row per person.</div>
         </div>
+        ${renderSimplePlanLinks(p)}
         ${renderTravelledWith(p)}
         ${renderPersonAlbums(p)}
         <div class="dir-grid">
@@ -10756,6 +10758,81 @@ function renderDayTabs() {
     if (e.target && e.target.id === 'deletePlanModal') closeDeletePlanModal();
   });
   document.getElementById('btnPhoneView').addEventListener('click', () => setViewPref('phone'));
+  // ---- Simple plan: read-only, big-text list of each day's places and times ----
+  function simplePlanStopTime(st) {
+    const t = String((st && st.time) || '').trim();
+    return /^\d{1,2}:\d{2}/.test(t) ? t.slice(0, 5).padStart(5, '0') : '';
+  }
+  function simplePlanDayHeading(d, i) {
+    let label = 'Day ' + (i + 1);
+    if (d && d.date) {
+      try {
+        const dt = parseISODateUTC(d.date);
+        label += ' · ' + dt.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+      } catch (_) { label += ' · ' + formatDateDMY(d.date); }
+    }
+    return label;
+  }
+  function openSimplePlan() {
+    const plan = state.plan;
+    let ov = document.getElementById('simplePlanOverlay');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = 'simplePlanOverlay';
+      ov.setAttribute('role', 'dialog');
+      ov.setAttribute('aria-label', 'Simple plan');
+      document.body.appendChild(ov);
+      ov.addEventListener('click', e => { if (e.target.closest('[data-sp-close]')) closeSimplePlan(); });
+    }
+    const title = plan ? (plan.groupName || (plan.bookingKey ? ('Booking #' + plan.bookingKey) : 'Tour')) : 'Simple plan';
+    let body = '';
+    if (!plan || !Array.isArray(plan.days) || !plan.days.length) {
+      body = '<p class="sp-empty">Open a tour first (choose it from the tour list), then tap Simple plan.</p>';
+    } else {
+      body = plan.days.map((d, i) => {
+        const stops = (d && Array.isArray(d.blocks) ? d.blocks : []).slice().sort((a, b) => {
+          const ta = simplePlanStopTime(a), tb = simplePlanStopTime(b);
+          if (!ta && !tb) return 0; if (!ta) return 1; if (!tb) return -1;
+          return ta < tb ? -1 : ta > tb ? 1 : 0;
+        }).filter(st => st && String(st.title || '').trim());
+        const rows = stops.length
+          ? stops.map(st => '<div class="sp-row"><span class="sp-time">' + escapeHtml(simplePlanStopTime(st) || '—') + '</span><span>' + escapeHtml(String(st.title).trim()) + '</span></div>').join('')
+          : '<p class="sp-empty">Nothing planned yet.</p>';
+        return '<section class="sp-card"><h2>' + escapeHtml(simplePlanDayHeading(d, i)) + '</h2>' + rows + '</section>';
+      }).join('');
+    }
+    ov.innerHTML = '<div class="sp-bar"><h1>' + escapeHtml(title) + '</h1><button type="button" class="sp-close" data-sp-close>Close</button></div>'
+      + '<div class="sp-wrap"><p class="sp-sub">Read-only. Times are approximate where shown as —.</p>' + body + '</div>';
+    ov.hidden = false;
+    ov.scrollTop = 0;
+    document.documentElement.style.overflow = 'hidden';
+  }
+  function closeSimplePlan() {
+    const ov = document.getElementById('simplePlanOverlay');
+    if (ov) ov.hidden = true;
+    document.documentElement.style.overflow = '';
+  }
+  function renderSimplePlanLinks(p) {
+    const refs = (p && Array.isArray(p.visitRefs) ? p.visitRefs : []).filter(r => r && r.booking_id != null);
+    if (!refs.length) return '';
+    return '<div class="people-simple-plans"><span class="field-label">Simple plan</span><div>'
+      + refs.map(r => '<button type="button" class="btn btn-outline btn-sm" data-simple-plan-booking="' + escapeHtml(String(r.booking_id)) + '">Simple plan: '
+        + escapeHtml(String(r.label || ('Booking #' + r.booking_id))) + (r.date ? ' (' + escapeHtml(formatDateDMY(r.date)) + ')' : '') + '</button>').join('')
+      + '</div></div>';
+  }
+  document.getElementById('btnSimplePlan').addEventListener('click', openSimplePlan);
+  document.addEventListener('click', async e => {
+    const btn = e.target.closest && e.target.closest('[data-simple-plan-booking]');
+    if (!btn) return;
+    e.preventDefault();
+    const key = btn.getAttribute('data-simple-plan-booking');
+    try {
+      if (String(state.bookingKey) !== String(key)) await selectPlan(key);
+    } catch (err) { console.warn('Simple plan: could not open booking', err); }
+    openSimplePlan();
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSimplePlan(); });
+  try { if (/[?&]simple=1\b/.test(location.search)) setTimeout(() => { if (state.plan) openSimplePlan(); }, 1500); } catch (_) {}
   document.getElementById('btnDetailedView').addEventListener('click', () => setViewPref('detailed'));
   document.getElementById('btnTheme').addEventListener('click', () => {
     const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
@@ -10773,5 +10850,21 @@ function renderDayTabs() {
   // Sign-in required: data is only available to Keith's signed-in account.
   AuthGate.require(sb, { title: 'Tour planner' }).then(() => init());
 </script>
+<style id="simplePlanCss">
+  #simplePlanOverlay{position:fixed;inset:0;z-index:9999;background:#f6f4ef;color:#1d1d1f;overflow-y:auto;-webkit-overflow-scrolling:touch;font-family:-apple-system,system-ui,"Segoe UI",sans-serif}
+  #simplePlanOverlay[hidden]{display:none}
+  .sp-bar{position:sticky;top:0;display:flex;align-items:center;gap:10px;padding:12px 16px;background:#1f3a5f;color:#fff}
+  .sp-bar h1{flex:1;font-size:20px;margin:0;line-height:1.2}
+  .sp-close{font-size:18px;font-weight:700;padding:10px 16px;border-radius:10px;border:0;background:#fff;color:#1f3a5f}
+  .sp-wrap{max-width:640px;margin:0 auto;padding:12px 14px 40px}
+  .sp-card{background:#fff;border-radius:14px;box-shadow:0 1px 4px rgba(0,0,0,.12);padding:14px 16px;margin:0 0 14px}
+  .sp-card h2{font-size:22px;margin:0 0 8px;color:#1f3a5f}
+  .sp-row{display:flex;gap:14px;font-size:20px;line-height:1.35;padding:8px 0;border-top:1px solid #eee}
+  .sp-row:first-of-type{border-top:0}
+  .sp-time{flex:0 0 64px;font-weight:800;font-variant-numeric:tabular-nums}
+  .sp-empty{font-size:18px;color:#666}
+  .sp-sub{font-size:16px;color:#555;margin:0 0 12px}
+  .people-simple-plans{margin:10px 0}.people-simple-plans .btn{margin:4px 6px 4px 0}
+</style>
 </body>
 </html>

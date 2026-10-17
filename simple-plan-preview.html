@@ -1,0 +1,30 @@
+<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Simple plan – sample preview</title><style id="simplePlanCss">
+  #simplePlanOverlay{position:fixed;inset:0;z-index:9999;background:#f6f4ef;color:#1d1d1f;overflow-y:auto;-webkit-overflow-scrolling:touch;font-family:-apple-system,system-ui,"Segoe UI",sans-serif}
+  #simplePlanOverlay[hidden]{display:none}
+  .sp-bar{position:sticky;top:0;display:flex;align-items:center;gap:10px;padding:12px 16px;background:#1f3a5f;color:#fff}
+  .sp-bar h1{flex:1;font-size:20px;margin:0;line-height:1.2}
+  .sp-close{font-size:18px;font-weight:700;padding:10px 16px;border-radius:10px;border:0;background:#fff;color:#1f3a5f}
+  .sp-wrap{max-width:640px;margin:0 auto;padding:12px 14px 40px}
+  .sp-card{background:#fff;border-radius:14px;box-shadow:0 1px 4px rgba(0,0,0,.12);padding:14px 16px;margin:0 0 14px}
+  .sp-card h2{font-size:22px;margin:0 0 8px;color:#1f3a5f}
+  .sp-row{display:flex;gap:14px;font-size:20px;line-height:1.35;padding:8px 0;border-top:1px solid #eee}
+  .sp-row:first-of-type{border-top:0}
+  .sp-time{flex:0 0 64px;font-weight:800;font-variant-numeric:tabular-nums}
+  .sp-empty{font-size:18px;color:#666}
+  .sp-sub{font-size:16px;color:#555;margin:0 0 12px}
+  .people-simple-plans{margin:10px 0}.people-simple-plans .btn{margin:4px 6px 4px 0}
+</style></head><body>
+<div id="simplePlanOverlay"><div class="sp-bar"><h1>Sample Tour (made-up data)</h1><a class="sp-close" href="tour-planner.html" style="text-decoration:none">Close</a></div>
+<div class="sp-wrap"><p class="sp-sub">Read-only. Sample preview only — no real customer data. In the real planner, sign in, open a tour and tap <b>Simple plan</b>.</p><div id="days"></div></div></div>
+<script>
+const SAMPLE={days:[
+ {date:'2027-05-10',blocks:[{time:'14:00',title:'Pickup at Prague Airport'},{time:'16:30',title:'Check in: Hotel (sample)'},{time:'19:00',title:'Welcome dinner'}]},
+ {date:'2027-05-11',blocks:[{time:'09:00',title:'Leave hotel'},{time:'09:30',title:'Rutkovsky'},{time:'12:30',title:'Lunch'},{time:'14:00',title:'Museum of Glass and Jewellery'}]},
+ {date:'2027-05-12',blocks:[{time:'09:30',title:'Preciosa Ornela'},{time:'13:00',title:'Lunch'},{time:'',title:'Free afternoon'}]},
+ {date:'2027-05-13',blocks:[{time:'10:00',title:'Křišťálový ráj'},{time:'15:00',title:'Drop-off at Prague Airport'}]}]};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+document.getElementById('days').innerHTML=SAMPLE.days.map((d,i)=>{const dt=new Date(d.date+'T00:00:00Z');
+ return '<section class="sp-card"><h2>Day '+(i+1)+' · '+esc(dt.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',timeZone:'UTC'}))+'</h2>'+
+ d.blocks.map(b=>'<div class="sp-row"><span class="sp-time">'+esc(b.time||'—')+'</span><span>'+esc(b.title)+'</span></div>').join('')+'</section>'}).join('');
+</script></body></html>
